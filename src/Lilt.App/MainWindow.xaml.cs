@@ -155,7 +155,7 @@ public sealed partial class MainWindow : Window
         UpdateTitle();
         if (!firstNavigation) return;
         firstNavigation = false;
-        report.FirstNavigation(sender.Source);
+        report.FirstNavigation(sender.Source, e.IsSuccess, e.WebErrorStatus.ToString());
     }
 
     void OnProcessFailed(CoreWebView2 sender, CoreWebView2ProcessFailedEventArgs e)
@@ -191,7 +191,8 @@ public sealed partial class MainWindow : Window
     void UpdateTitle()
     {
         var title = core?.DocumentTitle;
-        AppWindow.Title = string.IsNullOrWhiteSpace(title) || core?.Source?.StartsWith(BrowserEngine.NewTabUri.AbsoluteUri, StringComparison.Ordinal) == true
+        var newTab = Uri.TryCreate(core?.Source, UriKind.Absolute, out var source) && source.Host == BrowserEngine.NewTabHost;
+        AppWindow.Title = string.IsNullOrWhiteSpace(title) || newTab
             ? appName
             : $"{title} – {appName}";
     }

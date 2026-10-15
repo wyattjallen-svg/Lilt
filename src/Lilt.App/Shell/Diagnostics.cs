@@ -14,7 +14,7 @@ sealed class StartupReport(string? path)
     public void EnvironmentReady() => environmentReady ??= Since();
     public void EngineReady() => engineReady ??= Since();
 
-    public void FirstNavigation(string url)
+    public void FirstNavigation(string url, bool succeeded, string status)
     {
         if (path is null) return;
         var first = Since();
@@ -25,6 +25,8 @@ sealed class StartupReport(string? path)
             ["processToWebViewReadyMs"] = Round(engineReady),
             ["processToFirstNavigationMs"] = Round(first),
             ["url"] = url,
+            ["firstNavigationSucceeded"] = succeeded,
+            ["firstNavigationStatus"] = status,
             ["pid"] = Environment.ProcessId,
             ["time"] = DateTimeOffset.Now.ToString("O"),
         }, new JsonSerializerOptions { WriteIndented = true });

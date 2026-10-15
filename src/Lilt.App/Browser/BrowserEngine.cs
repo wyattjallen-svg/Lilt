@@ -23,7 +23,8 @@ sealed record Notice(string Message, NoticeKind Kind, string? ActionLabel = null
 sealed class BrowserEngine
 {
     public const string NewTabHost = "newtab.lilt.example";
-    public static readonly Uri NewTabUri = new($"https://{NewTabHost}/");
+    // Virtual host mapping serves files, not directories, so the page is named explicitly.
+    public static readonly Uri NewTabUri = new($"https://{NewTabHost}/index.html");
 
     readonly EngineOptions options;
     readonly Task<CoreWebView2Environment> environment;
