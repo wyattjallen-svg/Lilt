@@ -7,7 +7,7 @@ A personal, customizable Windows 11 browser built on WebView2 and WinUI 3. Early
 
 ## Run a build
 
-CI publishes every push to `prototype` as the **prototype-build** pre-release. Download `Lilt-win-x64.zip`, unzip it anywhere and run `Lilt.exe`. It is self-contained (no .NET or Windows App SDK install needed) and uses the WebView2 Runtime that ships with Windows 11.
+CI publishes every push to `prototype` as the **prototype-build** pre-release. Download `Lilt-win-x64.zip` (80 MB), unzip it anywhere and run `Lilt.exe`. It is self-contained (no .NET or Windows App SDK install needed) and uses the WebView2 Runtime that ships with Windows 11.
 
 ```
 Lilt.exe [url] [--url <url>] [--theme <file>] [--user-data <folder>] [--inprivate]

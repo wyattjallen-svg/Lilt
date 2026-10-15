@@ -4,22 +4,54 @@ Scope: the minimal prototype from `docs/architecture.md` section 11, plus the re
 
 ## Build and verification
 
+Build tested: commit `2035846`, [CI run](https://github.com/wyattjallen-svg/Lilt/actions/runs/38674868465), release `prototype-build`. Output: 214 MB unpacked, 458 files, 80 MB zipped (self-contained .NET and Windows App SDK; `Microsoft.Windows.SDK.NET.dll` alone is 56 MB).
+
 | Check | Where | Result |
 |---|---|---|
 | Core unit tests (35, including generated JS run under Node) | Linux, .NET 10.0.112 | Pass |
-| Core unit tests | Windows CI | _pending_ |
-| Self-contained ReadyToRun publish | Windows CI (windows-2025) | _pending_ |
-| Launch, startup report, screenshots | Windows CI | _pending_ |
-| Idle measurements | Windows CI | _pending_ |
+| Core unit tests | Windows CI | Pass (JS checks skipped: no Node path configured) |
+| Self-contained ReadyToRun publish | Windows CI (Windows Server 2025) | Pass |
+| Launch to new-tab page (Dusk, pinned left sidebar) | Windows CI | Pass; first page loaded; screenshot checked |
+| Launch to example.com (Dusk) | Windows CI | Pass; site rendered dark via `pages.colorScheme` |
+| Launch to example.com with `paper.json` (light, auto-hide right sidebar) | Windows CI | Pass |
+| Unexpected errors (`error.log`) during launches | Windows CI | None |
 | Interactive testing | Your PC | Checklist below |
+
+Bugs CI caught before this build: a crash when the address bar took focus (a CsWinRT delegate-marshalling rule; fixed with a lambda) and the new-tab page returning `ERR_ACCESS_DENIED` (virtual host mapping doesn't serve `index.html` for `/`; fixed). CI now fails the build if Lilt exits early, logs an error, or its first page doesn't load.
 
 ## Measured idle resource use
 
-_pending CI_
+**These are CI numbers, not your PC.** GitHub's Windows Server 2025 VM: 2 vCPUs (AMD EPYC 7763), 8 GB, no GPU (software rendering), High performance power plan, WebView2 runtime 153.0.4234.48. `tools/measure.ps1`, fresh profile per run, `about:blank`, 3 runs, 20 s settle, CPU over 30 s, whole process tree.
+
+| Scenario | Private bytes (median, range) | Working set (median, range) | Processes | CPU, % of one core | Start → window shown | Start → first page |
+|---|---|---|---|---|---|---|
+| Window visible | 143.9 MB (143.8–144.0) | 398.0 MB (396.4–400.6) | 7 | 0.2% (0.1–0.4) | 471 ms (446–559) | 1.34 s (1.26–1.56) |
+| Minimized (10 s after minimizing) | 147.3 MB (142.9–147.3) | 398.5 MB (394.6–402.0) | 7 | 0.3% (0.2–0.5) | — | — |
+
+Per process (visible, medians):
+
+| Process | Count | Working set | Private |
+|---|---|---|---|
+| Lilt.exe (WinUI shell) | 1 | 126.5 MB | 43.1 MB |
+| WebView2 browser process | 1 | 115.2 MB | 41.8 MB |
+| Renderer (about:blank) | 1 | 50.7 MB | 22.1 MB |
+| Utility (network, storage) | 2 | 52.7 MB | 19.7 MB |
+| GPU process | 1 | 35.2 MB | 14.0 MB |
+| Crashpad handler | 1 | 17.8 MB | 3.4 MB |
+
+Reading these:
+
+- Private bytes is the honest total. Summed working set double-counts DLL pages shared between processes, so ~400 MB overstates real use.
+- The WinUI shell is about 30% of private memory; the rest is WebView2's own processes, which any WebView2 or Chromium browser pays.
+- Minimizing made no measurable difference at idle on a blank page. Whether it matters with real pages is scenario 4 with tabs.
+- Idle CPU is near zero: no timers or polling in the shell.
+- Startup on this VM: environment creation starts with the window, which shows in under half a second; the WebView2 is ready about 1.1 s in.
+
+Limitations of these numbers: a VM without a GPU and with Windows Server rather than Windows 11; three runs; processes that exited during the sample window aren't counted in CPU; Mica rendering wasn't checked on the runner. Comparisons with Edge, Firefox and Helium weren't run: they need your PC (`tools/measure.ps1 -Browser edge|firefox|helium`), and the runner's numbers wouldn't transfer to your hardware anyway.
 
 ## Testing this build (spike 1 checklist)
 
-Unzip `Lilt-win-x64.zip` and run `Lilt.exe`. Note anything that fails; the decision on Google sign-in comes first.
+Unzip `Lilt-win-x64.zip` (or all three `part` zips into one folder) and run `Lilt.exe`. Note anything that fails; the decision on Google sign-in comes first.
 
 **Go/no-go: sign-in**
 - [ ] Sign in at accounts.google.com, then open Gmail and YouTube signed in.
