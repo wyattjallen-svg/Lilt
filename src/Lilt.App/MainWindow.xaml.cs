@@ -231,7 +231,8 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    void AddressBox_GotFocus(object sender, RoutedEventArgs e) => DispatcherQueue.TryEnqueue(AddressBox.SelectAll);
+    // A lambda, not a method group: CsWinRT can't marshal a delegate whose target is a projected control.
+    void AddressBox_GotFocus(object sender, RoutedEventArgs e) => DispatcherQueue.TryEnqueue(() => AddressBox.SelectAll());
 
     void Back_Click(object sender, RoutedEventArgs e) => core?.GoBack();
     void Forward_Click(object sender, RoutedEventArgs e) => core?.GoForward();

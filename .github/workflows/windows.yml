@@ -57,8 +57,8 @@ jobs:
 
       - name: Smoke test and screenshots
         shell: pwsh
-        continue-on-error: true
         run: |
+          $script:failed = @()
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing
           function Shot([string]$path) {
             $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
@@ -87,13 +87,16 @@ jobs:
               Get-Content "$dir/logs/error.log"
             }
             if ($alive) { [void]$p.CloseMainWindow(); if (-not $p.WaitForExit(10000)) { Stop-Process -Id $p.Id -Force } }
-            else { Write-Host "::warning::$name exited early with code $($p.ExitCode)" }
+            else { Write-Host "::error::$name exited early with code $($p.ExitCode)" }
+            if (-not $alive -or -not (Test-Path $report) -or (Test-Path "$dir/logs/error.log")) { $script:failed += $name }
             Write-Host "$name alive=$alive report=$(Test-Path $report)"
           }
           Smoke 'newtab' @()
+          Smoke 'dusk-page' @('--url', 'https://example.com')
           Smoke 'paper' @('--theme', "`"$PWD\out\Lilt\Themes\paper.json`"", '--url', 'https://example.com')
           Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Level = 2; StartTime = (Get-Date).AddMinutes(-15) } -ErrorAction SilentlyContinue |
             Format-List TimeCreated, ProviderName, Message | Out-File smoke-events.log
+          if ($script:failed.Count) { Write-Host "::error::Smoke test failed: $($script:failed -join ', ')"; exit 1 }
 
       - name: Idle measurements
         shell: pwsh
@@ -121,4 +124,5 @@ jobs:
         run: |
           gh release delete prototype-log --yes --cleanup-tag 2>$null
           if (-not (Test-Path build.log)) { 'No build log (failure before publish).' | Set-Content build.log }
-          gh release create prototype-log --prerelease --target $env:GITHUB_SHA --title "CI log $($env:GITHUB_SHA.Substring(0, 7))" --notes "Failed run $env:GITHUB_RUN_ID" build.log
+          $files = @('build.log') + @(Get-ChildItem screenshot-*.png, smoke-*.json, smoke-*.log -ErrorAction SilentlyContinue | ForEach-Object Name)
+          gh release create prototype-log --prerelease --target $env:GITHUB_SHA --title "CI log $($env:GITHUB_SHA.Substring(0, 7))" --notes "Failed run $env:GITHUB_RUN_ID" @files
