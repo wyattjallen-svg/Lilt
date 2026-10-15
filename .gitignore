@@ -1,0 +1,12 @@
+bin/
+obj/
+out/
+.vs/
+*.user
+*.binlog
+*.zip
+build.log
+measure-*.json
+measure-*.md
+screenshot-*.png
+smoke-*

@@ -1,0 +1,166 @@
+<Window
+    x:Class="Lilt.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Lilt">
+
+  <Grid x:Name="Root" KeyboardAcceleratorPlacementMode="Hidden">
+    <Grid.KeyboardAccelerators>
+      <KeyboardAccelerator Key="L" Modifiers="Control" Invoked="FocusAddress_Invoked" />
+      <KeyboardAccelerator Key="D" Modifiers="Menu" Invoked="FocusAddress_Invoked" />
+      <KeyboardAccelerator Key="F6" Invoked="FocusAddress_Invoked" />
+      <KeyboardAccelerator Key="B" Modifiers="Control" Invoked="ToggleSidebar_Invoked" />
+      <KeyboardAccelerator Key="Left" Modifiers="Menu" Invoked="Back_Invoked" />
+      <KeyboardAccelerator Key="Right" Modifiers="Menu" Invoked="Forward_Invoked" />
+      <KeyboardAccelerator Key="F5" Invoked="Reload_Invoked" />
+      <KeyboardAccelerator Key="R" Modifiers="Control" Invoked="Reload_Invoked" />
+    </Grid.KeyboardAccelerators>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+
+    <!-- Toolbar. It is also the title bar: empty space drags the window, controls are click-through regions. -->
+    <Grid x:Name="Toolbar" Background="{StaticResource LiltSurfaceBrush}" BorderBrush="{StaticResource LiltBorderBrush}">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition x:Name="DragColumn" Width="Auto" MinWidth="56" />
+        <ColumnDefinition x:Name="CaptionColumn" Width="0" />
+      </Grid.ColumnDefinitions>
+
+      <StackPanel x:Name="NavPanel" Orientation="Horizontal" VerticalAlignment="Center">
+        <Button x:Name="BackButton" Style="{StaticResource ChromeButton}" Click="Back_Click" IsEnabled="False"
+                ToolTipService.ToolTip="Back (Alt+Left)" AutomationProperties.Name="Back">
+          <FontIcon Glyph="&#xE72B;" />
+        </Button>
+        <Button x:Name="ForwardButton" Style="{StaticResource ChromeButton}" Click="Forward_Click" IsEnabled="False"
+                ToolTipService.ToolTip="Forward (Alt+Right)" AutomationProperties.Name="Forward">
+          <FontIcon Glyph="&#xE72A;" />
+        </Button>
+        <Button x:Name="ReloadButton" Style="{StaticResource ChromeButton}" Click="Reload_Click"
+                ToolTipService.ToolTip="Reload (F5)" AutomationProperties.Name="Reload">
+          <FontIcon x:Name="ReloadIcon" Glyph="&#xE72C;" />
+        </Button>
+      </StackPanel>
+
+      <Grid x:Name="AddressHost" Grid.Column="1" MaxWidth="900" VerticalAlignment="Center">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <StackPanel x:Name="InsecureChip" Orientation="Horizontal" Spacing="4" Margin="0,0,8,0" Visibility="Collapsed"
+                    VerticalAlignment="Center" ToolTipService.ToolTip="This page uses http, so others on the network can see or change it.">
+          <FontIcon Glyph="&#xE7BA;" FontSize="12" Foreground="{StaticResource LiltTextMutedBrush}" />
+          <TextBlock x:Name="InsecureText" Text="Not secure" Foreground="{StaticResource LiltTextMutedBrush}" VerticalAlignment="Center" />
+        </StackPanel>
+        <TextBox x:Name="AddressBox" Grid.Column="1" PlaceholderText="Search or enter address" IsSpellCheckEnabled="False"
+                 InputScope="Url" AutomationProperties.Name="Address and search bar"
+                 KeyDown="AddressBox_KeyDown" GotFocus="AddressBox_GotFocus" />
+      </Grid>
+
+      <Button x:Name="SidebarButton" Grid.Column="2" Style="{StaticResource ChromeButton}" Click="SidebarButton_Click"
+              VerticalAlignment="Center" ToolTipService.ToolTip="Sidebar (Ctrl+B)" AutomationProperties.Name="Show or hide sidebar">
+        <FontIcon Glyph="&#xE8A0;" />
+      </Button>
+    </Grid>
+
+    <!-- Content: page plus a sidebar that docks to any edge (pinned) or floats over the page (auto-hide). -->
+    <Grid x:Name="ContentArea" Grid.Row="1">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+
+      <Grid x:Name="PageHost" Grid.Row="1" Grid.Column="1" />
+
+      <Border x:Name="Sidebar" Canvas.ZIndex="1" BorderBrush="{StaticResource LiltBorderBrush}" KeyDown="Sidebar_KeyDown"
+              GotFocus="Sidebar_GotFocus" LostFocus="Sidebar_LostFocus" AutomationProperties.Name="Sidebar">
+        <Border.RenderTransform>
+          <TranslateTransform x:Name="SlideTransform" />
+        </Border.RenderTransform>
+        <ScrollViewer x:Name="SidebarScroll">
+          <StackPanel x:Name="SidebarStack">
+            <TextBlock x:Name="LayoutHeader" Text="Layout" Style="{StaticResource SectionHeader}" />
+            <StackPanel x:Name="EdgeButtons" Orientation="Horizontal" Spacing="2">
+              <ToggleButton x:Name="EdgeLeft" Tag="Left" Style="{StaticResource ChromeToggle}" Click="Edge_Click"
+                            ToolTipService.ToolTip="Dock left" AutomationProperties.Name="Dock left">
+                <FontIcon Glyph="&#xE90C;" />
+              </ToggleButton>
+              <ToggleButton x:Name="EdgeRight" Tag="Right" Style="{StaticResource ChromeToggle}" Click="Edge_Click"
+                            ToolTipService.ToolTip="Dock right" AutomationProperties.Name="Dock right">
+                <FontIcon Glyph="&#xE90D;" />
+              </ToggleButton>
+              <ToggleButton x:Name="EdgeTop" Tag="Top" Style="{StaticResource ChromeToggle}" Click="Edge_Click"
+                            ToolTipService.ToolTip="Dock top" AutomationProperties.Name="Dock top">
+                <FontIcon Glyph="&#xE90E;" RenderTransformOrigin="0.5,0.5">
+                  <FontIcon.RenderTransform>
+                    <RotateTransform Angle="180" />
+                  </FontIcon.RenderTransform>
+                </FontIcon>
+              </ToggleButton>
+              <ToggleButton x:Name="EdgeBottom" Tag="Bottom" Style="{StaticResource ChromeToggle}" Click="Edge_Click"
+                            ToolTipService.ToolTip="Dock bottom" AutomationProperties.Name="Dock bottom">
+                <FontIcon Glyph="&#xE90E;" />
+              </ToggleButton>
+              <ToggleButton x:Name="PinToggle" Style="{StaticResource ChromeToggle}" Click="Pin_Click" Margin="6,0,0,0"
+                            ToolTipService.ToolTip="Pinned (off: auto-hide, reveal from the edge)" AutomationProperties.Name="Pin sidebar">
+                <FontIcon Glyph="&#xE718;" />
+              </ToggleButton>
+            </StackPanel>
+
+            <TextBlock x:Name="ThemeHeader" Text="Theme" Style="{StaticResource SectionHeader}" />
+            <TextBlock x:Name="ThemeName" Style="{StaticResource BodyText}" />
+            <StackPanel x:Name="ThemeButtons" Orientation="Horizontal" Spacing="2">
+              <Button x:Name="ReloadThemeButton" Style="{StaticResource ChromeButton}" Click="ReloadTheme_Click"
+                      ToolTipService.ToolTip="Reload theme" AutomationProperties.Name="Reload theme">
+                <FontIcon Glyph="&#xE895;" />
+              </Button>
+              <Button x:Name="EditThemeButton" Style="{StaticResource ChromeButton}" Click="EditTheme_Click"
+                      ToolTipService.ToolTip="Edit theme.json" AutomationProperties.Name="Edit theme file">
+                <FontIcon Glyph="&#xE70F;" />
+              </Button>
+              <Button x:Name="DataFolderButton" Style="{StaticResource ChromeButton}" Click="OpenDataFolder_Click"
+                      ToolTipService.ToolTip="Open Lilt's data folder (themes, start page)" AutomationProperties.Name="Open data folder">
+                <FontIcon Glyph="&#xE838;" />
+              </Button>
+              <Button x:Name="UserContentButton" Style="{StaticResource ChromeButton}" Click="OpenUserContent_Click"
+                      ToolTipService.ToolTip="Per-site CSS and scripts folder" AutomationProperties.Name="Open user styles and scripts folder">
+                <FontIcon Glyph="&#xE943;" />
+              </Button>
+            </StackPanel>
+            <TextBlock x:Name="ThemeStatus" Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}" TextWrapping="Wrap" />
+
+            <TextBlock x:Name="DownloadsHeader" Text="Downloads" Style="{StaticResource SectionHeader}" />
+            <StackPanel x:Name="DownloadList" Spacing="4" />
+            <TextBlock x:Name="NoDownloads" Text="Nothing downloaded yet" Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}" />
+
+            <TextBlock x:Name="MemoryHeader" Text="Memory" Style="{StaticResource SectionHeader}" />
+            <Grid x:Name="MemoryRow" ColumnSpacing="6">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Button x:Name="MeasureButton" Style="{StaticResource ChromeButton}" Click="Measure_Click" VerticalAlignment="Top"
+                      ToolTipService.ToolTip="Measure Lilt and its WebView2 processes now" AutomationProperties.Name="Measure memory">
+                <FontIcon Glyph="&#xE9D9;" />
+              </Button>
+              <TextBlock x:Name="MemoryText" Grid.Column="1" Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}"
+                         TextWrapping="Wrap" Text="Not measured" />
+            </Grid>
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+
+      <InfoBar x:Name="NoticeBar" Grid.Row="1" Grid.Column="1" Canvas.ZIndex="2" IsOpen="False" IsClosable="True"
+               VerticalAlignment="Bottom" HorizontalAlignment="Center" MaxWidth="680" Margin="16" />
+    </Grid>
+  </Grid>
+</Window>

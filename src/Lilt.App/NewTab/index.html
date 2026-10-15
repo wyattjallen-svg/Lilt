@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; form-action https://duckduckgo.com">
+<title>New tab</title>
+<!--
+  Lilt's start page. This copy lives in your Lilt data folder (newtab\index.html):
+  edit it, add files beside it, or replace it entirely. It is served locally as https://newtab.lilt.example/
+  and has no access to Lilt itself.
+-->
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f2ed; --ink: #1e1c22; --muted: #6b6672; --field: #ffffffe6; --line: #1a18201f; --accent: #5b3fd0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #141318; --ink: #ece9f1; --muted: #a19cab; --field: #2a2733; --line: #ffffff1a; --accent: #c4a7ff; }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: grid; place-items: center; background: var(--bg); color: var(--ink);
+    font: 15px/1.4 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  }
+  main { width: min(560px, calc(100% - 32px)); margin-top: -12vh; }
+  .time { font: 300 64px/1 "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; letter-spacing: -0.02em; margin: 0 0 4px; }
+  .date { color: var(--muted); margin: 0 0 28px; }
+  form { display: flex; }
+  input {
+    flex: 1; font: inherit; color: inherit; background: var(--field);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; outline: none;
+  }
+  input:focus { border-color: var(--accent); }
+  p.hint { color: var(--muted); font-size: 13px; margin-top: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <p class="time" id="time"></p>
+  <p class="date" id="date"></p>
+  <form action="https://duckduckgo.com/" method="get" role="search">
+    <input name="q" placeholder="Search the web" aria-label="Search the web" autocomplete="off">
+  </form>
+  <p class="hint">Ctrl+L for the address bar · Ctrl+B for the sidebar</p>
+</main>
+<script src="clock.js"></script>
+</body>
+</html>

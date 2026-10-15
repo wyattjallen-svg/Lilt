@@ -1,0 +1,104 @@
+namespace Lilt.App;
+
+// Everything Lilt writes lives under one per-user folder (default %LOCALAPPDATA%\Lilt).
+sealed record LiltPaths(string Root)
+{
+    static string? root;
+
+    public string WebView2 => Path.Combine(Root, "WebView2");
+    public string Theme => Path.Combine(Root, "theme.json");
+    public string NewTab => Path.Combine(Root, "newtab");
+    public string UserContent => Path.Combine(Root, "user");
+    public static string Bundled => Path.Combine(AppContext.BaseDirectory, "Themes");
+    static string BundledNewTab => Path.Combine(AppContext.BaseDirectory, "NewTab");
+
+    public static LiltPaths Resolve(string? overrideRoot)
+    {
+        root = Path.GetFullPath(overrideRoot ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Lilt"));
+        Directory.CreateDirectory(root);
+        return new LiltPaths(root);
+    }
+
+    // Creates theme.json from the bundled default on first run and keeps the schema and samples next to it.
+    // Returns null when the folder can't be written; the caller falls back to built-in defaults.
+    public string? PrepareTheme(string? overridePath)
+    {
+        if (overridePath is not null) return Path.GetFullPath(overridePath);
+        try
+        {
+            if (!File.Exists(Theme)) File.Copy(Path.Combine(Bundled, "dusk.json"), Theme);
+            CopyIfDifferent("theme.schema.json");
+            CopyIfDifferent("paper.json");
+            return Theme;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            LogError(e);
+            return File.Exists(Theme) ? Theme : null;
+        }
+    }
+
+    // The start page is user-editable, so bundled files are only copied when missing.
+    public string PrepareNewTab()
+    {
+        try
+        {
+            Directory.CreateDirectory(NewTab);
+            foreach (var file in Directory.EnumerateFiles(BundledNewTab))
+            {
+                var to = Path.Combine(NewTab, Path.GetFileName(file));
+                if (!File.Exists(to)) File.Copy(file, to);
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            LogError(e);
+        }
+        return NewTab;
+    }
+
+    public string PrepareUserContent()
+    {
+        try
+        {
+            Directory.CreateDirectory(UserContent);
+            var readme = Path.Combine(UserContent, "README.txt");
+            if (!File.Exists(readme))
+                File.WriteAllText(readme, """
+                    Per-site styles and scripts for Lilt.
+
+                    example.com.css   CSS applied to example.com and its subdomains
+                    example.com.js    JavaScript run at document start on example.com and its subdomains
+                    all.css / all.js  applied to every http and https page
+
+                    Files are re-read when saved; reload the page to see changes.
+                    Scripts run with the page's own permissions and have no access to Lilt or your files.
+                    Each file can be up to 512 KB.
+                    """);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            LogError(e);
+        }
+        return UserContent;
+    }
+
+    void CopyIfDifferent(string name)
+    {
+        var from = Path.Combine(Bundled, name);
+        var to = Path.Combine(Root, name);
+        if (!File.Exists(to) || File.ReadAllText(to) != File.ReadAllText(from)) File.Copy(from, to, overwrite: true);
+    }
+
+    public static void LogError(Exception e)
+    {
+        try
+        {
+            var dir = Path.Combine(root ?? Path.GetTempPath(), "logs");
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(Path.Combine(dir, "error.log"), $"{DateTimeOffset.Now:O} {e}\n\n");
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+}

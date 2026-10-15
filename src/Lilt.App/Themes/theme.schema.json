@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Lilt theme",
+  "description": "Every setting is optional; missing or invalid values fall back to the built-in Dusk theme.",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "color": {
+      "type": "string",
+      "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$",
+      "description": "#RGB, #RRGGBB or #RRGGBBAA (alpha last)."
+    }
+  },
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "type": "integer", "minimum": 1, "description": "Format version. This version of Lilt reads version 1." },
+    "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "base": { "enum": ["dark", "light"], "description": "Base look for built-in controls and the color scheme websites see." },
+    "backdrop": { "enum": ["mica", "micaAlt", "acrylic", "none"], "description": "Window material. Falls back to colors.background where unsupported." },
+    "colors": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "background": { "$ref": "#/$defs/color", "description": "Window fill when there is no backdrop, and auto-hide panels over the page." },
+        "surface": { "$ref": "#/$defs/color", "description": "Toolbar and pinned sidebar, drawn over the backdrop." },
+        "surfaceRaised": { "$ref": "#/$defs/color", "description": "Fields such as the address bar." },
+        "border": { "$ref": "#/$defs/color" },
+        "text": { "$ref": "#/$defs/color" },
+        "textMuted": { "$ref": "#/$defs/color" },
+        "accent": { "$ref": "#/$defs/color" },
+        "onAccent": { "$ref": "#/$defs/color", "description": "Text on accent-colored fills." },
+        "hover": { "$ref": "#/$defs/color" },
+        "pressed": { "$ref": "#/$defs/color" },
+        "page": { "$ref": "#/$defs/color", "description": "Shown before a page paints. Alpha is ignored." }
+      }
+    },
+    "typography": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "family": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "size": { "type": "number", "minimum": 9, "maximum": 24 },
+        "weight": { "type": "integer", "minimum": 100, "maximum": 900 }
+      }
+    },
+    "shape": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "radius": { "type": "number", "minimum": 0, "maximum": 24, "description": "Panels." },
+        "controlRadius": { "type": "number", "minimum": 0, "maximum": 24, "description": "Buttons and fields." },
+        "borderWidth": { "type": "number", "minimum": 0, "maximum": 4 }
+      }
+    },
+    "density": { "enum": ["compact", "standard", "comfortable"], "description": "Spacing scale: 4, 6 or 8 px units." },
+    "toolbar": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "height": { "type": "number", "minimum": 32, "maximum": 64, "description": "48 or more uses tall window buttons." }
+      }
+    },
+    "sidebar": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "edge": { "enum": ["left", "right", "top", "bottom"] },
+        "width": { "type": "number", "minimum": 120, "maximum": 600, "description": "Used when docked left or right." },
+        "height": { "type": "number", "minimum": 32, "maximum": 200, "description": "Used when docked top or bottom." },
+        "autoHide": { "type": "boolean" },
+        "revealEdge": { "type": "number", "minimum": 1, "maximum": 32, "description": "Pixels from the edge that reveal an auto-hide sidebar." },
+        "hideDelay": { "type": "integer", "minimum": 0, "maximum": 5000, "description": "Milliseconds before an auto-hide sidebar closes after the pointer leaves." }
+      }
+    },
+    "motion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "animations": { "type": "boolean", "description": "Also off when Windows animation effects are off." },
+        "duration": { "type": "integer", "minimum": 0, "maximum": 1000 }
+      }
+    },
+    "pages": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "colorScheme": { "enum": ["theme", "auto", "light", "dark"], "description": "The prefers-color-scheme websites see. theme follows base; auto follows Windows." }
+      }
+    }
+  }
+}

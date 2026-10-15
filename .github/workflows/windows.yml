@@ -1,0 +1,124 @@
+name: Windows build
+
+on:
+  push:
+    branches: [main, prototype]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Core tests
+        run: dotnet run --project tests/Lilt.Core.Tests -c Release
+
+      - name: Publish (self-contained, ReadyToRun)
+        shell: pwsh
+        run: |
+          dotnet publish src/Lilt.App/Lilt.App.csproj -c Release -r win-x64 -p:Platform=x64 -o out/Lilt 2>&1 | Tee-Object -FilePath build.log
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Package
+        shell: pwsh
+        run: |
+          Compress-Archive -Path out/Lilt/* -DestinationPath Lilt-win-x64.zip
+          $zip = (Get-Item Lilt-win-x64.zip).Length / 1MB
+          $raw = (Get-ChildItem out/Lilt -Recurse -File | Measure-Object Length -Sum).Sum / 1MB
+          $files = (Get-ChildItem out/Lilt -Recurse -File).Count
+          "{0:N1} MB zipped, {1:N1} MB unpacked, {2} files" -f $zip, $raw, $files | Tee-Object size.txt
+          Get-ChildItem out/Lilt -File | Sort-Object Length -Descending | Select-Object -First 25 Name, @{n='MB';e={[math]::Round($_.Length/1MB,2)}} | Format-Table | Out-String | Add-Content size.txt
+
+      - name: WebView2 runtime
+        shell: pwsh
+        run: |
+          $key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          if (-not (Get-ItemProperty $key -ErrorAction SilentlyContinue).pv) {
+            Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile wv2setup.exe
+            Start-Process .\wv2setup.exe -ArgumentList '/silent', '/install' -Wait
+          }
+          "WebView2 runtime: $((Get-ItemProperty $key).pv)"
+
+      - name: Smoke test and screenshots
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          function Shot([string]$path) {
+            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = [System.Drawing.Bitmap]::new($b.Width, $b.Height)
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $bmp.Save((Join-Path $PWD $path))
+            $g.Dispose(); $bmp.Dispose()
+          }
+          function Smoke([string]$name, [string[]]$extra) {
+            $dir = Join-Path $env:RUNNER_TEMP "lilt-$name"
+            $report = Join-Path $dir 'startup.json'
+            New-Item -ItemType Directory $dir -Force | Out-Null
+            $argList = @('--user-data', "`"$dir`"", '--startup-report', "`"$report`"") + $extra
+            $p = Start-Process (Resolve-Path out/Lilt/Lilt.exe) -ArgumentList $argList -PassThru
+            $deadline = (Get-Date).AddSeconds(90)
+            while (-not (Test-Path $report) -and -not $p.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+            Start-Sleep -Seconds 6
+            try { Shot "screenshot-$name.png" } catch { Write-Host "::warning::screenshot failed: $_" }
+            $alive = -not $p.HasExited
+            if (Test-Path $report) { Copy-Item $report "smoke-$name.json"; Get-Content $report }
+            else { Write-Host "::warning::$name produced no startup report (exited: $($p.HasExited))" }
+            if (Test-Path "$dir/logs/error.log") {
+              Copy-Item "$dir/logs/error.log" "smoke-$name.log"
+              Write-Host "::warning::$name wrote error.log"
+              Get-Content "$dir/logs/error.log"
+            }
+            if ($alive) { [void]$p.CloseMainWindow(); if (-not $p.WaitForExit(10000)) { Stop-Process -Id $p.Id -Force } }
+            else { Write-Host "::warning::$name exited early with code $($p.ExitCode)" }
+            Write-Host "$name alive=$alive report=$(Test-Path $report)"
+          }
+          Smoke 'newtab' @()
+          Smoke 'paper' @('--theme', "`"$PWD\out\Lilt\Themes\paper.json`"", '--url', 'https://example.com')
+          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Level = 2; StartTime = (Get-Date).AddMinutes(-15) } -ErrorAction SilentlyContinue |
+            Format-List TimeCreated, ProviderName, Message | Out-File smoke-events.log
+
+      - name: Idle measurements
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Runs 3 -Settle 20 -Sample 30 -Label "CI runner, visible" -Out measure-visible.json
+          ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Runs 3 -Settle 20 -Sample 30 -Minimize -Label "CI runner, minimized" -Out measure-minimized.json
+          Get-Content measure-visible.md, measure-minimized.md | Add-Content $env:GITHUB_STEP_SUMMARY
+
+      - name: Publish prerelease
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = 'prototype-build'
+          gh release delete $tag --yes --cleanup-tag 2>$null
+          $files = @('Lilt-win-x64.zip', 'size.txt') + @(Get-ChildItem screenshot-*.png, measure-*.json, measure-*.md, smoke-*.json, smoke-*.log -ErrorAction SilentlyContinue | ForEach-Object Name)
+          gh release create $tag --prerelease --target $env:GITHUB_SHA --title "Lilt prototype build $($env:GITHUB_SHA.Substring(0, 7))" --notes "Built by CI from $env:GITHUB_SHA on $env:GITHUB_REF_NAME. Unzip anywhere and run Lilt.exe (Windows 11 x64)." @files
+
+      - name: Upload log on failure
+        if: failure()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete prototype-log --yes --cleanup-tag 2>$null
+          if (-not (Test-Path build.log)) { 'No build log (failure before publish).' | Set-Content build.log }
+          gh release create prototype-log --prerelease --target $env:GITHUB_SHA --title "CI log $($env:GITHUB_SHA.Substring(0, 7))" --notes "Failed run $env:GITHUB_RUN_ID" build.log
