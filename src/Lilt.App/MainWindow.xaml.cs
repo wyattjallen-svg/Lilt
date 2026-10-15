@@ -21,7 +21,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.Web.WebView2.Core;
 using Windows.Graphics;
-using Windows.System;
+using VirtualKey = Windows.System.VirtualKey;
 using Windows.UI.Text;
 using Windows.UI.ViewManagement;
 
@@ -542,12 +542,12 @@ public sealed partial class MainWindow : Window
         SidebarScroll.VerticalScrollMode = vertical ? ScrollMode.Auto : ScrollMode.Disabled;
         SidebarScroll.VerticalScrollBarVisibility = vertical ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
 
-        foreach (var (button, e) in EdgeButtons()) button.IsChecked = e == edge;
+        foreach (var (button, e) in EdgeToggles()) button.IsChecked = e == edge;
         PinToggle.IsChecked = !sidebar.AutoHide;
         ShowSidebar(sidebar.Open, animate: false);
     }
 
-    (ToggleButton Button, DockEdge Edge)[] EdgeButtons() =>
+    (ToggleButton Button, DockEdge Edge)[] EdgeToggles() =>
         [(EdgeLeft, DockEdge.Left), (EdgeRight, DockEdge.Right), (EdgeTop, DockEdge.Top), (EdgeBottom, DockEdge.Bottom)];
 
     void ShowSidebar(bool open, bool animate)
@@ -711,7 +711,7 @@ public sealed partial class MainWindow : Window
         pointerInBand = false;
         SyncSidebar();
         if (!sidebar.Open) return;
-        if (keyboard) EdgeButtons().First(b => b.Edge == sidebar.Edge).Button.Focus(FocusState.Keyboard);
+        if (keyboard) EdgeToggles().First(b => b.Edge == sidebar.Edge).Button.Focus(FocusState.Keyboard);
     }
 
     void Edge_Click(object sender, RoutedEventArgs e)
