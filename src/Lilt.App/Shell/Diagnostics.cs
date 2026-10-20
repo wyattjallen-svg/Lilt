@@ -10,6 +10,7 @@ sealed class StartupReport(string? path)
     readonly DateTime start = Process.GetCurrentProcess().StartTime;
     double? windowShown, environmentReady, engineReady;
     string[] extensions = [];
+    public string? Backdrop { get; set; }
 
     public void WindowShown() => windowShown ??= Since();
     public void EnvironmentReady() => environmentReady ??= Since();
@@ -30,6 +31,7 @@ sealed class StartupReport(string? path)
             ["firstNavigationSucceeded"] = succeeded,
             ["firstNavigationStatus"] = status,
             ["extensions"] = extensions,
+            ["backdrop"] = Backdrop,
             ["pid"] = Environment.ProcessId,
             ["time"] = DateTimeOffset.Now.ToString("O"),
         }, new JsonSerializerOptions { WriteIndented = true });

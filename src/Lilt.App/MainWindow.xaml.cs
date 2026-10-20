@@ -166,6 +166,8 @@ public sealed partial class MainWindow : Window
         }
 
         first.Navigate(tab.Url);
+        started = true;
+        if (active is { View: null, Loading: null } other) Load(other);
         if (tab.IsHome && tab == active) AddressBox.Focus(FocusState.Programmatic);
         if (startProblem is not null) ShowNotice(new(startProblem, NoticeKind.Warning));
     }
@@ -447,6 +449,7 @@ public sealed partial class MainWindow : Window
             backdropKey = key;
         }
         Root.Background = supported ? new SolidColorBrush(Colors.Transparent) : ThemeResources.Get("LiltBackgroundBrush");
+        report.Backdrop = supported ? spec.Material.ToString() : $"solid ({spec.Material} unsupported)";
         backdropNote = supported || spec.Material == Backdrop.None ? "" : $" · {spec.Material} unavailable, using a solid background";
     }
 

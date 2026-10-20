@@ -61,6 +61,15 @@ jobs:
           $script:failed = @()
           $script:checks = @()
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          Add-Type -Namespace Lilt -Name Input -MemberDefinition @'
+          [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+          [DllImport("user32.dll")] public static extern void mouse_event(int f, int x, int y, int d, int e);
+          [DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr h);
+          '@
+          # Windows Server ships with transparency effects off; turn them on so the glass themes can show.
+          $personalize = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'
+          if (-not (Test-Path $personalize)) { New-Item $personalize -Force | Out-Null }
+          Set-ItemProperty $personalize EnableTransparency 1 -Type DWord
           function Shot([string]$path) {
             $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
             $bmp = [System.Drawing.Bitmap]::new($b.Width, $b.Height)
@@ -86,12 +95,12 @@ jobs:
             if ($during -and -not $p.HasExited) { & $during $p }
             try { Shot "screenshot-$name.png" } catch { Write-Host "::warning::screenshot failed: $_" }
             $alive = -not $p.HasExited
-            if (Test-Path $report) { Copy-Item $report "smoke-$name.json"; Get-Content $report }
+            if (Test-Path $report) { Copy-Item $report "smoke-$name.json"; Get-Content $report | Out-Host }
             else { Write-Host "::warning::$name produced no startup report (exited: $($p.HasExited))" }
             if (Test-Path "$dir/logs/error.log") {
               Copy-Item "$dir/logs/error.log" "smoke-$name.log"
               Write-Host "::warning::$name wrote error.log"
-              Get-Content "$dir/logs/error.log"
+              Get-Content "$dir/logs/error.log" | Out-Host
             }
             if ($alive) { [void]$p.CloseMainWindow(); if (-not $p.WaitForExit(15000)) { Stop-Process -Id $p.Id -Force } }
             else { Write-Host "::error::$name exited early with code $($p.ExitCode)" }
@@ -111,21 +120,29 @@ jobs:
           [void](Smoke 'dusk-page' @('--url', 'https://example.com'))
           [void](Smoke 'paper' @('--theme', "`"$PWD\out\Lilt\Themes\paper.json`"", '--url', 'https://example.com'))
           [void](Smoke 'frost-home' @('--theme', "`"$PWD\out\Lilt\Themes\frost.json`""))
-          [void](Smoke 'adblock-test' @('--url', 'https://d3ward.github.io/toolz/adblock') -settle 15)
+          $frost = if (Test-Path 'smoke-frost-home.json') { (Get-Content 'smoke-frost-home.json' -Raw | ConvertFrom-Json).backdrop } else { '' }
+          Check 'Frost theme gets its glass material' ($frost -eq 'AcrylicThin') "backdrop: $frost"
+          [void](Smoke 'adblock-test' @('--url', 'https://adblock-tester.com/') -settle 20)
 
-          # Ctrl+T through the page, then close: the saved session should hold both tabs.
+          # Click into the page and press Ctrl+T (handled by the in-page key shim), then Ctrl+T again from the
+          # home tab's address box (a XAML accelerator), then close: the saved session should hold three tabs.
           $dir = Smoke 'keys-session' @('--url', 'https://example.com') {
             param($p)
-            $ws = New-Object -ComObject WScript.Shell
-            [void]$ws.AppActivate($p.Id)
+            $p.Refresh()
+            [void][Lilt.Input]::SetForegroundWindow($p.MainWindowHandle)
             Start-Sleep -Seconds 1
-            [System.Windows.Forms.Cursor]::Position = [System.Drawing.Point]::new(700, 450)
-            $ws.SendKeys('^t')
+            [void][Lilt.Input]::SetCursorPos(640, 420)
+            [Lilt.Input]::mouse_event(2, 0, 0, 0, 0); [Lilt.Input]::mouse_event(4, 0, 0, 0, 0)
+            Start-Sleep -Seconds 1
+            [System.Windows.Forms.SendKeys]::SendWait('^t')
+            Start-Sleep -Seconds 3
+            [System.Windows.Forms.SendKeys]::SendWait('^t')
             Start-Sleep -Seconds 3
           }
+          $dir = @($dir)[-1]
           $session = if (Test-Path "$dir/session.json") { Get-Content "$dir/session.json" -Raw | ConvertFrom-Json } else { $null }
           if ($session) { Copy-Item "$dir/session.json" 'smoke-keys-session.session.json' }
-          Check 'Ctrl+T opens a tab; session saved on close' ($session -and $session.tabs.Count -eq 2) "tabs: $(if ($session) { ($session.tabs | ForEach-Object url) -join ', ' } else { 'no session.json' })"
+          Check 'Ctrl+T in a page and in the address box; session saved on close' ($session -and $session.tabs.Count -eq 3) "tabs: $(if ($session) { ($session.tabs | ForEach-Object url) -join ', ' } else { 'no session.json' })"
 
           [void](Smoke 'proton-pass' @('--install-extension', 'ghmbeldphafepmbegfdlkpapadhbakde') -settle 4)
           $pp = Extensions 'proton-pass'

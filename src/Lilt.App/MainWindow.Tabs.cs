@@ -22,6 +22,8 @@ public sealed partial class MainWindow
     readonly List<SessionTab> closedTabs = [];
     DispatcherQueueTimer saveTimer = null!, suspendTimer = null!;
     BrowserTab? active;
+    // Tabs only load once startup has set up extensions, so the ad blocker covers the first page too.
+    bool started;
     string? startProblem;
 
     void InitTabs()
@@ -158,7 +160,7 @@ public sealed partial class MainWindow
         tab.LastActive = Environment.TickCount64;
         if (TabList.SelectedItem != tab) TabList.SelectedItem = tab;
         if (tab.View is { } view) view.Visibility = Visibility.Visible;
-        else if (tab.Loading is null) Load(tab);
+        else if (tab.Loading is null && started) Load(tab);
         SetFullScreen(tab.Core?.ContainsFullScreenElement == true);
         UpdateNavigation();
         UpdateTitle();
