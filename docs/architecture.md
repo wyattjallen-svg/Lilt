@@ -409,7 +409,7 @@ What Lilt adds (rules in `Lilt.Core.PowerPolicy`, unit-tested; code in `MainWind
 | Any tab not shown for `power.suspendMinutes` (default 5; 1 with Battery saver) | | That tab is suspended; it resumes when shown |
 | Tabs you aren't looking at | | Memory target Low at all times |
 
-"Covered" uses `SHQueryUserNotificationState` (the call Chromium uses to detect full-screen apps) plus a same-monitor check, so a page on your second monitor next to a game isn't paused. While you're in Lilt nothing polls; a 10-second timer runs only while you're away (30 s once paused). All of it is in the theme's `power` block and the Customize panel's Power tab, and can be turned off.
+"In front" means the foreground window belongs to Lilt (the main window or one of its pop-ups). "Covered" uses `SHQueryUserNotificationState` (the call Chromium uses to detect full-screen apps) and, for borderless games the shell doesn't flag, a frameless foreground window that exactly covers its monitor (Chromium's `IsFullScreenWindowMode` rule); either way only when it's on the same monitor as Lilt, so a page on your second monitor next to a game isn't paused. While you're in Lilt nothing polls; a 10-second timer runs only while you're away (30 s once paused). All of it is in the theme's `power` block and the Customize panel's Power tab, and can be turned off.
 
 Not done: discarding tabs (loses page state; suspend keeps it), disabling the GPU (Microsoft advises against it; software rendering costs more CPU), trimming working sets by force (Windows does it under pressure).
 

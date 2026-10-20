@@ -1,102 +1,85 @@
-# Prototype report
+# Prototype report (v0.3)
 
-Scope: the minimal prototype from `docs/architecture.md` section 11, plus the review changes (pop-ups with `window.opener`, downloads panel, certificate errors, autofill settings, page color scheme, user CSS/JS, local new-tab page, spike switches). It is not a complete browser: one page view, no tabs, no content blocking, no settings UI.
+Scope: v0.2 (tabs, sessions, bookmarks and import, home tab, glass, Customize panel, uBlock Origin Lite, Chrome Web Store extensions) plus v0.3: the design language from your sheet, every toolbar item, sidebar section and home element movable and removable, and efficiency mode. Architecture sections 6.5, 6.6, 8.0 and 14 describe them.
 
 ## Build and verification
 
-Build tested: commit `2035846`, [CI run](https://github.com/wyattjallen-svg/Lilt/actions/runs/38674868465), release `prototype-build`. Output: 214 MB unpacked, 458 files, 80 MB zipped (self-contained .NET and Windows App SDK; `Microsoft.Windows.SDK.NET.dll` alone is 56 MB).
+Build tested: commit `25ef4d3`, [CI run](https://github.com/wyattjallen-svg/Lilt/actions/runs/39448993185), release `prototype-build`. Output: 246.5 MB unpacked, 1,392 files, 89.5 MB zipped (uBlock Origin Lite adds about 33 MB unpacked).
 
 | Check | Where | Result |
 |---|---|---|
-| Core unit tests (35, including generated JS run under Node) | Linux, .NET 10.0.112 | Pass |
-| Core unit tests | Windows CI | Pass (JS checks skipped: no Node path configured) |
+| Core unit tests (50) | Linux and Windows CI | Pass |
 | Self-contained ReadyToRun publish | Windows CI (Windows Server 2025) | Pass |
-| Launch to new-tab page (Dusk, pinned left sidebar) | Windows CI | Pass; first page loaded; screenshot checked |
-| Launch to example.com (Dusk) | Windows CI | Pass; site rendered dark via `pages.colorScheme` |
-| Launch to example.com with `paper.json` (light, auto-hide right sidebar) | Windows CI | Pass |
-| Unexpected errors (`error.log`) during launches | Windows CI | None |
+| Launches: home tab (Minimal), example.com, Light theme page and home, Glass home, ad-block tester, Proton Pass install, keyboard and session, efficiency mode | Windows CI | All load their first page; no crashes; no `error.log` |
+| uBlock Origin Lite installs on first start and is on | Windows CI | Pass; [adblock-tester.com](https://adblock-tester.com/) scores 91/100 |
+| Proton Pass installs from the Chrome Web Store (signature-checked) | Windows CI | Pass |
+| Ctrl+T from the address box (XAML) and from inside a page (key shim); session saved on close | Windows CI | Pass (3 tabs restored) |
+| Efficiency mode: paused behind a full-screen window and when minimized, page suspended both times, back to full in front | Windows CI | Pass |
+| Glass theme selects Acrylic; Light and Minimal render; new icon in the taskbar | Windows CI | Pass (screenshots) |
 | Interactive testing | Your PC | Checklist below |
 
-Bugs CI caught before this build: a crash when the address bar took focus (a CsWinRT delegate-marshalling rule; fixed with a lambda) and the new-tab page returning `ERR_ACCESS_DENIED` (virtual host mapping doesn't serve `index.html` for `/`; fixed). CI now fails the build if Lilt exits early, logs an error, or its first page doesn't load.
+Bugs CI caught in this round: the sidebar's restored tab started loading before the ad blocker was ready; the in-page shortcut shim needed its binding installed per document (Chromium only installs name-based bindings when `Runtime.enable` is on, which Lilt avoids because sites can detect it); WebView2 event senders aren't always the same object as the stored view; a crash when the window closed while efficiency mode read a closing view; a stuck measurement step (now time-limited).
 
-## Measured idle resource use
+## Measured resource use
 
-**These are CI numbers, not your PC.** GitHub's Windows Server 2025 VM: 2 vCPUs (AMD EPYC 7763), 8 GB, no GPU (software rendering), High performance power plan, WebView2 runtime 153.0.4234.48. `tools/measure.ps1`, fresh profile per run, `about:blank`, 3 runs, 20 s settle, CPU over 30 s, whole process tree.
+**CI numbers, not your PC.** GitHub's Windows Server 2025 VM: 2 vCPUs (AMD EPYC 7763), 8 GB, no GPU, WebView2 runtime 154.0.4258.62. `tools/measure.ps1`, 3 runs, 20 s settle, CPU over 30 s, whole process tree.
 
-| Scenario | Private bytes (median, range) | Working set (median, range) | Processes | CPU, % of one core | Start → window shown | Start → first page |
-|---|---|---|---|---|---|---|
-| Window visible | 143.9 MB (143.8–144.0) | 398.0 MB (396.4–400.6) | 7 | 0.2% (0.1–0.4) | 471 ms (446–559) | 1.34 s (1.26–1.56) |
-| Minimized (10 s after minimizing) | 147.3 MB (142.9–147.3) | 398.5 MB (394.6–402.0) | 7 | 0.3% (0.2–0.5) | — | — |
-
-Per process (visible, medians):
-
-| Process | Count | Working set | Private |
-|---|---|---|---|
-| Lilt.exe (WinUI shell) | 1 | 126.5 MB | 43.1 MB |
-| WebView2 browser process | 1 | 115.2 MB | 41.8 MB |
-| Renderer (about:blank) | 1 | 50.7 MB | 22.1 MB |
-| Utility (network, storage) | 2 | 52.7 MB | 19.7 MB |
-| GPU process | 1 | 35.2 MB | 14.0 MB |
-| Crashpad handler | 1 | 17.8 MB | 3.4 MB |
+| Scenario | Private bytes (median) | Working set (median) | Processes | CPU, % of one core | Start → first page |
+|---|---|---|---|---|---|
+| `about:blank`, first start (installs uBlock Origin Lite) | 172.6 MB | 449.6 MB | 7 | 0.5% | 3.2 s |
+| `about:blank`, no extensions | 145.6 MB | 415.7 MB | 7 | 0.3% | 1.9 s |
+| `about:blank`, second start (ad blocker already installed) | 146.7 MB | 411.9 MB | 7 | 0.1% | 1.5 s |
+| Wikipedia article, in front | 201.2 MB | 500.4 MB | 7 | 0.6% | 2.3 s |
 
 Reading these:
 
-- Private bytes is the honest total. Summed working set double-counts DLL pages shared between processes, so ~400 MB overstates real use.
-- The WinUI shell is about 30% of private memory; the rest is WebView2's own processes, which any WebView2 or Chromium browser pays.
-- Minimizing made no measurable difference at idle on a blank page. Whether it matters with real pages is scenario 4 with tabs.
-- Idle CPU is near zero: no timers or polling in the shell.
-- Startup on this VM: environment creation starts with the window, which shows in under half a second; the WebView2 is ready about 1.1 s in.
+- Once installed, uBlock Origin Lite costs about 1 to 4 MB at idle; the first start pays for unpacking it (the first page now waits at most 1.5 s for it, then the blocker joins and Lilt offers a reload).
+- Lilt's own WinUI process is about 50 MB private; the rest is WebView2.
+- Efficiency mode was verified by behavior on CI rather than by savings figures: behind a full-screen window and when minimized, Lilt reported "paused", its page was suspended, and every process's working set dropped as the low memory target paged memory out (the renderer and GPU process went from hundreds of MB to under 1 MB resident). It returned to normal within a moment of coming back to the front.
+- CPU savings can't be measured meaningfully on this VM: it has no GPU, so an animated test page (WebGL) is rendered in software at nearly two full cores, which also starves Lilt's own timers. On your PC, `tools/measure.ps1 -Exe .\Lilt.exe -Url <a busy page> -Warm -Cover` measures Lilt behind a full-screen window; add `-Theme` with `"efficiency": false` for the comparison.
 
-Limitations of these numbers: a VM without a GPU and with Windows Server rather than Windows 11; three runs; processes that exited during the sample window aren't counted in CPU; Mica rendering wasn't checked on the runner. Comparisons with Edge, Firefox and Helium weren't run: they need your PC (`tools/measure.ps1 -Browser edge|firefox|helium`), and the runner's numbers wouldn't transfer to your hardware anyway.
+## Testing this build
 
-## Testing this build (spike 1 checklist)
+Unzip all the `part` zips into one folder and run `Lilt.exe`. Your existing tabs, bookmarks and settings carry over. If your `theme.json` was never edited it switches to the new Minimal look; otherwise pick Minimal, Glass or Light under Customize → Look.
 
-Unzip `Lilt-win-x64.zip` (or all three `part` zips into one folder) and run `Lilt.exe`. Note anything that fails; the decision on Google sign-in comes first.
+**Look and layout**
+- [ ] Customize (palette button or Ctrl+Shift+,): try Minimal, Glass and Light; change the material, glass tint, accent and any color in the picker; corner radius, font, text size, toolbar height.
+- [ ] Glass on your PC: with Glass or thin Acrylic the toolbar and sidebar should show a blurred desktop behind them (CI's VM can't render this). The Glass home tab shows hills; Home → Background → Pick an image uses your own.
+- [ ] Layout tab: each preset (Compact, Research, Vertical tabs, Top tabs, Bottom bar); untick toolbar items and move others with the arrows; reorder or hide sidebar sections.
+- [ ] Home tab: reorder or hide the logo, clock, search, tiles, hint and corner button; add a tile with +, remove one with its ×; visit a bookmarked site and its tile picks up the site icon.
 
-**Go/no-go: sign-in**
-- [ ] Sign in at accounts.google.com, then open Gmail and YouTube signed in.
-- [ ] If Google refuses ("This browser or app may not be secure"), close Lilt and retry with a current Edge user agent: `Lilt.exe --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/<ver>.0.0.0 Safari/537.36 Edg/<ver>.0.0.0"`.
-- [ ] Passkey sign-in with Windows Hello (e.g. a Google or GitHub passkey), and a 2FA prompt.
-- [ ] "Sign in with Google/Apple/GitHub" on a third-party site: the pop-up opens as a small Lilt window with its address shown, and closes itself after sign-in.
-- [ ] A card payment that opens a 3-D Secure window, if you have one handy.
-- [ ] In DevTools console (F12) on any site: `window.chrome.webview` is `undefined`.
+**Tabs**
+- [ ] Right-click a tab: pin (icon only, stays on top), mute, duplicate, bookmark, close others. A page with sound shows a speaker you can click to mute. Loading shows a spinner; a failed load turns the tab red.
+- [ ] Ctrl+T, Ctrl+W, Ctrl+Tab, Ctrl+1–9, Ctrl+L, Ctrl+D and Alt+F work with the focus inside a page as well as in the toolbar.
+- [ ] Close and reopen Lilt: tabs (including pinned) come back.
 
-**Composition hosting**
-- [ ] Typing with an IME or emoji panel (Win+.) in a page text field.
-- [ ] Dragging a file from Explorer into a page (e.g. an upload area).
-- [ ] File upload dialog and "Save as" from a page; a download appears in the sidebar's Downloads section.
-- [ ] Right-click context menu on a page, a link, an image.
-- [ ] Save a password when prompted, restart Lilt, and check the autofill dropdown offers it.
-- [ ] Ctrl+mouse wheel zoom on one site, navigate elsewhere and back: is the zoom remembered per site?
+**Efficiency mode**
+- [ ] Customize → Power shows the status. Start a game (or any full-screen app) with Lilt open behind it: after about 10 seconds Task Manager should show Lilt and its WebView2 processes with the efficiency-mode leaf icon, and Lilt's CPU near zero. Come back: everything resumes, nothing reloads.
+- [ ] Play music or a video in a tab, then switch to the game: Lilt stays at full speed so playback doesn't stutter.
+- [ ] Minimize Lilt for a minute and restore it: pages come back where they were.
+- [ ] Optional: compare `tools/measure.ps1 -Url <a page> -Warm -Minimize -AfterMinimize 40` against Edge or Helium.
 
-**Shell**
-- [ ] Sidebar: dock left, right, top, bottom (sidebar buttons); unpin (pin button) and reveal it by pushing the pointer to that edge; it hides shortly after the pointer leaves; Escape hides it; Ctrl+B toggles.
-- [ ] Keyboard with focus in the page: do Ctrl+L, Alt+D, F6 or Ctrl+B do anything? (Expected: no. Tab out of the page and they work.)
-- [ ] Edit `theme.json` (pencil button) and save: colors and sizes change live. Break the JSON on purpose: a notice explains and the old theme stays.
-- [ ] Copy `paper.json` over `theme.json`: light theme, right-hand auto-hide sidebar.
-- [ ] Put `example.com.css` with `body { outline: 4px solid red }` in the user folder (`</>` button), reload example.com.
-- [ ] `Lilt.exe --inprivate`: title says InPrivate; nothing persists after closing.
-- [ ] HTTPS upgrade flag test: `Lilt.exe --browser-args "--enable-features=HttpsUpgrades"` then type `http://example.com`; does it end up on https?
-- [ ] Memory button in the sidebar gives a number.
+**Carried over from v0.2 (still worth confirming)**
+- [ ] Google sign-in (accounts.google.com, Gmail, YouTube), passkeys, OAuth pop-ups.
+- [ ] Bookmarks import from Chrome/Helium/Edge or an HTML/CSV file; Proton Pass (Extensions button → Add Proton Pass) fills a login form.
+- [ ] uBlock Origin Lite: adblock-tester.com score; its dashboard opens from the menu.
 
 ## Known limitations
 
-- One page view; `target=_blank` links open in a pop-up window until tabs exist.
-- Keyboard shortcuts don't work while focus is inside the page (section 4.5 of the architecture doc).
-- No content blocking beyond WebView2's Balanced tracking prevention.
-- Permission requests are always denied (camera, microphone, location, notifications...), with a notice.
-- Links to other apps (`mailto:`, `ms-settings:` ...) are blocked, with a notice.
-- No per-site zoom control, settings UI, history or bookmarks.
-- Sidebar placement changed in the UI isn't saved between runs; the theme file sets the starting layout.
-- Windows high contrast is read at startup and on theme reload, not live.
-- If the WebView2 browser process dies, Lilt offers a restart rather than recovering in place.
+- The toolbar stays at the top: it's also the window's title bar. Everything on it can be reordered or hidden.
+- Glass rendering and efficiency-mode's Task Manager leaf can't be checked on CI's VM; screenshots there show the solid fallback.
+- Pages hidden for power (minimized or behind a full-screen app) take a moment to repaint when you come back.
+- Extensions' popups don't know the current tab (WebView2 limit); per-site ad-blocking modes are set in uBlock Origin Lite's dashboard.
+- Google Password Manager can't run outside Chrome; Proton Pass or WebView2's own saving are the options.
+- Permission prompts (camera, location...) are still denied with a notice.
 
 ## Dependency audit
 
 | Dependency | Version | Why | License | Removable? |
 |---|---|---|---|---|
-| Microsoft.WindowsAppSDK.WinUI (+ Base, Foundation, InteractiveExperiences, Microsoft.Windows.SDK.BuildTools, .BuildTools.MSIX, transitively) | 2.3.9 | WinUI 3 window, controls, Mica, title bar | Microsoft Software License Terms (redistributable) | Only by moving to WPF |
-| Microsoft.Web.WebView2 | 1.0.4258.31 | WebView2 SDK, newer than WinUI's minimum | BSD-3-Clause-style | No |
+| Microsoft.WindowsAppSDK.WinUI (+ Base, Foundation, InteractiveExperiences, Windows SDK build tools, transitively) | 2.3.9 | WinUI 3 window, controls, Mica/Acrylic, title bar | Microsoft Software License Terms (redistributable) | Only by moving to WPF |
+| Microsoft.Web.WebView2 | 1.0.4258.31 | WebView2 SDK | BSD-3-Clause-style | No |
 | .NET 10 runtime (bundled) | 10.0.x | Runtime, System.Text.Json | MIT | No |
+| uBlock Origin Lite | 2026.1018.2229 | Ad and tracker blocking, downloaded at build time and SHA-256 pinned | GPL-3.0 | Yes |
 
-No other packages. Tests use a 60-line runner instead of a test framework.
+No other packages. The icon is drawn by `tools/make-icon.py` (Pillow, build-time only, not shipped).
