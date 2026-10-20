@@ -236,7 +236,7 @@ jobs:
           $script = 'wait 4000; probe; state; mark playing; newTab; wait 2500; state; mark player; visualizer; wait 3000; state; mark visualizer; ' +
             'prevTab; wait 1500; split; wait 3000; state; mark split; split; wait 1000; pip; wait 3000; state; mark pip; wait 1500; pip; wait 1000; ' +
             'peek https://example.com; wait 4000; state; mark peek; closePeek; palette; wait 1500; state; mark palette; wait 1000'
-          [void](Smoke 'media' @('--url', 'https://newtab.lilt.example/media-test.html', '--browser-args', '"--autoplay-policy=no-user-gesture-required"', '--run', "`"$script`"") { param($p) Follow 'media' } -settle 1)
+          [void](Smoke 'media' @('--url', 'https://newtab.lilt.example/media-test.html', '--browser-args', '"--autoplay-policy=no-user-gesture-required"', '--run', "`"$script`"") { param($p) $p.Refresh(); [void][Lilt.Input]::SetForegroundWindow($p.MainWindowHandle); Follow 'media' } -settle 1)
           $s = States 'media'
           Get-Content (Join-Path $mdir 'startup.json.keys.txt') -ErrorAction SilentlyContinue | Where-Object { $_ -match ' (probe|pip|visualizer|media) ' } | Set-Content smoke-media-probe.txt
           $probe = if (Test-Path smoke-media-probe.txt) { (Get-Content smoke-media-probe.txt) -join ' / ' } else { 'none' }

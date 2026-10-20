@@ -63,15 +63,20 @@
       last = j;
       send(j);
     }
+    // While something plays, a check every 5 s catches what changes without a media event (a site updating its
+    // track info, the position drifting); nothing runs while nothing plays.
+    if (s.playing && !ticking) ticking = setInterval(report, 5000);
+    else if (!s.playing && ticking) { clearInterval(ticking); ticking = 0; }
   };
+  let ticking = 0;
   let queued = false;
   const soon = () => {
     if (queued) return;
     queued = true;
     setTimeout(() => { queued = false; report(); }, 150);
   };
-  for (const ev of ['play', 'playing', 'pause', 'ended', 'emptied', 'loadedmetadata', 'seeked', 'ratechange', 'volumechange',
-    'enterpictureinpicture', 'leavepictureinpicture']) document.addEventListener(ev, soon, true);
+  for (const ev of ['play', 'playing', 'pause', 'ended', 'emptied', 'loadedmetadata', 'loadeddata', 'canplay', 'durationchange', 'seeked',
+    'ratechange', 'volumechange', 'enterpictureinpicture', 'leavepictureinpicture']) document.addEventListener(ev, soon, true);
 
   // Next/previous for sites whose own buttons Lilt knows, when Windows media controls aren't available.
   const buttons = {
@@ -180,6 +185,8 @@
     },
   };
   report();
+  // Media that started before Lilt's helper arrived (autoplay during page load) fired its events already.
+  setTimeout(report, 1000);
   send('ready');
   return 'on';
 })();
