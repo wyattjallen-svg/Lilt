@@ -166,7 +166,7 @@ sealed class BrowserEngine
                 if (root.GetProperty("name").GetString() == "__liltKey" && root.GetProperty("payload").GetString() is { Length: <= 16 } command)
                     KeyCommand?.Invoke(sender, command);
             };
-            core.DOMContentLoaded += (sender, _) => _ = AddKeyShimToDocumentAsync(sender);
+            core.DOMContentLoaded += (sender, e) => _ = AddKeyShimToDocumentAsync(sender);
             await core.CallDevToolsProtocolMethodAsync("Runtime.addBinding", """{"name":"__liltKey","executionContextName":"lilt"}""");
             await core.CallDevToolsProtocolMethodAsync("Page.addScriptToEvaluateOnNewDocument", JsonSerializer.Serialize(new { source = KeyScript, worldName = "lilt" }));
         }
