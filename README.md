@@ -1,6 +1,6 @@
 # Lilt
 
-A personal, customizable Windows 11 browser built on WebView2 and WinUI 3. Early prototype: one page view, no tabs or ad blocking yet.
+A personal, customizable Windows 11 browser built on WebView2 and WinUI 3. v0.2 prototype: tabs with saved sessions, bookmarks and import, a configurable home tab, glass window materials with a Customize panel, and uBlock Origin Lite built in.
 
 - Architecture and decisions: [docs/architecture.md](docs/architecture.md)
 - Prototype results, test checklist and limitations: [docs/prototype-report.md](docs/prototype-report.md)
@@ -11,6 +11,7 @@ CI publishes every push to `prototype` as the **prototype-build** pre-release. D
 
 ```
 Lilt.exe [url] [--url <url>] [--theme <file>] [--user-data <folder>] [--inprivate]
+         [--install-extension <Web Store link or id>] [--no-extensions]
          [--user-agent "<ua>"] [--browser-args "<chromium switches>"] [--startup-report <file>]
 ```
 
@@ -30,9 +31,12 @@ Everything lives in `%LOCALAPPDATA%\Lilt`:
 
 | Path | What |
 |---|---|
-| `theme.json` | Active theme. Edit and save; the window updates live. `theme.schema.json` beside it gives editor completion; `paper.json` is a light sample. |
+| `theme.json` | Active theme. The Customize panel writes it; you can also edit and save it and the window updates live. `theme.schema.json` beside it gives editor completion; `paper.json` (light) and `frost.json` (glass) are samples. |
+| `session.json` | Open tabs, restored on the next start. |
+| `bookmarks.json` | Bookmarks. A bookmark folder named `Home` picks the home tab's tiles. |
 | `user\` | Per-site CSS and JS: `example.com.css`, `github.com.js`, `all.css`. Reloaded on save. |
-| `newtab\` | The start page (`index.html`). Edit freely. |
+| `newtab\` | The home tab. Lilt refreshes its own files on start; put changes in `custom.css` and `custom.js`. |
+| `Extensions\` | Installed extensions (uBlock Origin Lite, anything from the Chrome Web Store). |
 | `WebView2\` | Browser profile (cookies, cache, history, saved passwords). Readable by any program running as you. |
 | `logs\error.log` | Unexpected errors, local only. |
 
@@ -46,4 +50,4 @@ Everything lives in `%LOCALAPPDATA%\Lilt`:
 
 ## License
 
-GPL-3.0-or-later. See [LICENSE](LICENSE).
+GPL-3.0-or-later. See [LICENSE](LICENSE). Builds include [uBlock Origin Lite](https://github.com/uBlockOrigin/uBOL-home) (GPL-3.0), downloaded from its official release at build time and checked against a pinned SHA-256.

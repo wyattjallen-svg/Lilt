@@ -1,6 +1,6 @@
 # Lilt architecture (Stage 1)
 
-Status: revised draft for approval, 2026-10-14. Built so far: the prototype in section 11. Nothing else.
+Status: revised 2026-10-19 for v0.2. Built so far: the prototype in section 11, plus tabs, saved sessions, bookmarks and import, the home tab, the glass backdrop and Customize panel, bundled uBlock Origin Lite and Chrome Web Store extensions (section 13).
 
 Lilt is a personal Windows 11 browser built on WebView2. Priorities, in order: customization, performance, content blocking, privacy, import convenience. This document records what the platform allows, what Lilt has to build itself, what is still unproven, and what is not possible.
 
@@ -172,6 +172,8 @@ stateDiagram-v2
 - Closing a tab: memory returned to the OS is verified by measurement.
 - Moving a tab between windows: spike the live move; the fallback is the Discarded path.
 
+**Built in v0.2:** tabs live in the sidebar (a list when docked left or right, a strip when docked top or bottom). Restored tabs are Unloaded until selected; idle background tabs are suspended after 5 minutes unless they play audio. Discard isn't built: suspend keeps history, form contents and scroll position, which is the point. The session (URL and title per tab, the selected tab) is saved a second after each change and on close; InPrivate saves nothing. Closing the last tab leaves a home tab instead of closing the window.
+
 ### 4.5 Keyboard
 
 One command table (id, default gesture, user override). In Lilt's chrome, `KeyboardAccelerator` handles everything.
@@ -182,13 +184,17 @@ With focus inside the page:
 2. **[Experimental]** DevTools Protocol isolated world: a capture-phase `keydown` listener added with `Page.addScriptToEvaluateOnNewDocument` (`worldName`), reporting through `Runtime.addBinding` scoped to that world. Pages can't see or forge it.
 3. Rejected: main-world script plus `chrome.webview.postMessage`, because it exposes `window.chrome.webview` to every site.
 
+v0.2 ships option 2 for the tab and address shortcuts (Ctrl+T, Ctrl+Shift+T, Ctrl+W, Ctrl+Tab, Ctrl+1–9, Ctrl+L, Alt+D, F6, Ctrl+D, Ctrl+Shift+B; the sidebar moved from Ctrl+B to Ctrl+Shift+B because Ctrl+B is bold in every editor). Commands are accepted only from tab views, not pop-ups. It still doesn't fire before the page's first script on a brand-new document, and pages with a focused plugin or PDF viewer may swallow keys.
+
 Browser keys keep working regardless (Alt+Left/Right, F5, Ctrl+F, Ctrl+P, zoom, DevTools), and Tab/Shift+Tab move focus between page and chrome.
 
 ### 4.6 Pop-ups
 
-`NewWindowRequested` takes a deferral, opens a Lilt pop-up window with its own WebView2 in the same profile, and sets `NewWindow`, so OAuth (Google, Apple, GitHub), 3-D Secure and other `window.open` flows keep `window.opener` and `postMessage`. Pop-ups honor requested size and position, close on `window.close()`, and show a read-only address strip so a pop-up can't hide where it is. Only `http`, `https` and `about:blank` are opened. With tabs (Stage 2), `target=_blank` without window features becomes a tab; feature-sized `window.open` stays a pop-up.
+`NewWindowRequested` takes a deferral, opens a Lilt pop-up window with its own WebView2 in the same profile, and sets `NewWindow`, so OAuth (Google, Apple, GitHub), 3-D Secure and other `window.open` flows keep `window.opener` and `postMessage`. Pop-ups honor requested size and position, close on `window.close()`, and show a read-only address strip so a pop-up can't hide where it is. Only `http`, `https` and `about:blank` are opened. `target=_blank` and `window.open` without size or position become a tab (still the opener's `NewWindow`); sized `window.open` stays a pop-up. Pop-ups the user didn't click for are blocked, with an "Open it in a tab" action.
 
 ## 5. Content filtering
+
+**Decision for v0.2 (your request: uBlock Origin for ads and spam):** Path B ships now. Full uBlock Origin is a Manifest V2 extension, and WebView2 only runs Manifest V3 extensions, so the uBlock project's MV3 edition, **uBlock Origin Lite**, is bundled. It's fetched from its official GitHub release at build time, pinned by version and SHA-256, and installed into the profile with a fixed manifest key so its ID and settings survive updates. Its dashboard (filter lists, per-site modes) opens from the menu as a tab. Limits, from section 5.1: no per-request counts in Lilt, popups don't know the current tab, scriptlet and YouTube handling follow MV3's limits. Paths C and A stay as spikes for whatever uBO Lite misses. `--no-extensions` turns it off for comparisons.
 
 ### 5.1 Options
 
@@ -291,7 +297,7 @@ Reveal and hide rules (Core `SidebarState`, unit-tested):
 | Pointer within `revealEdge` px of the sidebar's edge, no mouse button held | Reveal |
 | Pointer back inside the sidebar's band | Cancel pending hide |
 | Pointer leaves the band or the window | Hide after `hideDelay` ms, unless keyboard focus is inside |
-| Ctrl+B or the toolbar button | Reveal (Ctrl+B also focuses it) or hide |
+| Ctrl+Shift+B or the toolbar button | Reveal (the shortcut also focuses it) or hide |
 | Escape inside, or a click on the page | Hide now |
 
 The edge is detected from the content grid's `PointerMoved` with `handledEventsToo`, which sees moves over the page because WinUI forwards them as XAML events. No hooks, no polling; the only timer is the single-shot hide delay. Mitigations for page scrollbars: Fluent overlay scrollbars, no reveal while a button is held, a small default `revealEdge` (6 px).
@@ -304,6 +310,9 @@ The edge is detected from the content grid's `PointerMoved` with `handledEventsT
 | Page dark mode | Built. `pages.colorScheme` in the theme sets `PreferredColorScheme`. |
 | Custom new-tab page | Built. `newtab\index.html` in the data folder, served as `https://newtab.lilt.example/` via virtual host mapping; editable, no access to Lilt. |
 | Per-site zoom | [Experimental]; see section 2. |
+| Home tab layout | Built (v0.2). Clock, search box and bookmark tiles, each switchable; a see-through background over the window material. Lilt writes `newtab\lilt-data.json` (colors, switches, tiles); the page reads it with no bridge to Lilt. `custom.css`/`custom.js` beside it are yours and never overwritten. Tiles come from the "Home" bookmark folder if there is one, else the bookmarks bar. |
+| Window material | Built (v0.2). `backdrop` is a name or `{ "material", "tint", "tintOpacity", "luminosityOpacity" }`; materials: Mica, Mica Alt, Acrylic, thin Acrylic ("glass"), solid. The controller stays "active" when the window loses focus so the glass doesn't flip to solid. Surface alpha controls how much of it shows through the toolbar and sidebar. The see-through home tab relies on an undocumented WinUI detail (the WebView2's bridge background brush) and is [Experimental]. |
+| Customize panel | Built (v0.2). Presets (Dusk, Paper, Frost), material, glass tint, toolbar/sidebar opacity, accent, corner radius, text size, sidebar width, spacing, home switches. Changes apply live and are written back to `theme.json`; a theme file with errors is never overwritten. |
 
 ## 7. Security and privacy
 
@@ -318,14 +327,16 @@ The edge is detected from the content grid's `PointerMoved` with `handledEventsT
 | Malicious theme or user CSS/JS | Theme: 1 MB cap, validation, no URLs. User scripts run with the page's own permissions only and are your own files | Low |
 | Local profile exposure | Per-user folder ACLs | **Any program running as you can read the profile folder, including the cookies that keep you signed in to Google and other sites.** Chromium's cookie and password encryption is tied to your Windows account: it protects against other accounts and offline disk theft, not against malware running as you. Lilt doesn't claim the profile is encrypted at rest. |
 | Unintended outbound traffic | Lilt itself sends nothing by default (see 7.3) | WebView2's required diagnostic data |
-| Address bar abuse | Only `http`, `https`, `about:blank` resolve; other schemes are refused with a message | None known |
+| Address bar abuse | Only `http`, `https`, `about:blank` resolve (plus typed `chrome-extension://` pages of installed extensions); other schemes are refused with a message | None known |
+| Malicious extension package | Chrome Web Store downloads over HTTPS only, CRX3 signature verified against the extension's public key, the key must hash to the requested ID, 200 MB cap, zip extraction refuses paths outside the folder | An extension you choose to install is trusted with what its manifest asks for |
+| Extension pages opened by websites | Pop-ups and new windows only open `http`, `https`, `about:blank` | None known |
 
 ### 7.2 Defaults
 
 - HTTPS: typed hosts become `https://`; loopback and IP literals `http://`; HTTP pages show "Not secure". Before building a custom HTTPS-first layer, test Chromium's HTTPS-upgrade features through `--browser-args` (undocumented in WebView2, so verified, not assumed).
 - Certificate errors: blocked, no override.
 - Permissions: denied by default; Stage 2 adds prompts and per-site decisions via `SetPermissionStateAsync`.
-- Password autosave on (WebView2's own store); address/card autofill off.
+- Password autosave on (WebView2's own store); address/card autofill off. Google Password Manager is part of Chrome and your Google account sync, with no API or extension that works outside Chrome, so Lilt can't use it. The supported manager is **Proton Pass** (Menu → Extensions → Add Proton Pass); move passwords across with Google's CSV export (passwords.google.com → Settings → Export) and Proton Pass's import. WebView2's own saving stays on as a fallback.
 - DevTools on.
 - Renderer crash: notice with Reload. Browser process exit: notice with Restart Lilt.
 
@@ -333,7 +344,8 @@ The edge is detected from the content grid's `PointerMoved` with `handledEventsT
 
 | Source | Traffic | Control |
 |---|---|---|
-| Lilt | None in the prototype. Later: filter-list updates | Opt-in, documented hosts |
+| Lilt | Chrome Web Store downloads, only when you install an extension | User action |
+| uBlock Origin Lite | Its filter-list updates (to the uBO project's own hosts) | Its dashboard |
 | WebView2 required diagnostic data | To Microsoft | Can't be disabled by Lilt |
 | WebView2 optional diagnostic data | If Windows optional diagnostic data is on | Windows setting |
 | SmartScreen | URL and download reputation checks to Microsoft | On by decision |
@@ -396,8 +408,8 @@ Comparisons with Edge, Firefox and Helium use the same script (`-Browser edge|fi
    If Google sign-in can't be made to work, stop and decide before further work.
 2. **Spike 2: filtering cost.** Path C proxy, Path A with host-scoped filters, initiator reconstruction, Path B as fallback.
 3. **Spike 3: lifecycle.** Hidden vs suspended vs closed with 1, 10 and 30 views; pre-warmed view.
-4. **Tabs v1.** Vertical tabs in the sidebar, lazy creation, suspend policy, URL-level session restore, keyboard switching.
-5. **Content blocking v1.** Chosen paths, counts, per-site toggle, allowlist, list updates, status.
+4. **Tabs v1.** Built in v0.2 (section 4.4). Not yet: pinned tabs, tab search, a tab context menu.
+5. **Content blocking v1.** uBlock Origin Lite built in (section 5). Lilt-side counts, status and per-site toggle wait for the Path C/A spike.
 6. **Customization v1.** Settings file, layout presets, configurable shortcuts, command palette, theme picker, per-site zoom if spike 1 allows.
 7. **Security hardening.** HTTPS-first (flags or custom), permission prompts, fullscreen hint, external-scheme prompt, traffic audit.
 8. **Import.** Section 9.1.
@@ -409,9 +421,9 @@ User-initiated, local, read-only. No cookies.
 
 | Data | Source | Handling |
 |---|---|---|
-| Bookmarks | Chrome's own `Bookmarks` file (plain JSON in the Chrome profile folder); HTML export as a fallback | Parsed read-only; titles as text; `http/https` only, others listed for review |
+| Bookmarks | Built (v0.2). Chromium `Bookmarks` files found automatically for Chrome, Edge, Helium, Brave, Vivaldi and Chromium (every profile, by its display name); or any file: Netscape HTML (what every browser's "Export bookmarks" writes, including Chrome's and Google's), CSV with a `url` column (`title`/`name`, `folder` optional; headerless url,title also works) | Read-only, shared read so the browser can stay open; titles as text; `http/https` only, duplicates skipped; 20 MB cap |
 | History | A read-only copy of Chrome's `History` SQLite file (Chrome locks the original while running) | `urls` and `visits` tables into Lilt's history store. Needs a SQLite library (Microsoft.Data.Sqlite, MIT). |
-| Passwords | Not imported into Lilt | Export the CSV from Chrome into whichever password manager you settle on (question 1). Chrome's app-bound encryption makes direct extraction impractical, and Lilt won't attempt it. |
+| Passwords | Not imported into Lilt | Export Google's CSV into Proton Pass (section 7.2). Chrome's app-bound encryption makes direct extraction impractical, and Lilt won't attempt it. |
 
 ## 10. Dependencies
 
@@ -420,6 +432,8 @@ User-initiated, local, read-only. No cookies.
 | `Microsoft.WindowsAppSDK.WinUI` 2.3.9 (+ Base, Foundation, InteractiveExperiences, Windows SDK build tools) | WinUI 3 | Microsoft Software License Terms (redistributable) | Only by switching to WPF |
 | `Microsoft.Web.WebView2` 1.0.4258.31 | WebView2 SDK (newer than WinUI's minimum 1.0.3719.77) | BSD-3-Clause-style | No |
 | .NET 10 | Runtime, `System.Text.Json` | MIT | No |
+
+| uBlock Origin Lite 2026.1018.2229 | Ad and tracker blocking (section 5) | GPL-3.0 | Yes (`--no-extensions`, or drop the build step) |
 
 No other packages. Future candidates: adblock-rust (MPL-2.0), uBO resources (GPL-3.0), Microsoft.Data.Sqlite (MIT) for history import. Licensing questions around redistribution are deferred until a public release is considered.
 
@@ -441,8 +455,21 @@ Command line: `--url <url>`, `--theme <file>`, `--user-data <folder>`, `--startu
 
 ## 12. Questions for you
 
-1. **Password manager, after spike 1.** WebView2's built-in saving (on in the build) if saved passwords persist and the dropdown works, or an external manager with auto-type (KeePassXC, 1Password desktop)?
+1. ~~Password manager~~: answered in v0.2: Proton Pass, with WebView2's saving as fallback (section 7.2).
 2. **Rust in the build.** If the filtering spike shows Path A is needed, is adding a Rust toolchain acceptable? Without it, cosmetic filtering and path rules wait or fall to Path B.
+
+## 13. v0.2
+
+Built on the prototype after your review (2026-10-19):
+
+- Tabs in the sidebar with saved sessions, lazy restore, suspend after 5 idle minutes, favicons, drag to reorder, middle-click to close, reopen closed tab (section 4.4).
+- Page shortcuts through the isolated-world key shim (section 4.5).
+- Bookmarks: star in the address bar, sidebar list with search, import from Chromium profiles, HTML or CSV (section 9.1).
+- Home tab with clock, search and bookmark tiles, each switchable, see-through over the window material (section 6.4).
+- Glass: Mica, Mica Alt, Acrylic, thin Acrylic with tint controls; Frost preset; Customize panel that writes `theme.json` (section 6.4).
+- uBlock Origin Lite bundled and on by default; Chrome Web Store extensions with signature checks; Proton Pass one click away (sections 5, 7).
+
+Command line additions: `--install-extension <id or Web Store link>`, `--no-extensions`.
 
 ## Sources
 
