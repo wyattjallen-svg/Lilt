@@ -20,7 +20,7 @@ Download the latest release from [Releases](https://github.com/wyattjallen-svg/L
 | Ctrl+Shift+, | Customize (Keys tab: change any shortcut) |
 
 - Architecture and decisions: [docs/architecture.md](docs/architecture.md)
-- Prototype results, test checklist and limitations: [docs/prototype-report.md](docs/prototype-report.md)
+- Release report (CI checks, measurements, test checklist, limitations): [docs/prototype-report.md](docs/prototype-report.md)
 
 Development builds: CI publishes every push to `prototype` as the **prototype-build** pre-release; tags `v*` become releases.
 

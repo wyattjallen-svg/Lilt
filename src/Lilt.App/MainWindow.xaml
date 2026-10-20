@@ -401,8 +401,7 @@
       <!-- Pages. In split view the two visible pages get a column (or row) each, with SplitHandle between them. -->
       <Grid x:Name="PageHost" Grid.Row="1" Grid.Column="1">
         <Border x:Name="SplitHandle" Visibility="Collapsed" Canvas.ZIndex="1" Background="Transparent"
-                PointerPressed="SplitHandle_PointerPressed" PointerMoved="SplitHandle_PointerMoved" PointerReleased="SplitHandle_PointerReleased"
-                PointerCaptureLost="SplitHandle_PointerCaptureLost" DoubleTapped="SplitHandle_DoubleTapped"
+                PointerPressed="SplitHandle_PointerPressed" DoubleTapped="SplitHandle_DoubleTapped"
                 ToolTipService.ToolTip="Drag to resize; double-click to make the panes equal" AutomationProperties.Name="Split view divider">
           <Border x:Name="SplitGrip" Background="{StaticResource LiltBorderBrush}" CornerRadius="2" />
         </Border>
@@ -414,8 +413,7 @@
       <Canvas x:Name="WidgetLayer" Grid.Row="1" Grid.Column="1" Canvas.ZIndex="1" SizeChanged="WidgetLayer_SizeChanged">
         <Border x:Name="MediaWidget" Tag="player" Visibility="Collapsed" Width="300" Padding="10" CornerRadius="12" BorderThickness="1"
                 Background="{StaticResource LiltOverlayBrush}" BorderBrush="{StaticResource LiltBorderBrush}"
-                PointerPressed="Widget_PointerPressed" PointerMoved="Widget_PointerMoved" PointerReleased="Widget_PointerReleased"
-                PointerCaptureLost="Widget_PointerCaptureLost" AutomationProperties.Name="Now playing">
+                PointerPressed="Widget_PointerPressed" AutomationProperties.Name="Now playing">
           <Grid ColumnSpacing="10" RowSpacing="6">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="Auto" />
@@ -485,8 +483,7 @@
 
         <Border x:Name="VisualizerWidget" Tag="visualizer" Visibility="Collapsed" Width="300" Height="72" Padding="8" CornerRadius="12" BorderThickness="1"
                 Background="{StaticResource LiltOverlayBrush}" BorderBrush="{StaticResource LiltBorderBrush}"
-                PointerPressed="Widget_PointerPressed" PointerMoved="Widget_PointerMoved" PointerReleased="Widget_PointerReleased"
-                PointerCaptureLost="Widget_PointerCaptureLost" DoubleTapped="Visualizer_DoubleTapped"
+                PointerPressed="Widget_PointerPressed" DoubleTapped="Visualizer_DoubleTapped"
                 ToolTipService.ToolTip="Drag to move; double-click to change style" AutomationProperties.Name="Visualizer">
           <Canvas x:Name="VisualizerCanvas" />
         </Border>
@@ -499,8 +496,7 @@
             <RowDefinition Height="*" />
           </Grid.RowDefinitions>
           <Border Tag="pip" Padding="8,0,2,0" CornerRadius="8,8,0,0" Background="{StaticResource LiltOverlayBrush}"
-                  PointerPressed="Widget_PointerPressed" PointerMoved="Widget_PointerMoved" PointerReleased="Widget_PointerReleased"
-                  PointerCaptureLost="Widget_PointerCaptureLost" DoubleTapped="PipBar_DoubleTapped"
+                  PointerPressed="Widget_PointerPressed" DoubleTapped="PipBar_DoubleTapped"
                   ToolTipService.ToolTip="Drag to move; double-click to go back to the tab" AutomationProperties.Name="Popped-out video">
             <Grid ColumnSpacing="2">
               <Grid.ColumnDefinitions>
@@ -521,8 +517,7 @@
           </Border>
           <Polygon Grid.Row="1" Tag="pipsize" Points="18,0 18,18 0,18" HorizontalAlignment="Right" VerticalAlignment="Bottom"
                    Fill="{StaticResource LiltOverlayBrush}" Stroke="{StaticResource LiltBorderBrush}"
-                   PointerPressed="Widget_PointerPressed" PointerMoved="Widget_PointerMoved" PointerReleased="Widget_PointerReleased"
-                   PointerCaptureLost="Widget_PointerCaptureLost" ToolTipService.ToolTip="Drag to resize" />
+                   PointerPressed="Widget_PointerPressed" ToolTipService.ToolTip="Drag to resize" />
         </Grid>
       </Canvas>
 

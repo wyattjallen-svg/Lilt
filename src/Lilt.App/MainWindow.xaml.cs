@@ -114,6 +114,12 @@ public sealed partial class MainWindow : Window
         ContentArea.AddHandler(UIElement.PointerMovedEvent, new PointerEventHandler(Content_PointerMoved), true);
         ContentArea.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(Content_PointerPressed), true);
         ContentArea.AddHandler(UIElement.PointerExitedEvent, new PointerEventHandler(Content_PointerExited), true);
+        ContentArea.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler((_, _) => EndDrag()), true);
+        ContentArea.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler((_, e) =>
+        {
+            // Capture can go (another window, a tooltip); the drag goes on as long as the button is down.
+            if (dragging is not null && !e.GetCurrentPoint(ContentArea).Properties.IsLeftButtonPressed) EndDrag();
+        }), true);
         ContentArea.SizeChanged += (_, e) => ContentArea.Clip = new RectangleGeometry { Rect = new Windows.Foundation.Rect(0, 0, e.NewSize.Width, e.NewSize.Height) };
         foreach (var element in new FrameworkElement[] { Toolbar, LeftPanel, AddressHost, RightPanel })
             element.SizeChanged += (_, _) => UpdateDragRegions();
@@ -897,6 +903,11 @@ public sealed partial class MainWindow : Window
     // so the edge reveal needs no hooks, timers or cursor polling.
     void Content_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
+        if (dragging is not null)
+        {
+            DragTo(e);
+            return;
+        }
         if (!sidebar.AutoHide || fullScreen) return;
         var point = e.GetCurrentPoint(ContentArea);
         var (x, y) = (point.Position.X, point.Position.Y);

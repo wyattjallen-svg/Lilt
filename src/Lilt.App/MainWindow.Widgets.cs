@@ -73,22 +73,43 @@ public sealed partial class MainWindow
 
     void WidgetLayer_SizeChanged(object sender, SizeChangedEventArgs e) => PlaceWidgets();
 
+    // A drag starts on the widget; its moves and the release are followed at the content area (handled events
+    // included), so it keeps going over the page and ends wherever the button comes up.
     void Widget_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
         if (dragging is not null || sender is not FrameworkElement { Tag: string tag } element) return;
         if (!e.GetCurrentPoint(element).Properties.IsLeftButtonPressed) return;
-        dragging = tag;
-        dragStart = e.GetCurrentPoint(WidgetLayer).Position;
+        StartDrag(tag, element, e);
         dragFrom = Box(Owner(tag));
         live = dragFrom;
+    }
+
+    void StartDrag(string tag, UIElement element, PointerRoutedEventArgs e)
+    {
+        dragging = tag;
+        dragMoves = 0;
+        dragStart = e.GetCurrentPoint(WidgetLayer).Position;
         element.CapturePointer(e.Pointer);
         e.Handled = true;
     }
 
-    void Widget_PointerMoved(object sender, PointerRoutedEventArgs e)
+    int dragMoves;
+
+    void DragTo(PointerRoutedEventArgs e)
     {
-        if (dragging is null) return;
-        var p = e.GetCurrentPoint(WidgetLayer).Position;
+        var point = e.GetCurrentPoint(WidgetLayer);
+        if (!point.Properties.IsLeftButtonPressed)
+        {
+            EndDrag();
+            return;
+        }
+        dragMoves++;
+        var p = point.Position;
+        if (dragging == "split")
+        {
+            SplitDragTo(e.GetCurrentPoint(PageHost).Position);
+            return;
+        }
         double dx = p.X - dragStart.X, dy = p.Y - dragStart.Y, width = WidgetLayer.ActualWidth, height = WidgetLayer.ActualHeight;
         var f = dragFrom;
         if (dragging == "pipsize")
@@ -102,14 +123,24 @@ public sealed partial class MainWindow
         PlaceWidgets();
     }
 
-    void Widget_PointerReleased(object sender, PointerRoutedEventArgs e) => EndDrag();
-    void Widget_PointerCaptureLost(object sender, PointerRoutedEventArgs e) => EndDrag();
-
     void EndDrag()
     {
-        if (dragging is not { } tag || live is not { } r) return;
+        if (dragging is not { } tag) return;
+        report.Key("drag", $"{tag} after {dragMoves} moves");
+        if (tag == "split")
+        {
+            dragging = null;
+            EndSplitDrag();
+            return;
+        }
         var widget = Owner(tag);
         dragging = null;
+        // A click that didn't move anything leaves the theme alone.
+        if (live is not { } r || r == dragFrom)
+        {
+            live = null;
+            return;
+        }
         live = null;
         double width = WidgetLayer.ActualWidth, height = WidgetLayer.ActualHeight;
         if (width <= 0 || height <= 0) return;

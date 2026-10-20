@@ -1,77 +1,78 @@
-# Prototype report (v0.3)
+# Release report (v0.4)
 
-Scope: v0.2 (tabs, sessions, bookmarks and import, home tab, glass, Customize panel, uBlock Origin Lite, Chrome Web Store extensions) plus v0.3: the design language from your sheet, every toolbar item, sidebar section and home element movable and removable, and efficiency mode. Architecture sections 6.5, 6.6, 8.0 and 14 describe them.
+Scope: v0.4 adds the now-playing player, the visualizer, picture in picture with an in-window pop-out, split view, peek, the command palette, shortcuts from the theme and a quieter efficiency mode, on top of v0.3 (design language, everything movable and removable, efficiency mode) and v0.2 (tabs, sessions, bookmarks and import, home tab, glass, uBlock Origin Lite, Chrome Web Store extensions). Architecture sections 4.5, 6.7, 6.8, 8.0 and 15 describe the new parts.
 
 ## Build and verification
 
-Build tested: commit `25ef4d3`, [CI run](https://github.com/wyattjallen-svg/Lilt/actions/runs/39448993185), release `prototype-build`. Output: 246.5 MB unpacked, 1,392 files, 89.5 MB zipped (uBlock Origin Lite adds about 33 MB unpacked).
+Every push builds a self-contained ReadyToRun x64 package on Windows CI (Windows Server 2025), runs the core tests, and launches the build through a set of scenarios with feature checks and screenshots; tags `v*` publish a release. Package: 89.7 MB zipped, 246.9 MB unpacked.
 
-| Check | Where | Result |
-|---|---|---|
-| Core unit tests (50) | Linux and Windows CI | Pass |
-| Self-contained ReadyToRun publish | Windows CI (Windows Server 2025) | Pass |
-| Launches: home tab (Minimal), example.com, Light theme page and home, Glass home, ad-block tester, Proton Pass install, keyboard and session, efficiency mode | Windows CI | All load their first page; no crashes; no `error.log` |
-| uBlock Origin Lite installs on first start and is on | Windows CI | Pass; [adblock-tester.com](https://adblock-tester.com/) scores 91/100 |
-| Proton Pass installs from the Chrome Web Store (signature-checked) | Windows CI | Pass |
-| Ctrl+T from the address box (XAML) and from inside a page (key shim); session saved on close | Windows CI | Pass (3 tabs restored) |
-| Efficiency mode: paused behind a full-screen window and when minimized, page suspended both times, back to full in front | Windows CI | Pass |
-| Glass theme selects Acrylic; Light and Minimal render; new icon in the taskbar | Windows CI | Pass (screenshots) |
-| Interactive testing | Your PC | Checklist below |
+New features are driven by `--run` scripts (commands, waits and `state` snapshots of what's on screen) against a local test page that plays a looping tone with media-session metadata next to a silent animated video, so the checks don't depend on outside sites.
 
-Bugs CI caught in this round: the sidebar's restored tab started loading before the ad blocker was ready; the in-page shortcut shim needed its binding installed per document (Chromium only installs name-based bindings when `Runtime.enable` is on, which Lilt avoids because sites can detect it); WebView2 event senders aren't always the same object as the stored view; a crash when the window closed while efficiency mode read a closing view; a stuck measurement step (now time-limited).
+| Check | Result |
+|---|---|
+| Core unit tests (56: theme parsing and writing, shortcuts, media info, spectrum, power rules, session, …) | Pass |
+| All scenarios load their first page; no crashes; no `error.log`; every run closes within 15 s | Pass |
+| Media reported from the page (title, artist, duration, playing) | Pass |
+| Player stays out of the way while the playing tab is on screen; shows when it isn't | Pass |
+| Visualizer draws and hears the sound (loopback where Windows can hear it; CI's VM has no audio device, so it switched to the tab's sound by itself) | Pass |
+| Split view pairs two tabs; picture in picture opens Windows' floating video window (WebView2 supports it) and closes again | Pass |
+| In-window pop-out: the tab floats in a frame over another tab, can be dragged with the mouse (the new place is saved to the theme) and goes back | See the release's `smoke-checks.md` |
+| Peek opens a link over the page; the command palette opens | Pass |
+| A shortcut changed in the theme works inside pages; a removed one does nothing | Pass |
+| Efficiency mode pauses behind a full-screen window and when minimized, suspends the page, returns to full in front | Pass |
+| uBlock Origin Lite installs and is on; Proton Pass installs from the Chrome Web Store; Glass gets Acrylic; Ctrl+T in the toolbar and in pages; session saved | Pass |
+
+What the engine on CI's VM reported (`--run probe`): picture in picture, document picture in picture, media session, `captureStream` and full screen all available; Windows lists Lilt's media as a session of `msedgewebview2.exe` with the page's title; process loopback works.
+
+Bugs CI caught in this round: selecting the first tab at startup laid out pages before the media panel existed (crash at launch); a media element that started before the page helper arrived went unreported; screenshots raced the script; a minimized window that Windows left as the foreground window counted as "in front", so minimizing didn't pause Lilt.
 
 ## Measured resource use
 
-**CI numbers, not your PC.** GitHub's Windows Server 2025 VM: 2 vCPUs (AMD EPYC 7763), 8 GB, no GPU, WebView2 runtime 154.0.4258.62. `tools/measure.ps1`, 3 runs, 20 s settle, CPU over 30 s, whole process tree.
+**CI numbers, not your PC.** GitHub's Windows Server 2025 VM: 2 vCPUs (AMD EPYC 7763), 8 GB, no GPU, WebView2 runtime 154.0.4258.62. `tools/measure.ps1`, 3 runs, 20 s settle, CPU over 30 s, whole process tree. The animated page is `bench.html` (400 moving circles on a canvas, bundled), software-rendered on this GPU-less VM.
 
-| Scenario | Private bytes (median) | Working set (median) | Processes | CPU, % of one core | Start → first page |
-|---|---|---|---|---|---|
-| `about:blank`, first start (installs uBlock Origin Lite) | 172.6 MB | 449.6 MB | 7 | 0.5% | 3.2 s |
-| `about:blank`, no extensions | 145.6 MB | 415.7 MB | 7 | 0.3% | 1.9 s |
-| `about:blank`, second start (ad blocker already installed) | 146.7 MB | 411.9 MB | 7 | 0.1% | 1.5 s |
-| Wikipedia article, in front | 201.2 MB | 500.4 MB | 7 | 0.6% | 2.3 s |
+| Scenario | Private bytes | Working set | CPU, % of one core | Power level |
+|---|---|---|---|---|
+| `about:blank`, first start (installs uBlock Origin Lite) | 170.7 MB | 444.4 MB | 0.5% | Full |
+| `about:blank`, no extensions | 145.0 MB | 415.3 MB | 0.2% | Full |
+| Animated page, in front | 263.4 MB | 561.1 MB | 20.4% | Full |
+| Animated page, behind another app's maximized window | 155.7 MB | 95.0 MB | 0.6% | Hidden |
+| Animated page, behind a full-screen window | 161.5 MB | 61.1 MB | 0.3% | Paused |
+| Animated page, behind a full-screen window, efficiency mode off | 258.8 MB | 557.8 MB | 0.8% | (off) |
 
 Reading these:
 
-- Once installed, uBlock Origin Lite costs about 1 to 4 MB at idle; the first start pays for unpacking it (the first page now waits at most 1.5 s for it, then the blocker joins and Lilt offers a reload).
-- Lilt's own WinUI process is about 50 MB private; the rest is WebView2.
-- Efficiency mode was verified by behavior on CI rather than by savings figures: behind a full-screen window and when minimized, Lilt reported "paused", its page was suspended, and every process's working set dropped as the low memory target paged memory out (the renderer and GPU process went from hundreds of MB to under 1 MB resident). It returned to normal within a moment of coming back to the front.
-- CPU savings can't be measured meaningfully on this VM: it has no GPU, so an animated test page (WebGL) is rendered in software at nearly two full cores, which also starves Lilt's own timers. On your PC, `tools/measure.ps1 -Exe .\Lilt.exe -Url <a busy page> -Warm -Cover` measures Lilt behind a full-screen window; add `-Theme` with `"efficiency": false` for the comparison.
+- Windows and Chromium already stop most drawing for a covered window (0.8% CPU with efficiency mode off). What efficiency mode adds is memory: behind another window Lilt's whole process tree drops from about 560 MB to 95 MB resident (Hidden) or 61 MB (Paused), and about 100 MB of private memory is released, so a game in front gets that RAM back. Everything returns when Lilt comes to the front; Hidden pages aren't suspended, so they repaint at once.
+- CPU in front is the animated page itself (software rendering); Lilt's own UI process idles near zero, and its drawing (visualizer, player clock) stops whenever the window can't be seen.
+- Minimized: fixed in this release (see above); the measurement is in the release's `measure-minimized.md`.
 
 ## Testing this build
 
-Unzip all the `part` zips into one folder and run `Lilt.exe`. Your existing tabs, bookmarks and settings carry over. If your `theme.json` was never edited it switches to the new Minimal look; otherwise pick Minimal, Glass or Light under Customize → Look.
+Unzip `Lilt-v0.4.0-win-x64.zip` and run `Lilt.exe`. Tabs, bookmarks and settings from earlier builds carry over; your `theme.json` gains the new blocks with their defaults.
 
-**Look and layout**
-- [ ] Customize (palette button or Ctrl+Shift+,): try Minimal, Glass and Light; change the material, glass tint, accent and any color in the picker; corner radius, font, text size, toolbar height.
-- [ ] Glass on your PC: with Glass or thin Acrylic the toolbar and sidebar should show a blurred desktop behind them (CI's VM can't render this). The Glass home tab shows hills; Home → Background → Pick an image uses your own.
-- [ ] Layout tab: each preset (Compact, Research, Vertical tabs, Top tabs, Bottom bar); untick toolbar items and move others with the arrows; reorder or hide sidebar sections.
-- [ ] Home tab: reorder or hide the logo, clock, search, tiles, hint and corner button; add a tile with +, remove one with its ×; visit a bookmarked site and its tile picks up the site icon.
+**Media**
+- [ ] Play music on YouTube Music or Spotify, switch to another tab: the player shows title, artist and artwork; play/pause, previous/next, seek (click the bar) and mute work; the arrow goes back to the tab. Drag it somewhere else; restart Lilt and it's still there.
+- [ ] The visualizer appears on music sites (Ctrl+Shift+U toggles it anywhere). Double-click it to change style. Customize → Media: bars, size, opacity, source, the music-site list.
+- [ ] A YouTube video: Alt+P (or the player's pop-out button) opens Windows' floating video window; Alt+P again closes it. Set "Pop-out videos" to "Inside Lilt" and Alt+P floats the tab in a frame over the page you're on: drag it by its bar, resize from its corner, double-click the bar to go back.
+- [ ] Media keys on your keyboard and Windows' volume flyout control what's playing.
 
-**Tabs**
-- [ ] Right-click a tab: pin (icon only, stays on top), mute, duplicate, bookmark, close others. A page with sound shows a speaker you can click to mute. Loading shows a spinner; a failed load turns the tab red.
-- [ ] Ctrl+T, Ctrl+W, Ctrl+Tab, Ctrl+1–9, Ctrl+L, Ctrl+D and Alt+F work with the focus inside a page as well as in the toolbar.
-- [ ] Close and reopen Lilt: tabs (including pinned) come back.
+**Layout**
+- [ ] Ctrl+Shift+S splits the current tab with the previous one; drag the divider; click into either side; right-click a tab → Open in split view / Swap / Close split view. Customize → Layout: side by side or stacked, gap.
+- [ ] Shift+click a link: it opens in a peek panel; Esc or a click outside closes it.
+- [ ] Ctrl+K: type "glass", "split", a tab's title or a bookmark and press Enter.
+- [ ] Customize → Keys: click a box and press a new combination; it works in pages and in the toolbar.
 
-**Efficiency mode**
-- [ ] Customize → Power shows the status. Start a game (or any full-screen app) with Lilt open behind it: after about 10 seconds Task Manager should show Lilt and its WebView2 processes with the efficiency-mode leaf icon, and Lilt's CPU near zero. Come back: everything resumes, nothing reloads.
-- [ ] Play music or a video in a tab, then switch to the game: Lilt stays at full speed so playback doesn't stutter.
-- [ ] Minimize Lilt for a minute and restore it: pages come back where they were.
-- [ ] Optional: compare `tools/measure.ps1 -Url <a page> -Warm -Minimize -AfterMinimize 40` against Edge or Helium.
-
-**Carried over from v0.2 (still worth confirming)**
-- [ ] Google sign-in (accounts.google.com, Gmail, YouTube), passkeys, OAuth pop-ups.
-- [ ] Bookmarks import from Chrome/Helium/Edge or an HTML/CSV file; Proton Pass (Extensions button → Add Proton Pass) fills a login form.
-- [ ] uBlock Origin Lite: adblock-tester.com score; its dashboard opens from the menu.
+**Efficiency**
+- [ ] Customize → Power shows the level. Cover Lilt with another app's window for 15 seconds: Task Manager shows Lilt's memory dropping; come back and it's instant. A full-screen game pauses it (leaf icon in Task Manager).
+- [ ] While music plays in Lilt, it stays at full speed in the background.
 
 ## Known limitations
 
 - The toolbar stays at the top: it's also the window's title bar. Everything on it can be reordered or hidden.
-- Glass rendering and efficiency-mode's Task Manager leaf can't be checked on CI's VM; screenshots there show the solid fallback.
-- Pages hidden for power (minimized or behind a full-screen app) take a moment to repaint when you come back.
-- Extensions' popups don't know the current tab (WebView2 limit); per-site ad-blocking modes are set in uBlock Origin Lite's dashboard.
-- Google Password Manager can't run outside Chrome; Proton Pass or WebView2's own saving are the options.
-- Permission prompts (camera, location...) are still denied with a notice.
+- Previous/next on sites Lilt doesn't know go through Windows' media controls, which only work if the site registers media session handlers.
+- The visualizer hears Lilt's sound through Windows 11's loopback; on Windows 10 (not supported) or with no audio device it uses the tab's sound, which DRM-protected services (Spotify, Apple Music) don't allow.
+- Peek opens links in a temporary view; "Open as tab" loads the page again.
+- Glass rendering and the Task Manager leaf can't be checked on CI's VM; screenshots there show the solid fallback.
+- Extensions' popups don't know the current tab (WebView2 limit). Permission prompts (camera, location…) are still denied with a notice.
 
 ## Dependency audit
 

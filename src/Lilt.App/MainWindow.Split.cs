@@ -141,24 +141,19 @@ public sealed partial class MainWindow
 
     void SplitHandle_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        if (dragging is not null) return;
         dragRatio = theme.Split.Ratio;
-        SplitHandle.CapturePointer(e.Pointer);
-        e.Handled = true;
+        StartDrag("split", SplitHandle, e);
     }
 
-    void SplitHandle_PointerMoved(object sender, PointerRoutedEventArgs e)
+    void SplitDragTo(Windows.Foundation.Point p)
     {
-        if (dragRatio is null) return;
         var horizontal = theme.Split.Orientation == SplitOrientation.Horizontal;
-        var p = e.GetCurrentPoint(PageHost).Position;
         var size = (horizontal ? PageHost.ActualWidth : PageHost.ActualHeight) - theme.Split.Gap;
         if (size <= 0) return;
         dragRatio = Math.Clamp(((horizontal ? p.X : p.Y) - theme.Split.Gap / 2) / size, 0.15, 0.85);
         LayoutPages();
     }
-
-    void SplitHandle_PointerReleased(object sender, PointerRoutedEventArgs e) => EndSplitDrag();
-    void SplitHandle_PointerCaptureLost(object sender, PointerRoutedEventArgs e) => EndSplitDrag();
 
     void EndSplitDrag()
     {
