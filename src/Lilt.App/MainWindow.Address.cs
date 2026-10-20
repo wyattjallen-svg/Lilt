@@ -201,9 +201,10 @@ public sealed partial class MainWindow
             };
             SuggestList.Children.Add(row);
         }
-        SuggestPanel.Width = Math.Max(320, AddressBox.ActualWidth);
-        SuggestPopup.VerticalOffset = AddressHost.ActualHeight + 4;
-        SuggestPopup.IsOpen = suggestRows.Count > 0;
+        var at = AddressBox.TransformToVisual(ContentArea).TransformPoint(default);
+        SuggestPanel.Width = Math.Min(Math.Max(320, AddressBox.ActualWidth), Math.Max(200, ContentArea.ActualWidth - 8));
+        SuggestPanel.Margin = new Thickness(Math.Clamp(at.X, 4, Math.Max(4, ContentArea.ActualWidth - SuggestPanel.Width - 4)), Math.Max(4, at.Y + AddressBox.ActualHeight + 4), 0, 0);
+        SuggestPanel.Visibility = suggestRows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     void Highlight(int index)
@@ -224,13 +225,13 @@ public sealed partial class MainWindow
 
     void HideSuggestions()
     {
-        SuggestPopup.IsOpen = false;
+        SuggestPanel.Visibility = Visibility.Collapsed;
         suggestRows = [];
     }
 
     void AddressBox_KeyDown(object sender, KeyRoutedEventArgs e)
     {
-        var open = SuggestPopup.IsOpen && suggestRows.Count > 0;
+        var open = SuggestPanel.Visibility == Visibility.Visible && suggestRows.Count > 0;
         static bool Down(VirtualKey k) => InputKeyboardSource.GetKeyStateForCurrentThread(k).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
         switch (e.Key)
         {

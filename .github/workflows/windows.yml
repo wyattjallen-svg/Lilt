@@ -125,12 +125,15 @@ jobs:
             return $dir
           }
           # Follows a --run script through the keys file: a screenshot at each "mark <name>", until "run done".
-          function Follow([string]$name, [int]$timeout = 150) {
+          # (-until <mark> returns at that mark, so the test can act there; marks already shot aren't shot again.)
+          $script:shots = @{}
+          function Follow([string]$name, [int]$timeout = 150, [string]$until = '') {
             $keys = Join-Path $env:RUNNER_TEMP "lilt-$name/startup.json.keys.txt"
-            $deadline = (Get-Date).AddSeconds($timeout); $shot = @{}
+            $deadline = (Get-Date).AddSeconds($timeout)
             while ((Get-Date) -lt $deadline) {
               $lines = if (Test-Path $keys) { @(Get-Content $keys) } else { @() }
-              foreach ($l in $lines) { if ($l -match ' run mark (\S+)$' -and -not $shot[$Matches[1]]) { $shot[$Matches[1]] = $true; try { Shot "screenshot-$name-$($Matches[1]).png" } catch { } } }
+              foreach ($l in $lines) { if ($l -match ' run mark (\S+)$' -and -not $script:shots["$name-$($Matches[1])"]) { $script:shots["$name-$($Matches[1])"] = $true; try { Shot "screenshot-$name-$($Matches[1]).png" } catch { } } }
+              if ($until -and ($lines -match " run mark $until$")) { return }
               if ($lines -match ' run done') { return }
               Start-Sleep -Milliseconds 250
             }
@@ -296,14 +299,13 @@ jobs:
           (Get-Content out/Lilt/Themes/minimal.json -Raw) -replace '"search": "duckduckgo"', '"search": "google"' | Set-Content $gt
           # The middle-click is real mouse input on the page's link, placed from the link's position the script reports.
           $script = "wait 3000; import $csv; wait 1500; state; mark import; wait 1000; go example.com; wait 4000; newTab; wait 1500; type exa; wait 1500; state; mark suggest; wait 1000; " +
-            "prevTab; wait 2000; eval JSON.stringify(document.querySelector('a').getBoundingClientRect()); state; mark click; wait 4000; state; mark behind; wait 500; " +
+            "prevTab; wait 2000; eval (document.querySelector('a').scrollIntoView({block: 'center'}), JSON.stringify(document.querySelector('a').getBoundingClientRect())); wait 500; state; mark click; wait 4000; state; mark behind; wait 500; " +
             "go lilt browser; wait 3000; state"
           [void](Smoke 'everyday' @('--theme', "`"$gt`"", '--run', "`"$script`"") {
             param($p)
             $p.Refresh(); [void][Lilt.Input]::SetForegroundWindow($p.MainWindowHandle)
             $keys = Join-Path $env:RUNNER_TEMP 'lilt-everyday/startup.json.keys.txt'
-            $deadline = (Get-Date).AddSeconds(90)
-            while ((Get-Date) -lt $deadline -and -not ((Test-Path $keys) -and (Get-Content $keys) -match ' run mark click')) { Start-Sleep -Milliseconds 250 }
+            Follow 'everyday' -timeout 90 -until 'click'
             $rect = @(Get-Content $keys | Where-Object { $_ -match '^\d+ eval \{' } | ForEach-Object { ($_ -split ' eval ', 2)[1] | ConvertFrom-Json })[-1]
             $st = @(States 'everyday')[-1]
             if ($rect -and $st.page) {

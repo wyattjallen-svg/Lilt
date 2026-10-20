@@ -101,13 +101,7 @@
         <TextBox x:Name="AddressBox" Grid.Column="1" PlaceholderText="Search or enter address" IsSpellCheckEnabled="False"
                  InputScope="Url" AutomationProperties.Name="Address and search bar"
                  KeyDown="AddressBox_KeyDown" GotFocus="AddressBox_GotFocus" LostFocus="AddressBox_LostFocus" TextChanged="AddressBox_TextChanged" />
-        <!-- Suggestions as you type. The rows can't take focus, so typing carries on in the address box. -->
-        <Popup x:Name="SuggestPopup" Grid.Column="1" ShouldConstrainToRootBounds="True">
-          <Border x:Name="SuggestPanel" Padding="4" CornerRadius="10" BorderThickness="1" Background="{StaticResource LiltOverlayBrush}"
-                  BorderBrush="{StaticResource LiltBorderBrush}">
-            <StackPanel x:Name="SuggestList" Spacing="1" />
-          </Border>
-        </Popup>
+
       </Grid>
 
       <StackPanel x:Name="RightPanel" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" />
@@ -694,6 +688,13 @@
             </ToggleButton>
           </StackPanel>
         </Grid>
+      </Border>
+
+      <!-- Address-bar suggestions, placed under the address box. The rows can't take focus, so typing carries on there. -->
+      <Border x:Name="SuggestPanel" Grid.RowSpan="3" Grid.ColumnSpan="3" Canvas.ZIndex="6" Visibility="Collapsed" VerticalAlignment="Top"
+              HorizontalAlignment="Left" Padding="4" CornerRadius="10" BorderThickness="1" Background="{StaticResource LiltOverlayBrush}"
+              BorderBrush="{StaticResource LiltBorderBrush}">
+        <StackPanel x:Name="SuggestList" Spacing="1" />
       </Border>
 
       <InfoBar x:Name="NoticeBar" Grid.Row="1" Grid.Column="1" Canvas.ZIndex="4" IsOpen="False" IsClosable="True"

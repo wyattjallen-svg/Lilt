@@ -260,7 +260,7 @@ public sealed partial class MainWindow : Window
         shortcuts = Root.KeyboardAccelerators.Count,
         address = AddressBox.Text,
         url = active?.Url,
-        suggestions = SuggestPopup.IsOpen ? suggestRows.Select(r => r.Title).ToArray() : [],
+        suggestions = SuggestPanel.Visibility == Visibility.Visible ? suggestRows.Select(r => r.Title).ToArray() : [],
         bookmarks = bookmarks.Items.Count,
         history = history.Count,
         notice = NoticeBar.IsOpen ? NoticeBar.Message : null,

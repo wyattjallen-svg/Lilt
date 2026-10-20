@@ -219,6 +219,9 @@ public sealed partial class MainWindow
         // media.autoPictureInPicture: a video playing in the tab you leave pops out.
         if (old is { Media: { Playing: true, Video: true } } && old != tab && !OnScreen(old) && theme.Media.AutoPictureInPicture) _ = PipAsync(old);
         SetFullScreen(tab.Core?.ContainsFullScreenElement == true);
+        // Whatever was being typed belonged to the other tab.
+        HideSuggestions();
+        if (AddressBox.FocusState != FocusState.Unfocused) SetAddress(CurrentFull);
         UpdateNavigation();
         UpdateTitle();
         ScheduleSave();
