@@ -218,13 +218,14 @@ jobs:
       - name: Idle measurements
         shell: pwsh
         continue-on-error: true
-        timeout-minutes: 20
+        timeout-minutes: 25
         run: |
-          ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Runs 3 -Settle 20 -Sample 30 -Label "CI runner, visible" -Out measure-visible.json
-          ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Runs 3 -Settle 20 -Sample 30 -Minimize -AfterMinimize 40 -Label "CI runner, minimized 40 s" -Out measure-minimized.json
+          ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Runs 3 -Settle 20 -Sample 30 -Label "CI runner, visible, first start" -Out measure-visible.json
           ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Runs 3 -Settle 20 -Sample 30 -Label "CI runner, visible, no extensions" -Out measure-noext.json -ExtraArgs '--no-extensions'
-          ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Runs 3 -Settle 20 -Sample 30 -Warm -Label "CI runner, visible, second start" -Out measure-warm.json
-          Get-Content measure-visible.md, measure-minimized.md, measure-noext.md, measure-warm.md | Add-Content $env:GITHUB_STEP_SUMMARY
+          $page = 'https://en.wikipedia.org/wiki/Web_browser'
+          ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Url $page -Runs 3 -Settle 20 -Sample 30 -Warm -Label "CI runner, Wikipedia page, in front" -Out measure-warm.json
+          ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Url $page -Runs 3 -Settle 20 -Sample 30 -Warm -Minimize -AfterMinimize 40 -Label "CI runner, Wikipedia page, minimized 40 s (efficiency mode)" -Out measure-minimized.json
+          Get-Content measure-visible.md, measure-noext.md, measure-warm.md, measure-minimized.md | Add-Content $env:GITHUB_STEP_SUMMARY
 
       - name: Publish prerelease
         shell: pwsh
