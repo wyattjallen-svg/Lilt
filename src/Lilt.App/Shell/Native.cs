@@ -30,6 +30,21 @@ static class Native
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] static extern IntPtr GetWindowLongPtr(IntPtr window, int index);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr window, char[] name, int max);
     [DllImport("user32.dll")] static extern bool IsIconic(IntPtr window);
+    [DllImport("user32.dll")] static extern bool ClientToScreen(IntPtr window, ref Point point);
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct Point
+    {
+        public int X, Y;
+    }
+
+    // A point in the window's content (device-independent pixels) as screen pixels.
+    public static int[] ClientToScreen(IntPtr window, Windows.Foundation.Point at, double scale)
+    {
+        var p = new Point { X = (int)Math.Round(at.X * scale), Y = (int)Math.Round(at.Y * scale) };
+        ClientToScreen(window, ref p);
+        return [p.X, p.Y];
+    }
     [DllImport("kernel32.dll")] static extern bool SetProcessWorkingSetSizeEx(IntPtr process, IntPtr min, IntPtr max, uint flags);
 
     [StructLayout(LayoutKind.Sequential)]

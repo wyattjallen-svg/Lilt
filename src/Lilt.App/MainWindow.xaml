@@ -361,6 +361,8 @@
               <MenuFlyoutItem Text="Open data folder" Click="OpenDataFolder_Click">
                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE838;" /></MenuFlyoutItem.Icon>
               </MenuFlyoutItem>
+              <MenuFlyoutSeparator />
+              <MenuFlyoutItem x:Name="VersionItem" IsEnabled="False" />
             </MenuFlyout>
         </FlyoutBase.AttachedFlyout>
       </Grid>

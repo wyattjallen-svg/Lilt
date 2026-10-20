@@ -251,6 +251,37 @@ jobs:
           Check 'Command palette opens' ($s.Count -gt 6 -and $s[6].palette) "$(if ($s.Count -gt 6) { $s[6] | ConvertTo-Json -Compress })"
           Check 'Engine capabilities (info)' $true $probe
 
+          # Pop-out inside Lilt (media.pip.show "always"): the tab floats in a frame over the page you switch to, then goes back.
+          $pt = Join-Path $env:RUNNER_TEMP 'popout-theme.json'
+          (Get-Content out/Lilt/Themes/minimal.json -Raw) -replace '"pip": \{ "show": "auto"', '"pip": { "show": "always"' | Set-Content $pt
+          $pdir = Join-Path $env:RUNNER_TEMP 'lilt-popout'
+          New-Item -ItemType Directory "$pdir/newtab" -Force | Out-Null
+          Copy-Item tools/media-test.html "$pdir/newtab/media-test.html"
+          # The frame is dragged by its bar (real mouse input) while the script waits; the new place is saved to the theme.
+          $script = 'wait 4000; pip; wait 3000; state; mark floating; wait 6000; state; mark dragged; wait 1000; pip; wait 1500; state'
+          [void](Smoke 'popout' @('--theme', "`"$pt`"", '--url', 'https://newtab.lilt.example/media-test.html', '--browser-args', '"--autoplay-policy=no-user-gesture-required"', '--run', "`"$script`"") {
+            param($p)
+            $p.Refresh(); [void][Lilt.Input]::SetForegroundWindow($p.MainWindowHandle)
+            $deadline = (Get-Date).AddSeconds(60)
+            while ((Get-Date) -lt $deadline -and @(States 'popout').Count -lt 1) { Start-Sleep -Milliseconds 300 }
+            $first = @(States 'popout')[0]
+            if ($first.pipBar) {
+              Start-Sleep -Seconds 1
+              $x = $first.pipBar[0]; $y = $first.pipBar[1]
+              [void][Lilt.Input]::SetCursorPos($x, $y); [Lilt.Input]::mouse_event(2, 0, 0, 0, 0)
+              foreach ($i in 1..12) { [void][Lilt.Input]::SetCursorPos($x - 15 * $i, $y - 8 * $i); Start-Sleep -Milliseconds 40 }
+              [Lilt.Input]::mouse_event(4, 0, 0, 0, 0)
+            }
+            Follow 'popout'
+          } -settle 1)
+          $s = States 'popout'
+          Check 'Video pops out into a frame inside Lilt' ($s.Count -gt 0 -and $s[0].floating -ge 0 -and $s[0].active -ne $s[0].floating) "$(if ($s.Count) { $s[0] | ConvertTo-Json -Compress })"
+          $moved = $s.Count -gt 1 -and $s[0].pipBar -and $s[1].pipBar -and ($s[0].pipBar[0] - $s[1].pipBar[0]) -gt 100
+          $saved = (Get-Content $pt -Raw) -match '"pip":\s*\{[^}]*"x":\s*([0-9.]+)'
+          $savedX = if ($saved) { [double]$Matches[1] } else { -1 }
+          Check 'Dragging the frame moves it and saves the place to the theme' ($moved -and $savedX -ge 0 -and $savedX -lt 0.59) "bar $(if ($s.Count -gt 1) { "$($s[0].pipBar -join ',') -> $($s[1].pipBar -join ',')" }), theme x $savedX"
+          Check 'Popped-out video goes back' ($s.Count -gt 2 -and $s[2].floating -lt 0) "$(if ($s.Count -gt 2) { $s[2] | ConvertTo-Json -Compress })"
+
           # Shortcuts from the theme: the palette moved to Ctrl+Shift+Y, split view's shortcut removed.
           $kt = Join-Path $env:RUNNER_TEMP 'keys-theme.json'
           (Get-Content out/Lilt/Themes/minimal.json -Raw) -replace '"shortcuts": \{\}', '"shortcuts": { "palette": "Ctrl+Shift+Y", "split": "" }' | Set-Content $kt

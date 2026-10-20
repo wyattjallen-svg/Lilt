@@ -54,10 +54,11 @@ public sealed partial class MainWindow
     void UpdatePower()
     {
         if (powerTimer is null || closing) return;
-        var focused = Native.LiltInFront();
+        var minimized = AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized };
+        // A minimized window can stay the foreground window when nothing else takes over; it still isn't in front.
+        var focused = !minimized && Native.LiltInFront();
         if (focused) awaySince = -1;
         else if (awaySince < 0) awaySince = Environment.TickCount64;
-        var minimized = AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized };
         var away = awaySince < 0 ? 0 : (Environment.TickCount64 - awaySince) / 1000.0;
         var audible = tabs.Any(t => t.IsAudible);
         var covered = !focused && !minimized && Native.IsCovered(hwnd);

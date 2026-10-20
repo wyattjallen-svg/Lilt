@@ -83,6 +83,7 @@ public sealed partial class MainWindow : Window
         appName = options.InPrivate ? "Lilt (InPrivate)" : "Lilt";
         AppWindow.Title = appName;
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "lilt.ico"));
+        VersionItem.Text = $"Lilt {typeof(MainWindow).Assembly.GetName().Version?.ToString(3)}";
         WindowSizing.Place(this, 1280, 820);
 
         ApplyTheme(themes.Current, previous: null);
@@ -224,6 +225,10 @@ public sealed partial class MainWindow : Window
         media = mediaTab?.Media is { } m ? new { m.Title, m.Artist, m.Playing, m.Video, m.Duration, m.PictureInPicture } : null,
         power = powerLevel.ToString(),
         shortcuts = Root.KeyboardAccelerators.Count,
+        // Screen pixels of a point on the pop-out frame's bar, for tests that drag it.
+        pipBar = PipFrame.Visibility == Visibility.Visible && PipFrame.XamlRoot is { } xr
+            ? Native.ClientToScreen(hwnd, PipFrame.TransformToVisual(null).TransformPoint(new Windows.Foundation.Point(40, 15)), xr.RasterizationScale)
+            : null,
     });
 
     async Task SetUpAdBlockAsync(CoreWebView2Profile profile)
