@@ -100,6 +100,7 @@ public sealed partial class MainWindow
         var point = e.GetCurrentPoint(WidgetLayer);
         if (!point.Properties.IsLeftButtonPressed)
         {
+            report.Key("drag", "button up");
             EndDrag();
             return;
         }

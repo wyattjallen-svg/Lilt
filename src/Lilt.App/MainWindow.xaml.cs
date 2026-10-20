@@ -114,11 +114,16 @@ public sealed partial class MainWindow : Window
         ContentArea.AddHandler(UIElement.PointerMovedEvent, new PointerEventHandler(Content_PointerMoved), true);
         ContentArea.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(Content_PointerPressed), true);
         ContentArea.AddHandler(UIElement.PointerExitedEvent, new PointerEventHandler(Content_PointerExited), true);
-        ContentArea.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler((_, _) => EndDrag()), true);
-        ContentArea.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler((_, e) =>
+        ContentArea.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler((_, _) =>
         {
-            // Capture can go (another window, a tooltip); the drag goes on as long as the button is down.
-            if (dragging is not null && !e.GetCurrentPoint(ContentArea).Properties.IsLeftButtonPressed) EndDrag();
+            if (dragging is null) return;
+            report.Key("drag", "released");
+            EndDrag();
+        }), true);
+        // Capture can go (a tooltip, another window); the drag goes on as long as moves come with the button down.
+        ContentArea.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler((_, _) =>
+        {
+            if (dragging is not null) report.Key("drag", "capture lost");
         }), true);
         ContentArea.SizeChanged += (_, e) => ContentArea.Clip = new RectangleGeometry { Rect = new Windows.Foundation.Rect(0, 0, e.NewSize.Width, e.NewSize.Height) };
         foreach (var element in new FrameworkElement[] { Toolbar, LeftPanel, AddressHost, RightPanel })
