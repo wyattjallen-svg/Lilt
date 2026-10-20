@@ -112,7 +112,10 @@ jobs:
               Write-Host "::warning::$name wrote error.log"
               Get-Content "$dir/logs/error.log" | Out-Host
             }
-            if ($alive) { [void]$p.CloseMainWindow(); if (-not $p.WaitForExit(15000)) { Stop-Process -Id $p.Id -Force } }
+            if ($alive) {
+              [void]$p.CloseMainWindow()
+              if (-not $p.WaitForExit(15000)) { Stop-Process -Id $p.Id -Force; $script:checks += "| $name closes within 15 s | FAIL | had to be killed |"; Write-Host "::warning::$name didn't exit after closing" }
+            }
             else { Write-Host "::error::$name exited early with code $($p.ExitCode)" }
             $loaded = (Test-Path $report) -and (Get-Content $report -Raw | ConvertFrom-Json).firstNavigationSucceeded
             if (-not $loaded) { Write-Host "::error::$name first page did not load" }
