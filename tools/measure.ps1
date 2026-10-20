@@ -6,6 +6,7 @@
   Each run starts the browser with a fresh temporary profile, waits -Settle seconds, optionally minimizes it,
   then samples CPU over -Sample seconds and memory at the end. The root process and every descendant are counted.
   Results are written as JSON plus a markdown summary (median, min, max).
+  -Warm launches once first and closes, so first-run work (extension install, profile creation) isn't measured.
 
 .EXAMPLE
   ./tools/measure.ps1 -Exe .\out\Lilt\Lilt.exe
@@ -21,6 +22,7 @@ param(
     [int]$Settle = 30,
     [int]$Sample = 60,
     [switch]$Minimize,
+    [switch]$Warm,
     [string]$Label = '',
     [string]$Out = 'measure-results.json',
     [string[]]$ExtraArgs = @()
@@ -90,6 +92,13 @@ for ($run = 1; $run -le $Runs; $run++) {
         }
         default { @("--user-data-dir=`"$dir`"", '--no-first-run', '--no-default-browser-check', $Url) }
     }
+    if ($Warm) {
+        $w = Start-Process -FilePath $exePath -ArgumentList $argList -PassThru
+        Start-Sleep -Seconds 12
+        Stop-Tree $w.Id
+        Remove-Item $startup -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+    }
     $p = Start-Process -FilePath $exePath -ArgumentList $argList -PassThru
     Start-Sleep -Seconds $Settle
     if ($Minimize) {
@@ -102,7 +111,9 @@ for ($run = 1; $run -le $Runs; $run++) {
     Start-Sleep -Seconds $Sample
     $after = @(Get-Tree $p.Id)
     $wall = $t0.Elapsed.TotalMilliseconds
-    $cpuDelta = ($after | Measure-Object Cpu -Sum).Sum - ($before | Measure-Object Cpu -Sum).Sum
+    # Per process: new processes count from zero; ones that exited mid-sample drop out instead of making the total negative.
+    $start = @{}; foreach ($b in $before) { $start[$b.Id] = $b.Cpu }
+    $cpuDelta = 0.0; foreach ($a in $after) { $cpuDelta += $a.Cpu - $(if ($start.ContainsKey($a.Id)) { $start[$a.Id] } else { 0 }) }
     $byType = [ordered]@{}
     foreach ($g in ($after | Group-Object { "$($_.Name)/$($_.Type)" } | Sort-Object Name)) {
         $byType[$g.Name] = [ordered]@{ count = $g.Count; workingSetMB = [math]::Round(($g.Group | Measure-Object WorkingSet -Sum).Sum / 1MB, 1); privateMB = [math]::Round(($g.Group | Measure-Object Private -Sum).Sum / 1MB, 1) }
@@ -130,7 +141,7 @@ $summary = @(
     "### $Browser $Label".Trim()
     ''
     "$($conditions.os) · $($conditions.cpu) · $($conditions.logicalCores) logical cores · $($conditions.ramGB) GB · power plan $($conditions.powerPlan)"
-    "WebView2 runtime $wv2 · $Runs runs · settle $Settle s · CPU sampled over $Sample s · minimized: $([bool]$Minimize) · $Url"
+    "WebView2 runtime $wv2 · $Runs runs · settle $Settle s · CPU sampled over $Sample s · minimized: $([bool]$Minimize) · warm start: $([bool]$Warm) · $Url"
     ''
     '| Metric | Median | Min | Max |'
     '|---|---|---|---|'

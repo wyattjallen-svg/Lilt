@@ -160,7 +160,8 @@ jobs:
           ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Runs 3 -Settle 20 -Sample 30 -Label "CI runner, visible" -Out measure-visible.json
           ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Runs 3 -Settle 20 -Sample 30 -Minimize -Label "CI runner, minimized" -Out measure-minimized.json
           ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Runs 3 -Settle 20 -Sample 30 -Label "CI runner, visible, no extensions" -Out measure-noext.json -ExtraArgs '--no-extensions'
-          Get-Content measure-visible.md, measure-minimized.md, measure-noext.md | Add-Content $env:GITHUB_STEP_SUMMARY
+          ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Runs 3 -Settle 20 -Sample 30 -Warm -Label "CI runner, visible, second start" -Out measure-warm.json
+          Get-Content measure-visible.md, measure-minimized.md, measure-noext.md, measure-warm.md | Add-Content $env:GITHUB_STEP_SUMMARY
 
       - name: Publish prerelease
         shell: pwsh
