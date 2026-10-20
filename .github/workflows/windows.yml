@@ -241,7 +241,8 @@ jobs:
         timeout-minutes: 30
         run: |
           # Each scenario runs in its own process with a hard time limit, so one stuck run can't hold up the rest.
-          function Measure([string]$out, [string[]]$a) {
+          # (Not named Measure: that's an alias for Measure-Object, and aliases win over functions.)
+          function Invoke-Scenario([string]$out, [string[]]$a) {
             $argList = @('-NoProfile', '-File', 'tools/measure.ps1', '-Exe', 'out/Lilt/Lilt.exe', '-Runs', '3', '-Settle', '20', '-Sample', '30', '-Out', $out) + $a
             $m = Start-Process pwsh -ArgumentList $argList -NoNewWindow -PassThru
             if (-not $m.WaitForExit(480000)) {
@@ -251,10 +252,10 @@ jobs:
             }
           }
           $page = 'https://en.wikipedia.org/wiki/Web_browser'
-          Measure measure-visible.json @('-Label', '"CI runner, about:blank, first start"')
-          Measure measure-noext.json @('-Label', '"CI runner, about:blank, no extensions"', '-ExtraArgs', '--no-extensions')
-          Measure measure-warm.json @('-Url', $page, '-Warm', '-Label', '"CI runner, Wikipedia page, in front"')
-          Measure measure-minimized.json @('-Url', $page, '-Warm', '-Minimize', '-AfterMinimize', '40', '-Label', '"CI runner, Wikipedia page, minimized 40 s (efficiency mode)"')
+          Invoke-Scenario measure-visible.json @('-Label', '"CI runner, about:blank, first start"')
+          Invoke-Scenario measure-noext.json @('-Label', '"CI runner, about:blank, no extensions"', '-ExtraArgs', '--no-extensions')
+          Invoke-Scenario measure-warm.json @('-Url', $page, '-Warm', '-Label', '"CI runner, Wikipedia page, in front"')
+          Invoke-Scenario measure-minimized.json @('-Url', $page, '-Warm', '-Minimize', '-AfterMinimize', '40', '-Label', '"CI runner, Wikipedia page, minimized 40 s (efficiency mode)"')
           Get-Content measure-*.md -ErrorAction SilentlyContinue | Add-Content $env:GITHUB_STEP_SUMMARY
 
       - name: Add measurements to the release
