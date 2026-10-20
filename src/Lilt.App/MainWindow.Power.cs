@@ -16,7 +16,7 @@ public sealed partial class MainWindow
 {
     DispatcherQueueTimer? powerTimer;
     long awaySince = -1;
-    bool focused = true, energySaver, pageHiddenForPower, closing;
+    bool energySaver, pageHiddenForPower, closing;
     PowerLevel powerLevel = PowerLevel.Full;
     IntPtr hwnd;
 
@@ -26,14 +26,14 @@ public sealed partial class MainWindow
         powerTimer = DispatcherQueue.CreateTimer();
         powerTimer.Interval = TimeSpan.FromSeconds(10);
         powerTimer.Tick += (_, _) => UpdatePower();
+        // Activation changes trigger a check; while Lilt isn't in front (including a window that never got focus) a timer keeps checking.
         Activated += (_, e) =>
         {
-            focused = e.WindowActivationState != WindowActivationState.Deactivated;
-            awaySince = focused ? -1 : Environment.TickCount64;
-            if (focused) powerTimer.Stop();
-            else powerTimer.Start();
-            UpdatePower();
+            if (e.WindowActivationState == WindowActivationState.Deactivated) powerTimer.Start();
+            else powerTimer.Stop();
+            DispatcherQueue.TryEnqueue(() => UpdatePower());
         };
+        powerTimer.Start();
         try
         {
             energySaver = PowerManager.EnergySaverStatus == EnergySaverStatus.On;
@@ -52,6 +52,9 @@ public sealed partial class MainWindow
     void UpdatePower()
     {
         if (powerTimer is null || closing) return;
+        var focused = Native.LiltInFront();
+        if (focused) awaySince = -1;
+        else if (awaySince < 0) awaySince = Environment.TickCount64;
         var minimized = AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized };
         var away = awaySince < 0 ? 0 : (Environment.TickCount64 - awaySince) / 1000.0;
         var audible = tabs.Any(t => t.IsAudible);

@@ -23,6 +23,7 @@ static class Native
     [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetProcessInformation(IntPtr process, int infoClass, ref PowerThrottlingState info, int size);
     [DllImport("shell32.dll")] static extern int SHQueryUserNotificationState(out int state);
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out int pid);
     [DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr window, uint flags);
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr window, out Rect rect);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
@@ -61,6 +62,13 @@ static class Native
         {
             if (!self) CloseHandle(handle);
         }
+    }
+
+    // True when the window in front belongs to Lilt (the main window or one of its pop-ups).
+    public static bool LiltInFront()
+    {
+        var front = GetForegroundWindow();
+        return front != IntPtr.Zero && GetWindowThreadProcessId(front, out var pid) != 0 && pid == Environment.ProcessId;
     }
 
     // True when the session is locked, or a full-screen app (a game, a presentation, a full-screen video player)

@@ -7,6 +7,7 @@
   then samples CPU over -Sample seconds and memory at the end. The root process and every descendant are counted.
   Results are written as JSON plus a markdown summary (median, min, max).
   -Warm launches once first and closes, so first-run work (extension install, profile creation) isn't measured.
+  -Cover puts a full-screen window (standing in for a game) in front for -AfterCover seconds before and during the sample.
 
 .EXAMPLE
   ./tools/measure.ps1 -Exe .\out\Lilt\Lilt.exe
@@ -24,13 +25,16 @@ param(
     [switch]$Minimize,
     [int]$AfterMinimize = 10,
     [switch]$Warm,
+    [switch]$Cover,
+    [int]$AfterCover = 20,
     [string]$Label = '',
     [string]$Out = 'measure-results.json',
-    [string[]]$ExtraArgs = @()
+    [string[]]$ExtraArgs = @(),
+    [string]$Theme = ''
 )
 
 $ErrorActionPreference = 'Stop'
-Add-Type -Namespace Lilt -Name Native -MemberDefinition '[DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr h, int cmd);'
+Add-Type -Namespace Lilt -Name Native -MemberDefinition '[DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr h, int cmd); [DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr h);'
 
 function Get-Tree([int]$rootId) {
     $all = @(Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId, Name, CommandLine)
@@ -82,7 +86,7 @@ for ($run = 1; $run -le $Runs; $run++) {
     New-Item -ItemType Directory $dir | Out-Null
     $startup = Join-Path $dir 'startup.json'
     $argList = switch ($Browser) {
-        'lilt' { @('--user-data', "`"$dir`"", '--startup-report', "`"$startup`"", '--url', $Url) + $ExtraArgs }
+        'lilt' { @('--user-data', "`"$dir`"", '--startup-report', "`"$startup`"", '--url', $Url) + $(if ($Theme) { @('--theme', "`"$Theme`"") } else { @() }) + $ExtraArgs }
         'firefox' {
             Set-Content (Join-Path $dir 'user.js') @(
                 'user_pref("browser.aboutwelcome.enabled", false);'
@@ -101,7 +105,22 @@ for ($run = 1; $run -le $Runs; $run++) {
         Start-Sleep -Seconds 2
     }
     $p = Start-Process -FilePath $exePath -ArgumentList $argList -PassThru
-    Start-Sleep -Seconds $Settle
+    Start-Sleep -Seconds 3
+    $p.Refresh()
+    [void][Lilt.Native]::SetForegroundWindow($p.MainWindowHandle)
+    Start-Sleep -Seconds ([math]::Max(0, $Settle - 3))
+    $coverProc = $null
+    if ($Cover) {
+        $coverFile = Join-Path $dir 'cover.ps1'
+        Set-Content $coverFile @'
+Add-Type -AssemblyName System.Windows.Forms
+$f = New-Object System.Windows.Forms.Form
+$f.FormBorderStyle = 'None'; $f.WindowState = 'Maximized'; $f.TopMost = $true; $f.BackColor = 'Black'; $f.Text = 'Game'
+[System.Windows.Forms.Application]::Run($f)
+'@
+        $coverProc = Start-Process pwsh -ArgumentList '-NoProfile', '-File', "`"$coverFile`"" -PassThru
+        Start-Sleep -Seconds $AfterCover
+    }
     if ($Minimize) {
         $p.Refresh()
         [void][Lilt.Native]::ShowWindow($p.MainWindowHandle, 6)
@@ -127,8 +146,10 @@ for ($run = 1; $run -le $Runs; $run++) {
         cpuPercentOfOneCore = [math]::Round(100 * $cpuDelta / $wall, 2)
         byProcess = $byType
     }
+    if ($coverProc) { Stop-Process -Id $coverProc.Id -Force -ErrorAction SilentlyContinue }
     Stop-Tree $p.Id
     if (Test-Path $startup) { $r.startup = Get-Content $startup -Raw | ConvertFrom-Json }
+    if (Test-Path "$startup.keys.txt") { $r.power = @(Get-Content "$startup.keys.txt" | Where-Object { $_ -match ' power ' }) }
     $results += [pscustomobject]$r
     Write-Host ("run {0}: {1} MB working set, {2} MB private, {3} processes, {4}% of one core" -f $run, $r.workingSetMB, $r.privateMB, $r.processes, $r.cpuPercentOfOneCore)
     Start-Sleep -Seconds 2
@@ -142,7 +163,7 @@ $summary = @(
     "### $Browser $Label".Trim()
     ''
     "$($conditions.os) · $($conditions.cpu) · $($conditions.logicalCores) logical cores · $($conditions.ramGB) GB · power plan $($conditions.powerPlan)"
-    "WebView2 runtime $wv2 · $Runs runs · settle $Settle s · CPU sampled over $Sample s · minimized: $([bool]$Minimize) · warm start: $([bool]$Warm) · $Url"
+    "WebView2 runtime $wv2 · $Runs runs · settle $Settle s · CPU sampled over $Sample s · minimized: $([bool]$Minimize) · warm start: $([bool]$Warm) · covered: $([bool]$Cover) · $Url"
     ''
     '| Metric | Median | Min | Max |'
     '|---|---|---|---|'

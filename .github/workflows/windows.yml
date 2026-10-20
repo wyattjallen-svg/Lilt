@@ -251,11 +251,15 @@ jobs:
               Get-Process Lilt, msedgewebview2 -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
             }
           }
-          $page = 'https://en.wikipedia.org/wiki/Web_browser'
           Invoke-Scenario measure-visible.json @('-Label', '"CI runner, about:blank, first start"')
           Invoke-Scenario measure-noext.json @('-Label', '"CI runner, about:blank, no extensions"', '-ExtraArgs', '--no-extensions')
-          Invoke-Scenario measure-warm.json @('-Url', $page, '-Warm', '-Label', '"CI runner, Wikipedia page, in front"')
-          Invoke-Scenario measure-minimized.json @('-Url', $page, '-Warm', '-Minimize', '-AfterMinimize', '40', '-Label', '"CI runner, Wikipedia page, minimized 40 s (efficiency mode)"')
+          # A page that animates continuously (WebGL; software-rendered on this GPU-less VM), so background savings show up.
+          $page = 'https://threejs.org/examples/webgl_animation_keyframes.html'
+          $off = Join-Path $env:RUNNER_TEMP 'efficiency-off.json'
+          (Get-Content out/Lilt/Themes/minimal.json -Raw) -replace '"efficiency": true', '"efficiency": false' | Set-Content $off
+          Invoke-Scenario measure-front.json @('-Url', $page, '-Warm', '-Label', '"CI runner, animated page, in front"')
+          Invoke-Scenario measure-covered.json @('-Url', $page, '-Warm', '-Cover', '-Label', '"CI runner, animated page, behind a full-screen window, efficiency mode on"')
+          Invoke-Scenario measure-covered-off.json @('-Url', $page, '-Warm', '-Cover', '-Theme', "`"$off`"", '-Label', '"CI runner, animated page, behind a full-screen window, efficiency mode off"')
           Get-Content measure-*.md -ErrorAction SilentlyContinue | Add-Content $env:GITHUB_STEP_SUMMARY
 
       - name: Add measurements to the release
