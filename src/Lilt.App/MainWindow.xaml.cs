@@ -354,7 +354,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    void Print_Click(object sender, RoutedEventArgs e) => core?.ShowPrintUI();
+    void Print_Click(object sender, RoutedEventArgs e) => core?.ShowPrintUI(CoreWebView2PrintDialogKind.Browser);
     void DevTools_Click(object sender, RoutedEventArgs e) => core?.OpenDevToolsWindow();
     void CustomizeMenu_Click(object sender, RoutedEventArgs e) => CustomizeFlyout.ShowAt(CustomizeButton);
 
