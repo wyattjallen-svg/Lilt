@@ -211,7 +211,7 @@ sealed class BrowserEngine
                 PeekRequested?.Invoke(core, u.GetString()!);
                 break;
             case "behind" when m.TryGetProperty("url", out var b) && b.GetString() is { } link:
-                behindLink = (link, Environment.TickCount64);
+                behindLink = (link, System.Environment.TickCount64);
                 break;
         }
     }
@@ -349,7 +349,7 @@ sealed class BrowserEngine
             var features = e.WindowFeatures;
             if (OpenTabForPage is { } openTab && features is not { HasSize: true } and not { HasPosition: true })
             {
-                var behind = behindLink.Url == uri && Environment.TickCount64 - behindLink.At < 2000;
+                var behind = behindLink.Url == uri && System.Environment.TickCount64 - behindLink.At < 2000;
                 behindLink = default;
                 e.NewWindow = await openTab(behind);
                 return;
