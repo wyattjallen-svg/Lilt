@@ -1,4 +1,16 @@
-# Release report (v0.4)
+# Release report (v0.5, with v0.4's numbers)
+
+**v0.5** (after your first playtest): password exports no longer become bookmarks; address-bar completion and suggestions; your search engine; Ctrl/middle-click open behind; bookmark editing with undo; tidier address bar and notices. CI now runs 28 feature checks, all passing, including:
+
+| Check | Result |
+|---|---|
+| A Chrome password export imports no bookmarks, and bookmarks left by importing it before are found (2 of 3) and offered for removal | Pass |
+| Typing "exa" completes "example.com" from history and lists it with tabs and bookmarks | Pass |
+| A real middle-click on a link opens it in a tab behind the current one | Pass |
+| A search from the address bar uses the chosen engine (Google in the test) | Pass |
+
+Resource use is unchanged from v0.4 (below): history is one small file written at most every 5 seconds while you browse, and suggestions are only computed while you type.
+
 
 Scope: v0.4 adds the now-playing player, the visualizer, picture in picture with an in-window pop-out, split view, peek, the command palette, shortcuts from the theme and a quieter efficiency mode, on top of v0.3 (design language, everything movable and removable, efficiency mode) and v0.2 (tabs, sessions, bookmarks and import, home tab, glass, uBlock Origin Lite, Chrome Web Store extensions). Architecture sections 4.5, 6.7, 6.8, 8.0 and 15 describe the new parts.
 
