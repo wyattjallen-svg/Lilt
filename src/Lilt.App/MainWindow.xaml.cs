@@ -74,9 +74,9 @@ public sealed partial class MainWindow : Window
             sidebar.HideDelayElapsed();
             SyncSidebar();
         };
+        InitMedia();
         InitTabs();
         InitPower();
-        InitMedia();
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(Toolbar);
@@ -171,6 +171,7 @@ public sealed partial class MainWindow : Window
         first.Navigate(tab.Url);
         started = true;
         if (active is { View: null, Loading: null } other) Load(other);
+        if (active is not null && Partner(active) is { View: null, Loading: null } partner) Load(partner);
         if (tab.IsHome && tab == active) AddressBox.Focus(FocusState.Programmatic);
         if (startProblem is not null) ShowNotice(new(startProblem, NoticeKind.Warning));
         if (options.Run is { } script) await RunScriptAsync(script);
@@ -567,6 +568,13 @@ public sealed partial class MainWindow : Window
             tb.FontSize = t.Typography.Size;
             tb.FontWeight = weight;
         }
+        // Floating panels follow the theme's shape too.
+        foreach (var panel in new[] { MediaWidget, VisualizerWidget, PeekPanel })
+        {
+            panel.CornerRadius = new CornerRadius(t.Shape.Radius + 2);
+            panel.BorderThickness = new Thickness(t.Shape.BorderWidth);
+        }
+        MediaTitle.FontFamily = MediaArtist.FontFamily = MediaTime.FontFamily = PipTitle.FontFamily = PeekAddress.FontFamily = family;
         TabsTitle.FontFamily = family;
         TabsTitle.FontSize = Math.Max(9, t.Typography.Size - 2);
         AppWindow.TitleBar.PreferredHeightOption = m.TallCaption ? TitleBarHeightOption.Tall : TitleBarHeightOption.Standard;

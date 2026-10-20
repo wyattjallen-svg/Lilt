@@ -188,6 +188,8 @@ v0.2 ships option 2 for the tab and address shortcuts (Ctrl+T, Ctrl+Shift+T, Ctr
 
 Browser keys keep working regardless (Alt+Left/Right, F5, Ctrl+F, Ctrl+P, zoom, DevTools), and Tab/Shift+Tab move focus between page and chrome.
 
+v0.4: every shortcut comes from the theme's `shortcuts` block (defaults in `Lilt.Core.Commands`; a command left out keeps its default, `""` removes it). Lilt rebuilds its `KeyboardAccelerator`s when the block changes and sends the same table to every page. The page side is now a general page helper (`Browser/page.js`, embedded) created per document at `DOMContentLoaded`: `Page.createIsolatedWorld`, then `Runtime.addBinding` scoped to that world's execution context, then `Runtime.evaluate` of the helper. (Name-based bindings need `Runtime.enable`, which sites can detect, so Lilt never calls it.) "Reserved" commands (new/close/reopen tab, next/previous tab, Ctrl+1–9, address bar, palette) are taken at capture phase like Chrome's; the rest only fire if the page didn't handle the key. Lilt can call the helper back with `Runtime.evaluate` in the same context, with `userGesture` for things pages may only do on a click (picture in picture, full screen, starting audio).
+
 ### 4.6 Pop-ups
 
 `NewWindowRequested` takes a deferral, opens a Lilt pop-up window with its own WebView2 in the same profile, and sets `NewWindow`, so OAuth (Google, Apple, GitHub), 3-D Secure and other `window.open` flows keep `window.opener` and `postMessage`. Pop-ups honor requested size and position, close on `window.close()`, and show a read-only address strip so a pop-up can't hide where it is. Only `http`, `https` and `about:blank` are opened. `target=_blank` and `window.open` without size or position become a tab (still the opener's `NewWindow`); sized `window.open` stays a pop-up. Pop-ups the user didn't click for are blocked, with an "Open it in a tab" action.
@@ -341,6 +343,21 @@ Each arrangeable area is an ordered list of ids in the theme. Position in the li
 
 Also changeable from the panel: window material, glass tint, chrome opacity, any of the 11 colors (color picker with alpha), accent swatches, font, text size, corner radius, toolbar height, spacing, sidebar width and edge, auto-hide, home background and see-through, and the power settings. The toolbar stays at the top because it is also the title bar; moving it is a later option.
 
+### 6.7 Media, visualizer and pop-out (v0.4)
+
+The page helper reports each tab's media: the element that's playing (or played last), the page's `navigator.mediaSession` metadata (title, artist, album, artwork), position, duration, rate and picture-in-picture state, on media events only (debounced, sent only when something changed; no timers). Everything is page-supplied text, so `Lilt.Core.MediaInfo` clips and cleans it and keeps artwork only for http(s) URLs.
+
+- **Player**: a floating panel showing the tab that last started playing. `media.player.show`: auto shows it while that tab is out of sight (you can see the page otherwise), always, or never; its button and Ctrl+Shift+M override that until something else plays. Play/pause, seek and mute act on the page's element (mute uses the tab's own mute); previous/next press the site's own buttons where Lilt knows them (YouTube, YouTube Music, Spotify, SoundCloud, generic "Next" labels), else go through Windows' media controls, which reach the page's media session handlers. Progress moves on from the last report locally, one tick a second, only while the panel shows.
+- **Visualizer**: `Lilt.Core.Spectrum` (1024-point Hann-windowed FFT, log bands 40 Hz–16 kHz, dB levels, fast rise and slow fall). Sound comes from Windows' process loopback (`ActivateAudioInterfaceAsync` on `VAD\Process_Loopback` with Lilt's process tree, Windows 11 build 20348+), which hears every site including DRM services, without recording anything; or, where that's unavailable or chosen, from the playing element (`captureStream()` into an `AnalyserNode` in the page helper's world; doesn't change what you hear; not for DRM media). It runs only while it shows and something is audible, draws at 30 fps, and stops when the window can't be seen.
+- **Picture in picture**: Alt+P asks the page for `requestPictureInPicture()` (with a user gesture). Where WebView2 doesn't offer it, or `media.pip.show` is "always", the tab itself pops out: it leaves the page area and is shown in a draggable, resizable frame above whatever you browse, its video in element full screen so it fills that small page. The tab keeps running in place: nothing reloads.
+- **Widgets** (player, visualizer, pop-out frame) are positioned by fractions of the page area in the theme (`media.player`, `media.visualizer`, `media.pip`: x, y, width, height, opacity), so they stay put when the window resizes. Drag one and the theme is updated.
+
+### 6.8 Split view, peek and palette (v0.4)
+
+- **Split view** pairs two tabs. Showing either shows both (the earlier one in the tab list takes the first pane); showing any other tab shows it alone, and switching back restores the pair. One layout function places every view: three grid columns (or rows) for the panes and the `split.gap`, ratio from `split.ratio` (dragging the divider updates it live and saves on release). A click in a pane makes its tab active. The pair is saved in the session.
+- **Peek**: Shift+click on an http(s) link (page helper, capture phase, only plain Shift+left click) opens it in a temporary view over the page; Esc, the close button or a click outside closes it and the view is destroyed. "Open as tab" and "Open in split view" reload it in a tab.
+- **Command palette** (Ctrl+K): commands with their current shortcuts, open tabs, bookmarks, theme and layout presets, sidebar docking and settings toggles, ranked by prefix, words and then letters in order. Typing an address or a search offers to go there.
+
 ## 7. Security and privacy
 
 ### 7.1 Threat model
@@ -405,13 +422,16 @@ What Lilt adds (rules in `Lilt.Core.PowerPolicy`, unit-tested; code in `MainWind
 |---|---|---|
 | Lilt in front, or any tab playing sound | Full | Normal priority, Windows decides QoS, the active page's memory target is Normal |
 | In another app for 10 s (immediately with Battery saver) | Reduced | Below-normal priority and EcoQoS on Lilt, the WebView2 browser, GPU and utility processes; every page's memory target Low |
+| Another app's window completely covers Lilt (v0.4) | Hidden | Reduced, plus the visible pages are hidden (no drawing, Chromium's background throttling) but not suspended, so coming back is instant |
 | Minimized, or a full-screen app or game covers Lilt's monitor, or the session is locked | Paused | Reduced, plus the visible page is hidden (stops rendering, gets Chromium's background throttling) and all silent tabs are suspended |
 | Any tab not shown for `power.suspendMinutes` (default 5; 1 with Battery saver) | | That tab is suspended; it resumes when shown |
 | Tabs you aren't looking at | | Memory target Low at all times |
 
 "In front" means the foreground window belongs to Lilt (the main window or one of its pop-ups). "Covered" uses `SHQueryUserNotificationState` (the call Chromium uses to detect full-screen apps) and, for borderless games the shell doesn't flag, a frameless foreground window that exactly covers its monitor (Chromium's `IsFullScreenWindowMode` rule); either way only when it's on the same monitor as Lilt, so a page on your second monitor next to a game isn't paused. While you're in Lilt nothing polls; a 10-second timer runs only while you're away (30 s once paused). All of it is in the theme's `power` block and the Customize panel's Power tab, and can be turned off.
 
-Not done: discarding tabs (loses page state; suspend keeps it), disabling the GPU (Microsoft advises against it; software rendering costs more CPU), trimming working sets by force (Windows does it under pressure).
+v0.4 additions: a WinEvent hook on foreground changes makes Lilt react the moment another window comes to the front or goes away (no faster polling needed); entering Hidden or Paused runs a garbage collection and returns Lilt's own unused pages to Windows (`SetProcessWorkingSetSizeEx(-1, -1)`; they fault back in from memory if needed); Lilt's own drawing (visualizer, player clock) stops whenever the window can't be seen, even at Full because something is playing; `power.lean` adds Chromium's `--enable-low-end-device-mode` and `--process-per-site` (after a restart); the UI process uses non-concurrent GC (no background GC thread; the managed heap is small).
+
+Not done: discarding tabs (loses page state; suspend keeps it), disabling the GPU (Microsoft advises against it; software rendering costs more CPU), trimming WebView2's processes by force (the low memory target already makes Chromium release memory).
 
 ### 8.1 Method
 
@@ -508,6 +528,10 @@ Command line: `--url <url>`, `--theme <file>`, `--user-data <folder>`, `--startu
 
 1. ~~Password manager~~: answered in v0.2: Proton Pass, with WebView2's saving as fallback (section 7.2).
 2. **Rust in the build.** If the filtering spike shows Path A is needed, is adding a Rust toolchain acceptable? Without it, cosmetic filtering and path rules wait or fall to Path B.
+
+## 15. v0.4
+
+After your request for well-received features from other browsers (2026-10-20): now-playing player and visualizer (6.7), picture in picture with an in-window pop-out fallback (6.7), split view, peek and the command palette (6.8), shortcuts from the theme (4.5), the Hidden power level, foreground hook and memory trim (8.0). CI drives the new features with `--run` scripts on a local test page and checks them through `state` snapshots; tags `v*` publish releases.
 
 ## 14. v0.3
 

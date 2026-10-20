@@ -2,19 +2,33 @@
 
 A lighter way through the web: a personal, customizable Windows 11 browser built on WebView2 and WinUI 3.
 
-v0.3 prototype: the Lilt design language (Minimal, Glass and Light themes in a sage palette), a toolbar, sidebar and home tab whose every element can be moved, hidden or restyled from the Customize panel (Ctrl+Shift+,), tabs with saved sessions and pinning, bookmarks and import, uBlock Origin Lite built in, Proton Pass one click away, and an efficiency mode that gets out of the way of games and other apps.
+Think of it as clay: the toolbar, sidebar, home tab, floating player, visualizer, split view and every shortcut are yours to move, hide, resize and restyle, from the Customize panel (Ctrl+Shift+,), the command palette (Ctrl+K) or one `theme.json` file.
+
+v0.4: a now-playing player with artwork and controls, a music visualizer fed by Lilt's own sound, picture in picture and in-window video pop-out, split view, link peek (Shift+click), a command palette, remappable shortcuts, and a quieter efficiency mode (pages stop drawing behind other windows; memory handed back while hidden). Plus everything from v0.3: the Lilt design language (Minimal, Glass and Light), tabs with saved sessions and pinning, bookmarks and import, uBlock Origin Lite built in, Proton Pass one click away.
+
+## Get it
+
+Download the latest release from [Releases](https://github.com/wyattjallen-svg/Lilt/releases/latest), unzip it anywhere and run `Lilt.exe` (Windows 11 x64). It is self-contained (no .NET or Windows App SDK install needed) and uses the WebView2 Runtime that ships with Windows 11.
+
+| Keys | |
+|---|---|
+| Ctrl+K | Command palette: commands, tabs, bookmarks, presets, settings |
+| Ctrl+Shift+S | Split view |
+| Shift+click a link | Peek |
+| Ctrl+Shift+M / Ctrl+Shift+U | Now-playing player / visualizer |
+| Alt+P | Pop the playing video out |
+| Ctrl+Shift+, | Customize (Keys tab: change any shortcut) |
 
 - Architecture and decisions: [docs/architecture.md](docs/architecture.md)
 - Prototype results, test checklist and limitations: [docs/prototype-report.md](docs/prototype-report.md)
 
-## Run a build
-
-CI publishes every push to `prototype` as the **prototype-build** pre-release. Download `Lilt-win-x64.zip` (about 90 MB), unzip it anywhere and run `Lilt.exe`. It is self-contained (no .NET or Windows App SDK install needed) and uses the WebView2 Runtime that ships with Windows 11.
+Development builds: CI publishes every push to `prototype` as the **prototype-build** pre-release; tags `v*` become releases.
 
 ```
 Lilt.exe [url] [--url <url>] [--theme <file>] [--user-data <folder>] [--inprivate]
          [--install-extension <Web Store link or id>] [--no-extensions]
          [--user-agent "<ua>"] [--browser-args "<chromium switches>"] [--startup-report <file>]
+         [--run "<command>; wait <ms>; open <url>; peek <url>; state; ..."]
 ```
 
 ## Build from source
@@ -33,8 +47,8 @@ Everything lives in `%LOCALAPPDATA%\Lilt`:
 
 | Path | What |
 |---|---|
-| `theme.json` | Everything you can customize: colors, materials, sizes, the order and visibility of toolbar items, sidebar sections and home elements, and power settings. The Customize panel writes it; you can also edit and save it and the window updates live. `theme.schema.json` beside it gives editor completion; `minimal.json`, `glass.json` and `light.json` are the presets. |
-| `session.json` | Open tabs, restored on the next start. |
+| `theme.json` | Everything you can customize: colors, materials, sizes, the order and visibility of toolbar items, sidebar sections and home elements, where the player, visualizer and popped-out videos float, split view, shortcuts and power settings. The Customize panel writes it; you can also edit and save it and the window updates live. `theme.schema.json` beside it gives editor completion; `minimal.json`, `glass.json` and `light.json` are the presets. |
+| `session.json` | Open tabs (and the split-view pair), restored on the next start. |
 | `bookmarks.json` | Bookmarks. A bookmark folder named `Home` picks the home tab's tiles. |
 | `user\` | Per-site CSS and JS: `example.com.css`, `github.com.js`, `all.css`. Reloaded on save. |
 | `newtab\` | The home tab. Lilt refreshes its own files on start; put changes in `custom.css` and `custom.js`. A background image you pick is copied here; `icons\` holds favicons for your tiles. |
@@ -47,6 +61,7 @@ Everything lives in `%LOCALAPPDATA%\Lilt`:
 ```powershell
 ./tools/measure.ps1 -Exe .\out\Lilt\Lilt.exe                       # idle, window visible
 ./tools/measure.ps1 -Exe .\out\Lilt\Lilt.exe -Url https://en.wikipedia.org/wiki/Web_browser -Warm -Minimize -AfterMinimize 40   # efficiency mode
+./tools/measure.ps1 -Exe .\out\Lilt\Lilt.exe -Url https://newtab.lilt.example/bench.html -Warm -Occlude    # animated page behind another window
 ./tools/measure.ps1 -Browser edge -Exe "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 ```
 

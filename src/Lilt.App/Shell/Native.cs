@@ -88,6 +88,19 @@ static class Native
         return Lilt.Core.PowerPolicy.Covers((f.Left, f.Top, f.Right, f.Bottom), (w.Left, w.Top, w.Right, w.Bottom));
     }
 
+    delegate void WinEventProc(IntPtr hook, uint e, IntPtr window, int obj, int child, uint thread, uint time);
+    [DllImport("user32.dll")] static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr module, WinEventProc proc, uint pid, uint thread, uint flags);
+    static WinEventProc? foregroundProc;
+
+    // Calls back (on this thread) whenever another window comes to the front, so Lilt reacts at once instead of polling.
+    public static void OnForegroundChanged(Action changed)
+    {
+        const uint foreground = 3, minimizeEnd = 0x17;
+        foregroundProc = (_, _, _, _, _, _, _) => changed();
+        SetWinEventHook(foreground, foreground, IntPtr.Zero, foregroundProc, 0, 0, 0);
+        SetWinEventHook(minimizeEnd, minimizeEnd, IntPtr.Zero, foregroundProc, 0, 0, 0);
+    }
+
     // Hands memory Lilt's own process isn't using back to Windows (it pages back in if needed), after a garbage collection.
     public static void TrimMemory()
     {

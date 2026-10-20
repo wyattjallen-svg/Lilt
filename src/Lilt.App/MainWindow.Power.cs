@@ -35,6 +35,7 @@ public sealed partial class MainWindow
             DispatcherQueue.TryEnqueue(() => UpdatePower());
         };
         powerTimer.Start();
+        Native.OnForegroundChanged(() => UpdatePower());
         try
         {
             energySaver = PowerManager.EnergySaverStatus == EnergySaverStatus.On;
