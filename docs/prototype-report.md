@@ -4,7 +4,7 @@ Scope: v0.4 adds the now-playing player, the visualizer, picture in picture with
 
 ## Build and verification
 
-Release build: tag `v0.4.0` (the code of commit `4e2fb14` plus documentation); that commit's [prototype run](https://github.com/wyattjallen-svg/Lilt/actions/runs/39496781108) passed all 24 feature checks and produced the measurements below. Every push builds a self-contained ReadyToRun x64 package on Windows CI (Windows Server 2025), runs the core tests, and launches the build through a set of scenarios with feature checks and screenshots; tags `v*` publish a release. Package: 89.7 MB zipped, 246.9 MB unpacked.
+Release build: `v0.4.0` (the code of commit `4e2fb14` plus documentation and CI); that commit's [prototype run](https://github.com/wyattjallen-svg/Lilt/actions/runs/39496781108) passed all 24 feature checks and produced the measurements below. Every push builds a self-contained ReadyToRun x64 package on Windows CI (Windows Server 2025), runs the core tests, and launches the build through a set of scenarios with feature checks and screenshots; a new version reaching main publishes a release. Package: 89.7 MB zipped, 246.9 MB unpacked.
 
 New features are driven by `--run` scripts (commands, waits and `state` snapshots of what's on screen) against a local test page that plays a looping tone with media-session metadata next to a silent animated video, so the checks don't depend on outside sites.
 

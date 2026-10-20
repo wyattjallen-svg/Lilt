@@ -531,7 +531,7 @@ Command line: `--url <url>`, `--theme <file>`, `--user-data <folder>`, `--startu
 
 ## 15. v0.4
 
-After your request for well-received features from other browsers (2026-10-20): now-playing player and visualizer (6.7), picture in picture with an in-window pop-out fallback (6.7), split view, peek and the command palette (6.8), shortcuts from the theme (4.5), the Hidden power level, foreground hook and memory trim (8.0). CI drives the new features with `--run` scripts on a local test page and checks them through `state` snapshots; tags `v*` publish releases.
+After your request for well-received features from other browsers (2026-10-20): now-playing player and visualizer (6.7), picture in picture with an in-window pop-out fallback (6.7), split view, peek and the command palette (6.8), shortcuts from the theme (4.5), the Hidden power level, foreground hook and memory trim (8.0). CI drives the new features with `--run` scripts on a local test page and checks them through `state` snapshots; a new version reaching main (or a `v*` tag) publishes a release.
 
 ## 14. v0.3
 

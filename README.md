@@ -22,7 +22,7 @@ Download the latest release from [Releases](https://github.com/wyattjallen-svg/L
 - Architecture and decisions: [docs/architecture.md](docs/architecture.md)
 - Release report (CI checks, measurements, test checklist, limitations): [docs/prototype-report.md](docs/prototype-report.md)
 
-Development builds: CI publishes every push to `prototype` as the **prototype-build** pre-release; tags `v*` become releases.
+Development builds: CI publishes every push to `prototype` as the **prototype-build** pre-release. A new `<Version>` in `src/Lilt.App/Lilt.App.csproj` reaching `main` (or a `v*` tag) becomes a release, with notes from `docs/releases/v<version>.md`, once the build passes every check.
 
 ```
 Lilt.exe [url] [--url <url>] [--theme <file>] [--user-data <folder>] [--inprivate]
