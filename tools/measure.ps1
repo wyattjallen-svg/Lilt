@@ -22,7 +22,8 @@ param(
     [int]$Sample = 60,
     [switch]$Minimize,
     [string]$Label = '',
-    [string]$Out = 'measure-results.json'
+    [string]$Out = 'measure-results.json',
+    [string[]]$ExtraArgs = @()
 )
 
 $ErrorActionPreference = 'Stop'
@@ -78,7 +79,7 @@ for ($run = 1; $run -le $Runs; $run++) {
     New-Item -ItemType Directory $dir | Out-Null
     $startup = Join-Path $dir 'startup.json'
     $argList = switch ($Browser) {
-        'lilt' { @('--user-data', "`"$dir`"", '--startup-report', "`"$startup`"", '--url', $Url) }
+        'lilt' { @('--user-data', "`"$dir`"", '--startup-report', "`"$startup`"", '--url', $Url) + $ExtraArgs }
         'firefox' {
             Set-Content (Join-Path $dir 'user.js') @(
                 'user_pref("browser.aboutwelcome.enabled", false);'

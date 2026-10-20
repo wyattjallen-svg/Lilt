@@ -9,6 +9,9 @@ sealed record LiltPaths(string Root)
     public string Theme => Path.Combine(Root, "theme.json");
     public string NewTab => Path.Combine(Root, "newtab");
     public string UserContent => Path.Combine(Root, "user");
+    public string Session => Path.Combine(Root, "session.json");
+    public string Bookmarks => Path.Combine(Root, "bookmarks.json");
+    public string Extensions => Path.Combine(Root, "Extensions");
     public static string Bundled => Path.Combine(AppContext.BaseDirectory, "Themes");
     static string BundledNewTab => Path.Combine(AppContext.BaseDirectory, "NewTab");
 
@@ -29,6 +32,7 @@ sealed record LiltPaths(string Root)
             if (!File.Exists(Theme)) File.Copy(Path.Combine(Bundled, "dusk.json"), Theme);
             CopyIfDifferent("theme.schema.json");
             CopyIfDifferent("paper.json");
+            CopyIfDifferent("frost.json");
             return Theme;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -38,7 +42,7 @@ sealed record LiltPaths(string Root)
         }
     }
 
-    // The start page is user-editable, so bundled files are only copied when missing.
+    // The home tab's files are Lilt's and are refreshed on every start; custom.css and custom.js are yours and never overwritten.
     public string PrepareNewTab()
     {
         try
@@ -46,8 +50,10 @@ sealed record LiltPaths(string Root)
             Directory.CreateDirectory(NewTab);
             foreach (var file in Directory.EnumerateFiles(BundledNewTab))
             {
-                var to = Path.Combine(NewTab, Path.GetFileName(file));
-                if (!File.Exists(to)) File.Copy(file, to);
+                var name = Path.GetFileName(file);
+                var to = Path.Combine(NewTab, name);
+                var mine = name.StartsWith("custom.", StringComparison.OrdinalIgnoreCase);
+                if (!File.Exists(to) || (!mine && File.ReadAllText(to) != File.ReadAllText(file))) File.Copy(file, to, overwrite: true);
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

@@ -36,5 +36,6 @@
   },
   "motion": { "animations": true, "duration": 160 },
   // theme follows "base"; auto follows Windows; or force light/dark for websites.
-  "pages": { "colorScheme": "theme" }
+  "pages": { "colorScheme": "theme" },
+  "home": { "clock": true, "search": true, "tiles": true, "glass": true }
 }

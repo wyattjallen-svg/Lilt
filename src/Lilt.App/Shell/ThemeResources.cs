@@ -39,6 +39,17 @@ static class ThemeResources
         ("TextControlSelectionHighlightColor", c => c.Accent.WithAlpha(0x66)),
         ("TextControlButtonForeground", c => c.TextMuted),
         ("TextControlButtonForegroundPointerOver", c => c.Text),
+        ("ListViewItemBackgroundPointerOver", c => c.Hover),
+        ("ListViewItemBackgroundPressed", c => c.Pressed),
+        ("ListViewItemBackgroundSelected", c => c.Accent.WithAlpha(0x33)),
+        ("ListViewItemBackgroundSelectedPointerOver", c => c.Accent.WithAlpha(0x40)),
+        ("ListViewItemBackgroundSelectedPressed", c => c.Pressed),
+        ("ListViewItemForeground", c => c.Text),
+        ("ListViewItemForegroundPointerOver", c => c.Text),
+        ("ListViewItemForegroundSelected", c => c.Text),
+        ("ListViewItemSelectionIndicatorBrush", c => c.Accent),
+        ("FlyoutPresenterBackground", c => c.Background.Opaque),
+        ("MenuFlyoutPresenterBackground", c => c.Background.Opaque),
     ];
 
     public static void Apply(ResourceDictionary resources, ThemeColors colors)

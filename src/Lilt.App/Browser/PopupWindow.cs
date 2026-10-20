@@ -18,11 +18,14 @@ sealed class PopupWindow : Window
     readonly TextBlock address = new() { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, IsTextSelectionEnabled = true };
     readonly FontIcon security = new() { FontSize = 13, VerticalAlignment = VerticalAlignment.Center };
     readonly CoreWebView2WindowFeatures? features;
+    readonly double defaultWidth, defaultHeight;
 
-    public PopupWindow(BrowserEngine engine, CoreWebView2WindowFeatures? features)
+    public PopupWindow(BrowserEngine engine, CoreWebView2WindowFeatures? features, double defaultWidth = 1100, double defaultHeight = 800)
     {
         this.engine = engine;
         this.features = features;
+        this.defaultWidth = defaultWidth;
+        this.defaultHeight = defaultHeight;
         Title = "Lilt";
 
         var strip = new Grid
@@ -65,8 +68,8 @@ sealed class PopupWindow : Window
         var f = features;
         var sized = f is { HasSize: true } && f.Width >= 200 && f.Height >= 200;
         WindowSizing.Place(this,
-            sized ? f!.Width : 1100,
-            sized ? f!.Height + 40 : 800,
+            sized ? f!.Width : defaultWidth,
+            sized ? f!.Height + 40 : defaultHeight,
             f is { HasPosition: true } ? (double)f.Left : null,
             f is { HasPosition: true } ? (double)f.Top : null);
         Activate();

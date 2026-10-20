@@ -18,7 +18,8 @@ public static class ThemeParser
 
     public static IReadOnlyDictionary<string, string[]> KnownKeys { get; } = new Dictionary<string, string[]>
     {
-        [""] = ["$schema", "schemaVersion", "name", "base", "backdrop", "colors", "typography", "shape", "density", "toolbar", "sidebar", "motion", "pages"],
+        [""] = ["$schema", "schemaVersion", "name", "base", "backdrop", "colors", "typography", "shape", "density", "toolbar", "sidebar", "motion", "pages", "home"],
+        ["backdrop"] = ["material", "tint", "tintOpacity", "luminosityOpacity"],
         ["colors"] = ["background", "surface", "surfaceRaised", "border", "text", "textMuted", "accent", "onAccent", "hover", "pressed", "page"],
         ["typography"] = ["family", "size", "weight"],
         ["shape"] = ["radius", "controlRadius", "borderWidth"],
@@ -26,6 +27,7 @@ public static class ThemeParser
         ["sidebar"] = ["edge", "width", "height", "autoHide", "revealEdge", "hideDelay"],
         ["motion"] = ["animations", "duration"],
         ["pages"] = ["colorScheme"],
+        ["home"] = ["clock", "search", "tiles", "glass"],
     };
 
     static readonly JsonDocumentOptions jsonOptions = new()
@@ -135,11 +137,34 @@ public static class ThemeParser
             var pg = r.Section(root, "pages");
             var pages = new PagesSpec(r.Enum(pg, "colorScheme", d.Pages.ColorScheme));
 
+            var hm = r.Section(root, "home");
+            var home = new HomeSpec(
+                r.Bool(hm, "clock", d.Home.Clock),
+                r.Bool(hm, "search", d.Home.Search),
+                r.Bool(hm, "tiles", d.Home.Tiles),
+                r.Bool(hm, "glass", d.Home.Glass));
+
+            // "backdrop" is either a material name or an object with tint settings.
+            BackdropSpec backdrop;
+            if (root.TryGetProperty("backdrop", out var bd) && bd.ValueKind == JsonValueKind.Object)
+            {
+                var b = r.Section(root, "backdrop");
+                backdrop = new BackdropSpec(
+                    r.Enum(b, "material", d.Backdrop.Material),
+                    r.OptColor(b, "tint"),
+                    r.OptNum(b, "tintOpacity", 0, 1),
+                    r.OptNum(b, "luminosityOpacity", 0, 1));
+            }
+            else
+            {
+                backdrop = new BackdropSpec(r.Enum(top, "backdrop", d.Backdrop.Material));
+            }
+
             var theme = new Theme(
                 Math.Min(version, CurrentVersion),
                 r.Str(top, "name", 64, d.Name),
                 r.Enum(top, "base", d.Base),
-                r.Enum(top, "backdrop", d.Backdrop),
+                backdrop,
                 colors,
                 typography,
                 shape,
@@ -147,7 +172,8 @@ public static class ThemeParser
                 toolbar,
                 sidebar,
                 motion,
-                pages);
+                pages,
+                home);
 
             return new ThemeLoadResult(theme, issues, false);
         }
@@ -188,6 +214,22 @@ public static class ThemeParser
             if (!Get(o, key, out var v, out var path)) return fallback;
             if (v.ValueKind == JsonValueKind.String && Rgba.TryParse(v.GetString(), out var c)) return c;
             return Bad(path, "expected a color like \"#RRGGBB\" or \"#RRGGBBAA\"", fallback);
+        }
+
+        public Rgba? OptColor(Obj? o, string key)
+        {
+            if (!Get(o, key, out var v, out var path)) return null;
+            if (v.ValueKind == JsonValueKind.String && Rgba.TryParse(v.GetString(), out var c)) return c;
+            issues.Add(new(path, "expected a color like \"#RRGGBB\"; ignored"));
+            return null;
+        }
+
+        public double? OptNum(Obj? o, string key, double min, double max)
+        {
+            if (!Get(o, key, out var v, out var path)) return null;
+            if (v.ValueKind == JsonValueKind.Number && v.TryGetDouble(out var n) && n >= min && n <= max) return n;
+            issues.Add(new(path, $"expected a number from {min} to {max}; ignored"));
+            return null;
         }
 
         public double Num(Obj? o, string key, double min, double max, double fallback)

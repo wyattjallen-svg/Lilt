@@ -26,7 +26,7 @@ public static partial class AddressResolver
         if (SchemePrefix().IsMatch(text) && !HostWithPort().IsMatch(text))
         {
             if (!Uri.TryCreate(text, UriKind.Absolute, out var uri)) return new(AddressKind.Rejected, Reason: "That isn't a valid address.");
-            if (UrlPolicy.IsNavigable(uri)) return new(AddressKind.Navigate, uri);
+            if (UrlPolicy.IsNavigable(uri) || UrlPolicy.IsExtensionPage(uri)) return new(AddressKind.Navigate, uri);
             return new(AddressKind.Rejected, Reason: $"Lilt only opens web addresses (http and https), not {uri.Scheme}: links.");
         }
 

@@ -13,6 +13,9 @@ public static class UrlPolicy
     public static bool IsNavigable(string? uri) =>
         Uri.TryCreate(uri, UriKind.Absolute, out var parsed) && IsNavigable(parsed);
 
+    // Pages of installed extensions (options, dashboards). Openable from the address bar or Lilt's menus, never by websites.
+    public static bool IsExtensionPage(Uri uri) => uri.IsAbsoluteUri && uri.Scheme == "chrome-extension" && uri.Host.Length == 32;
+
     public static bool IsBlank(Uri uri) => uri.IsAbsoluteUri && uri.Scheme == "about" && uri.AbsolutePath == "blank";
 
     public static bool IsInsecure(Uri uri) => uri.IsAbsoluteUri && uri.Scheme == Uri.UriSchemeHttp && !IsLoopback(uri.Host);

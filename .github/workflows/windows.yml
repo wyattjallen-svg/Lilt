@@ -59,6 +59,7 @@ jobs:
         shell: pwsh
         run: |
           $script:failed = @()
+          $script:checks = @()
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing
           function Shot([string]$path) {
             $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
@@ -68,15 +69,21 @@ jobs:
             $bmp.Save((Join-Path $PWD $path))
             $g.Dispose(); $bmp.Dispose()
           }
-          function Smoke([string]$name, [string[]]$extra) {
+          function Check([string]$name, [bool]$ok, [string]$detail) {
+            $script:checks += "| $name | $(if ($ok) { 'pass' } else { 'FAIL' }) | $detail |"
+            if (-not $ok) { Write-Host "::warning::$name failed: $detail" }
+          }
+          # Starts Lilt with a fresh data folder, waits for the first page, runs $during, screenshots, closes. Returns the data folder.
+          function Smoke([string]$name, [string[]]$extra, [scriptblock]$during = $null, [int]$settle = 6) {
             $dir = Join-Path $env:RUNNER_TEMP "lilt-$name"
             $report = Join-Path $dir 'startup.json'
             New-Item -ItemType Directory $dir -Force | Out-Null
             $argList = @('--user-data', "`"$dir`"", '--startup-report', "`"$report`"") + $extra
             $p = Start-Process (Resolve-Path out/Lilt/Lilt.exe) -ArgumentList $argList -PassThru
-            $deadline = (Get-Date).AddSeconds(90)
+            $deadline = (Get-Date).AddSeconds(120)
             while (-not (Test-Path $report) -and -not $p.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
-            Start-Sleep -Seconds 6
+            Start-Sleep -Seconds $settle
+            if ($during -and -not $p.HasExited) { & $during $p }
             try { Shot "screenshot-$name.png" } catch { Write-Host "::warning::screenshot failed: $_" }
             $alive = -not $p.HasExited
             if (Test-Path $report) { Copy-Item $report "smoke-$name.json"; Get-Content $report }
@@ -86,18 +93,47 @@ jobs:
               Write-Host "::warning::$name wrote error.log"
               Get-Content "$dir/logs/error.log"
             }
-            if ($alive) { [void]$p.CloseMainWindow(); if (-not $p.WaitForExit(10000)) { Stop-Process -Id $p.Id -Force } }
+            if ($alive) { [void]$p.CloseMainWindow(); if (-not $p.WaitForExit(15000)) { Stop-Process -Id $p.Id -Force } }
             else { Write-Host "::error::$name exited early with code $($p.ExitCode)" }
             $loaded = (Test-Path $report) -and (Get-Content $report -Raw | ConvertFrom-Json).firstNavigationSucceeded
             if (-not $loaded) { Write-Host "::error::$name first page did not load" }
             if (-not $alive -or -not $loaded -or (Test-Path "$dir/logs/error.log")) { $script:failed += $name }
             Write-Host "$name alive=$alive report=$(Test-Path $report)"
+            return $dir
           }
-          Smoke 'newtab' @()
-          Smoke 'dusk-page' @('--url', 'https://example.com')
-          Smoke 'paper' @('--theme', "`"$PWD\out\Lilt\Themes\paper.json`"", '--url', 'https://example.com')
-          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Level = 2; StartTime = (Get-Date).AddMinutes(-15) } -ErrorAction SilentlyContinue |
+          function Extensions([string]$name) {
+            if (Test-Path "smoke-$name.json") { @((Get-Content "smoke-$name.json" -Raw | ConvertFrom-Json).extensions) } else { @() }
+          }
+
+          [void](Smoke 'newtab' @())
+          $ubol = Extensions 'newtab'
+          Check 'uBlock Origin Lite installed' ([bool]($ubol -match 'uBlock')) ($ubol -join '; ')
+          [void](Smoke 'dusk-page' @('--url', 'https://example.com'))
+          [void](Smoke 'paper' @('--theme', "`"$PWD\out\Lilt\Themes\paper.json`"", '--url', 'https://example.com'))
+          [void](Smoke 'frost-home' @('--theme', "`"$PWD\out\Lilt\Themes\frost.json`""))
+          [void](Smoke 'adblock-test' @('--url', 'https://d3ward.github.io/toolz/adblock') -settle 15)
+
+          # Ctrl+T through the page, then close: the saved session should hold both tabs.
+          $dir = Smoke 'keys-session' @('--url', 'https://example.com') {
+            param($p)
+            $ws = New-Object -ComObject WScript.Shell
+            [void]$ws.AppActivate($p.Id)
+            Start-Sleep -Seconds 1
+            [System.Windows.Forms.Cursor]::Position = [System.Drawing.Point]::new(700, 450)
+            $ws.SendKeys('^t')
+            Start-Sleep -Seconds 3
+          }
+          $session = if (Test-Path "$dir/session.json") { Get-Content "$dir/session.json" -Raw | ConvertFrom-Json } else { $null }
+          if ($session) { Copy-Item "$dir/session.json" 'smoke-keys-session.session.json' }
+          Check 'Ctrl+T opens a tab; session saved on close' ($session -and $session.tabs.Count -eq 2) "tabs: $(if ($session) { ($session.tabs | ForEach-Object url) -join ', ' } else { 'no session.json' })"
+
+          [void](Smoke 'proton-pass' @('--install-extension', 'ghmbeldphafepmbegfdlkpapadhbakde') -settle 4)
+          $pp = Extensions 'proton-pass'
+          Check 'Proton Pass installs from the Chrome Web Store' ([bool]($pp -match 'Proton')) ($pp -join '; ')
+
+          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Level = 2; StartTime = (Get-Date).AddMinutes(-20) } -ErrorAction SilentlyContinue |
             Format-List TimeCreated, ProviderName, Message | Out-File smoke-events.log
+          @('### Feature checks', '', '| Check | Result | Detail |', '|---|---|---|') + $script:checks | Tee-Object smoke-checks.md | Add-Content $env:GITHUB_STEP_SUMMARY
           if ($script:failed.Count) { Write-Host "::error::Smoke test failed: $($script:failed -join ', ')"; exit 1 }
 
       - name: Idle measurements
@@ -106,7 +142,8 @@ jobs:
         run: |
           ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Runs 3 -Settle 20 -Sample 30 -Label "CI runner, visible" -Out measure-visible.json
           ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Runs 3 -Settle 20 -Sample 30 -Minimize -Label "CI runner, minimized" -Out measure-minimized.json
-          Get-Content measure-visible.md, measure-minimized.md | Add-Content $env:GITHUB_STEP_SUMMARY
+          ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Runs 3 -Settle 20 -Sample 30 -Label "CI runner, visible, no extensions" -Out measure-noext.json -ExtraArgs '--no-extensions'
+          Get-Content measure-visible.md, measure-minimized.md, measure-noext.md | Add-Content $env:GITHUB_STEP_SUMMARY
 
       - name: Publish prerelease
         shell: pwsh
@@ -115,7 +152,7 @@ jobs:
         run: |
           $tag = 'prototype-build'
           gh release delete $tag --yes --cleanup-tag 2>$null
-          $files = @('Lilt-win-x64.zip', 'size.txt') + @(Get-ChildItem screenshot-*.png, measure-*.json, measure-*.md, smoke-*.json, smoke-*.log -ErrorAction SilentlyContinue | ForEach-Object Name)
+          $files = @('Lilt-win-x64.zip', 'size.txt') + @(Get-ChildItem screenshot-*.png, measure-*.json, measure-*.md, smoke-*.json, smoke-*.log, smoke-*.md -ErrorAction SilentlyContinue | ForEach-Object Name)
           gh release create $tag --prerelease --target $env:GITHUB_SHA --title "Lilt prototype build $($env:GITHUB_SHA.Substring(0, 7))" --notes "Built by CI from $env:GITHUB_SHA on $env:GITHUB_REF_NAME. Unzip anywhere and run Lilt.exe (Windows 11 x64)." @files
 
       - name: Upload log on failure

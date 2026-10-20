@@ -1,6 +1,7 @@
 namespace Lilt.Core;
 
 // --user-agent, --inprivate and --browser-args exist for the sign-in and HTTPS-flag spikes, so they can be tried without a rebuild.
+// --install-extension takes a Chrome Web Store ID or URL; --no-extensions turns extension support off (for comparisons).
 public sealed record LaunchOptions(
     string? Url,
     string? ThemePath,
@@ -8,12 +9,14 @@ public sealed record LaunchOptions(
     string? StartupReportPath,
     bool InPrivate = false,
     string? UserAgent = null,
-    string? BrowserArgs = null)
+    string? BrowserArgs = null,
+    string? InstallExtension = null,
+    bool NoExtensions = false)
 {
     public static LaunchOptions Parse(IReadOnlyList<string> args)
     {
-        string? url = null, theme = null, data = null, report = null, agent = null, browserArgs = null;
-        var inPrivate = false;
+        string? url = null, theme = null, data = null, report = null, agent = null, browserArgs = null, install = null;
+        bool inPrivate = false, noExtensions = false;
         for (var i = 0; i < args.Count; i++)
         {
             var a = args[i];
@@ -28,11 +31,13 @@ public sealed record LaunchOptions(
                 case "--user-agent": agent = Next() ?? agent; break;
                 case "--browser-args": browserArgs = Raw() ?? browserArgs; break;
                 case "--inprivate": inPrivate = true; break;
+                case "--install-extension": install = Next() ?? install; break;
+                case "--no-extensions": noExtensions = true; break;
                 default:
                     if (!a.StartsWith("--", StringComparison.Ordinal)) url ??= a;
                     break;
             }
         }
-        return new(url, theme, data, report, inPrivate, agent, browserArgs);
+        return new(url, theme, data, report, inPrivate, agent, browserArgs, install, noExtensions);
     }
 }

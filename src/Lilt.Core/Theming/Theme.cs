@@ -4,7 +4,10 @@ namespace Lilt.Core.Theming;
 
 public enum ThemeBase { Dark, Light }
 
-public enum Backdrop { Mica, MicaAlt, Acrylic, None }
+public enum Backdrop { Mica, MicaAlt, Acrylic, AcrylicThin, None }
+
+// Tint values are optional; when absent Windows picks them from the light/dark base.
+public sealed record BackdropSpec(Backdrop Material, Rgba? Tint = null, double? TintOpacity = null, double? LuminosityOpacity = null);
 
 public enum Density { Compact, Standard, Comfortable }
 
@@ -36,11 +39,14 @@ public sealed record MotionSpec(bool Animations, int Duration);
 
 public sealed record PagesSpec(PageColorScheme ColorScheme);
 
+// The home tab. Glass makes its background transparent so the window material shows through.
+public sealed record HomeSpec(bool Clock, bool Search, bool Tiles, bool Glass);
+
 public sealed record Theme(
     int SchemaVersion,
     string Name,
     ThemeBase Base,
-    Backdrop Backdrop,
+    BackdropSpec Backdrop,
     ThemeColors Colors,
     Typography Typography,
     Shape Shape,
@@ -48,13 +54,14 @@ public sealed record Theme(
     ToolbarSpec Toolbar,
     SidebarSpec Sidebar,
     MotionSpec Motion,
-    PagesSpec Pages)
+    PagesSpec Pages,
+    HomeSpec Home)
 {
     public static Theme Default { get; } = new(
         1,
         "Dusk",
         ThemeBase.Dark,
-        Backdrop.Mica,
+        new BackdropSpec(Theming.Backdrop.Mica),
         new ThemeColors(
             Background: Rgba.Parse("#141318"),
             Surface: Rgba.Parse("#1D1B23B3"),
@@ -73,5 +80,6 @@ public sealed record Theme(
         new ToolbarSpec(40),
         new SidebarSpec(DockEdge.Left, Width: 248, Height: 48, AutoHide: false, RevealEdge: 6, HideDelay: 350),
         new MotionSpec(Animations: true, Duration: 160),
-        new PagesSpec(PageColorScheme.Theme));
+        new PagesSpec(PageColorScheme.Theme),
+        new HomeSpec(Clock: true, Search: true, Tiles: true, Glass: true));
 }

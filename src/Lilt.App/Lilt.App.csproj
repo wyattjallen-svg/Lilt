@@ -30,5 +30,27 @@
   <ItemGroup>
     <Content Include="Themes\*.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="NewTab\*.*" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Extensions\ubol-key.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <!-- uBlock Origin Lite (GPL-3.0) is bundled from its official release, pinned by version and SHA-256. -->
+  <PropertyGroup>
+    <UbolVersion>2026.1018.2229</UbolVersion>
+    <UbolSha256>c48dfa2f925ed31fdbd478d6b504432152ac995ab1e0fc96c3a008a0307dbbe2</UbolSha256>
+    <UbolDir>$(BaseIntermediateOutputPath)uBOLite-$(UbolVersion)\</UbolDir>
+  </PropertyGroup>
+
+  <Target Name="FetchUbol" Condition="!Exists('$(UbolDir)manifest.json')">
+    <DownloadFile SourceUrl="https://github.com/uBlockOrigin/uBOL-home/releases/download/$(UbolVersion)/uBOLite_$(UbolVersion).chromium.zip"
+                  DestinationFolder="$(BaseIntermediateOutputPath)" DestinationFileName="uBOLite-$(UbolVersion).zip" Retries="3" />
+    <VerifyFileHash File="$(BaseIntermediateOutputPath)uBOLite-$(UbolVersion).zip" Hash="$(UbolSha256)" Algorithm="SHA256" />
+    <Unzip SourceFiles="$(BaseIntermediateOutputPath)uBOLite-$(UbolVersion).zip" DestinationFolder="$(UbolDir)" />
+  </Target>
+
+  <Target Name="IncludeUbol" DependsOnTargets="FetchUbol" BeforeTargets="AssignTargetPaths">
+    <ItemGroup>
+      <_Ubol Include="$(UbolDir)**\*" />
+      <Content Include="@(_Ubol)" Link="Extensions\uBOLite\%(_Ubol.RecursiveDir)%(_Ubol.Filename)%(_Ubol.Extension)" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
 </Project>

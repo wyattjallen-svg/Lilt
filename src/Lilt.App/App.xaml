@@ -38,6 +38,17 @@
       <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="#66C4A7FF" />
       <SolidColorBrush x:Key="TextControlButtonForeground" Color="#A19CAB" />
       <SolidColorBrush x:Key="TextControlButtonForegroundPointerOver" Color="#ECE9F1" />
+      <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="#0FFFFFFF" />
+      <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="#1AFFFFFF" />
+      <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#33C4A7FF" />
+      <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#33C4A7FF" />
+      <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#1AFFFFFF" />
+      <SolidColorBrush x:Key="ListViewItemForeground" Color="#ECE9F1" />
+      <SolidColorBrush x:Key="ListViewItemForegroundPointerOver" Color="#ECE9F1" />
+      <SolidColorBrush x:Key="ListViewItemForegroundSelected" Color="#ECE9F1" />
+      <SolidColorBrush x:Key="ListViewItemSelectionIndicatorBrush" Color="#C4A7FF" />
+      <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="#141318" />
+      <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#141318" />
 
       <Style x:Key="ChromeButton" TargetType="Button">
         <Setter Property="Background" Value="Transparent" />

@@ -1,14 +1,13 @@
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Text.RegularExpressions;
 using Lilt.App.Browser;
 using Lilt.App.Shell;
 using Lilt.Core;
+using Lilt.Core.Bookmarks;
 using Lilt.Core.Layout;
 using Lilt.Core.Navigation;
 using Lilt.Core.Theming;
 using Microsoft.UI;
-using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
@@ -22,6 +21,7 @@ using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.Web.WebView2.Core;
 using Windows.Graphics;
 using VirtualKey = Windows.System.VirtualKey;
+using VirtualKeyModifiers = Windows.System.VirtualKeyModifiers;
 using Windows.UI.Text;
 using Windows.UI.ViewManagement;
 
@@ -29,6 +29,7 @@ namespace Lilt.App;
 
 public sealed partial class MainWindow : Window
 {
+    readonly LaunchOptions options;
     readonly LiltPaths paths;
     readonly ThemeService themes;
     readonly BrowserEngine engine;
@@ -36,37 +37,34 @@ public sealed partial class MainWindow : Window
     readonly DispatcherQueueTimer hideTimer;
     readonly StartupReport report;
     readonly UISettings uiSettings = new();
-    readonly WebView2 view = new();
-    readonly Uri startUri;
-    readonly string? startProblem;
     readonly string appName;
-    CoreWebView2? core;
     Theme theme = Theme.Default;
     ShellMetrics metrics;
-    Backdrop? activeBackdrop;
+    string backdropKey = "";
     string backdropNote = "";
-    bool sidebarShown, pointerInBand, fullScreen, loading, firstNavigation = true;
+    bool sidebarShown, pointerInBand, fullScreen, firstNavigation = true;
     int slideGeneration;
+
+    CoreWebView2? core => active?.Core;
 
     public MainWindow(LaunchOptions options)
     {
+        this.options = options;
         report = new StartupReport(options.StartupReportPath);
         paths = LiltPaths.Resolve(options.UserDataDir);
         var queue = DispatcherQueue.GetForCurrentThread();
-        engine = new BrowserEngine(new EngineOptions(paths.WebView2, paths.PrepareNewTab(), paths.PrepareUserContent(),
-            options.InPrivate, options.UserAgent, options.BrowserArgs), queue);
+        engine = new BrowserEngine(new EngineOptions(paths.WebView2, paths.PrepareNewTab(), paths.PrepareUserContent(), paths.Extensions,
+            options.InPrivate, options.UserAgent, options.BrowserArgs, !options.NoExtensions), queue);
 
         themes = new ThemeService(paths.PrepareTheme(options.ThemePath), queue);
         var load = themes.Load();
         var typography = themes.Current.Typography;
         Application.Current.Resources["ContentControlThemeFontFamily"] = new FontFamily(typography.Family);
         Application.Current.Resources["ControlContentThemeFontSize"] = typography.Size;
+        bookmarks = new BookmarkStore(paths.Bookmarks);
+        bookmarks.Load();
 
         InitializeComponent();
-
-        var start = AddressResolver.Resolve(options.Url);
-        startUri = start.Kind is AddressKind.Navigate or AddressKind.Search ? start.Uri! : BrowserEngine.NewTabUri;
-        startProblem = start.Kind == AddressKind.Rejected ? start.Reason : null;
 
         sidebar = new SidebarState(themes.Current.Sidebar.Edge, themes.Current.Sidebar.AutoHide);
         hideTimer = DispatcherQueue.CreateTimer();
@@ -76,6 +74,7 @@ public sealed partial class MainWindow : Window
             sidebar.HideDelayElapsed();
             SyncSidebar();
         };
+        InitTabs();
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(Toolbar);
@@ -83,25 +82,35 @@ public sealed partial class MainWindow : Window
         AppWindow.Title = appName;
         WindowSizing.Place(this, 1280, 820);
 
-        PageHost.Children.Add(view);
         ApplyTheme(themes.Current, previous: null);
         ShowThemeLoad(load, startup: true);
         themes.Reloaded += OnThemeReloaded;
         themes.Watch();
+        BuildAccentSwatches();
+        ShowBookmarks();
+        FlushHomeData();
 
         engine.Noticed += ShowNotice;
         engine.DownloadStarted += OnDownloadStarted;
+        engine.KeyCommand += (sender, command) =>
+        {
+            if (tabs.Any(t => t.Core == sender)) RunCommand(command);
+        };
+        engine.OpenTabForPage = OpenTabForPageAsync;
+        engine.OpenUrlInTab = url => AddTab(url);
+        AdBlockMenuItem.Visibility = ExtensionsMenuItem.Visibility = engine.ExtensionsEnabled ? Visibility.Visible : Visibility.Collapsed;
 
         ContentArea.AddHandler(UIElement.PointerMovedEvent, new PointerEventHandler(Content_PointerMoved), true);
         ContentArea.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(Content_PointerPressed), true);
         ContentArea.AddHandler(UIElement.PointerExitedEvent, new PointerEventHandler(Content_PointerExited), true);
         ContentArea.SizeChanged += (_, e) => ContentArea.Clip = new RectangleGeometry { Rect = new Windows.Foundation.Rect(0, 0, e.NewSize.Width, e.NewSize.Height) };
-        foreach (var element in new FrameworkElement[] { Toolbar, NavPanel, AddressHost, SidebarButton })
+        foreach (var element in new FrameworkElement[] { Toolbar, NavPanel, AddressHost, ActionsPanel })
             element.SizeChanged += (_, _) => UpdateDragRegions();
         Root.Loaded += (_, _) =>
         {
             Root.XamlRoot.Changed += (_, _) => UpdateDragRegions();
             UpdateDragRegions();
+            LayoutSidebar();
         };
 
         Activated += (_, e) =>
@@ -113,15 +122,17 @@ public sealed partial class MainWindow : Window
         _ = StartAsync();
     }
 
-    // ---- Engine and navigation ----
+    // ---- Startup ----
 
     async Task StartAsync()
     {
+        var tab = active!;
+        CoreWebView2 first;
         try
         {
             await engine.WhenEnvironmentReady;
             report.EnvironmentReady();
-            core = await engine.AttachAsync(view);
+            first = await LoadAsync(tab, navigate: false);
         }
         catch (Exception e)
         {
@@ -131,34 +142,35 @@ public sealed partial class MainWindow : Window
         }
         report.EngineReady();
 
-        core.NavigationStarting += (_, _) =>
+        // Extensions are set up before the first page loads, so the ad blocker covers it.
+        try
         {
-            loading = true;
-            UpdateNavigation();
-        };
-        core.NavigationCompleted += OnNavigationCompleted;
-        core.SourceChanged += (_, _) => UpdateNavigation();
-        core.HistoryChanged += (_, _) => UpdateNavigation();
-        core.DocumentTitleChanged += (_, _) => UpdateTitle();
-        core.ContainsFullScreenElementChanged += (_, _) => SetFullScreen(core.ContainsFullScreenElement);
-        core.ProcessFailed += OnProcessFailed;
+            await engine.EnsureBundledExtensionsAsync(first.Profile);
+        }
+        catch (Exception e)
+        {
+            LiltPaths.LogError(e);
+            ShowNotice(new($"The ad blocker couldn't be set up: {e.Message}", NoticeKind.Warning));
+        }
+        if (options.InstallExtension is { } install) await InstallAsync(install);
+        if (engine.ExtensionsEnabled)
+        {
+            try
+            {
+                report.Extensions((await engine.ListExtensionsAsync(first.Profile)).Select(x => $"{x.Name} ({x.Id}, {(x.Enabled ? "on" : "off")})"));
+            }
+            catch (Exception e)
+            {
+                LiltPaths.LogError(e);
+            }
+        }
 
-        core.Navigate(startUri.AbsoluteUri);
+        first.Navigate(tab.Url);
+        if (tab.IsHome && tab == active) AddressBox.Focus(FocusState.Programmatic);
         if (startProblem is not null) ShowNotice(new(startProblem, NoticeKind.Warning));
-        if (startUri == BrowserEngine.NewTabUri) AddressBox.Focus(FocusState.Programmatic);
     }
 
-    void OnNavigationCompleted(CoreWebView2 sender, CoreWebView2NavigationCompletedEventArgs e)
-    {
-        loading = false;
-        UpdateNavigation();
-        UpdateTitle();
-        if (!firstNavigation) return;
-        firstNavigation = false;
-        report.FirstNavigation(sender.Source, e.IsSuccess, e.WebErrorStatus.ToString());
-    }
-
-    void OnProcessFailed(CoreWebView2 sender, CoreWebView2ProcessFailedEventArgs e)
+    void OnProcessFailed(BrowserTab tab, CoreWebView2ProcessFailedEventArgs e)
     {
         switch (e.ProcessFailedKind)
         {
@@ -166,35 +178,36 @@ public sealed partial class MainWindow : Window
                 ShowNotice(new("The web engine stopped.", NoticeKind.Error, "Restart Lilt", Restart));
                 break;
             case CoreWebView2ProcessFailedKind.RenderProcessUnresponsive:
-                ShowNotice(new("This page isn't responding.", NoticeKind.Warning, "Reload", () => core?.Reload()));
+                ShowNotice(new($"{tab.DisplayTitle} isn't responding.", NoticeKind.Warning, "Reload", () => tab.Core?.Reload()));
                 break;
             case CoreWebView2ProcessFailedKind.RenderProcessExited:
             case CoreWebView2ProcessFailedKind.FrameRenderProcessExited:
-                ShowNotice(new("This page crashed.", NoticeKind.Error, "Reload", () => core?.Reload()));
+                ShowNotice(new($"{tab.DisplayTitle} crashed.", NoticeKind.Error, "Reload", () => tab.Core?.Reload()));
                 break;
         }
     }
 
+    // ---- Toolbar and navigation ----
+
     void UpdateNavigation()
     {
-        if (core is null) return;
-        BackButton.IsEnabled = core.CanGoBack;
-        ForwardButton.IsEnabled = core.CanGoForward;
+        var tab = active;
+        BackButton.IsEnabled = tab?.Core?.CanGoBack == true;
+        ForwardButton.IsEnabled = tab?.Core?.CanGoForward == true;
+        var loading = tab?.IsLoadingPage == true;
         ReloadIcon.Glyph = loading ? "" : "";
         ToolTipService.SetToolTip(ReloadButton, loading ? "Stop" : "Reload (F5)");
         AutomationProperties.SetName(ReloadButton, loading ? "Stop" : "Reload");
-        var uri = Uri.TryCreate(core.Source, UriKind.Absolute, out var u) ? u : null;
+        var uri = Uri.TryCreate(tab?.Url, UriKind.Absolute, out var u) ? u : null;
         if (AddressBox.FocusState == FocusState.Unfocused) AddressBox.Text = Display(uri);
         InsecureChip.Visibility = uri is not null && UrlPolicy.IsInsecure(uri) ? Visibility.Visible : Visibility.Collapsed;
+        UpdateStar();
     }
 
     void UpdateTitle()
     {
-        var title = core?.DocumentTitle;
-        var newTab = Uri.TryCreate(core?.Source, UriKind.Absolute, out var source) && source.Host == BrowserEngine.NewTabHost;
-        AppWindow.Title = string.IsNullOrWhiteSpace(title) || newTab
-            ? appName
-            : $"{title} – {appName}";
+        var tab = active;
+        AppWindow.Title = tab is null || tab.IsHome || string.IsNullOrWhiteSpace(tab.Title) ? appName : $"{tab.Title} – {appName}";
     }
 
     static string Display(Uri? uri) =>
@@ -211,10 +224,18 @@ public sealed partial class MainWindow : Window
                 ShowNotice(new(result.Reason!, NoticeKind.Warning));
                 return;
             default:
-                core?.Navigate(result.Uri!.AbsoluteUri);
-                view.Focus(FocusState.Programmatic);
+                Navigate(result.Uri!.AbsoluteUri);
                 break;
         }
+    }
+
+    void Navigate(string url)
+    {
+        if (active is null) return;
+        active.Url = url;
+        if (active.Core is { } c) c.Navigate(url);
+        else _ = LoadAsync(active, navigate: true);
+        active.View?.Focus(FocusState.Programmatic);
     }
 
     void AddressBox_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -227,8 +248,8 @@ public sealed partial class MainWindow : Window
         else if (e.Key == VirtualKey.Escape)
         {
             e.Handled = true;
-            AddressBox.Text = Display(Uri.TryCreate(core?.Source, UriKind.Absolute, out var u) ? u : null);
-            view.Focus(FocusState.Programmatic);
+            AddressBox.Text = Display(Uri.TryCreate(active?.Url, UriKind.Absolute, out var u) ? u : null);
+            active?.View?.Focus(FocusState.Programmatic);
         }
     }
 
@@ -237,37 +258,68 @@ public sealed partial class MainWindow : Window
 
     void Back_Click(object sender, RoutedEventArgs e) => core?.GoBack();
     void Forward_Click(object sender, RoutedEventArgs e) => core?.GoForward();
+    void Home_Click(object sender, RoutedEventArgs e) => Navigate(BrowserEngine.NewTabUri.AbsoluteUri);
 
     void Reload_Click(object sender, RoutedEventArgs e)
     {
-        if (loading) core?.Stop();
+        if (active?.IsLoadingPage == true) core?.Stop();
         else core?.Reload();
     }
 
-    void FocusAddress_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
+    // Shortcuts work both from Lilt's chrome (keyboard accelerators) and from inside pages (the engine's key shim).
+    void Accelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
     {
+        var ctrl = sender.Modifiers.HasFlag(VirtualKeyModifiers.Control);
+        var shift = sender.Modifiers.HasFlag(VirtualKeyModifiers.Shift);
+        var alt = sender.Modifiers.HasFlag(VirtualKeyModifiers.Menu);
+        var command = sender.Key switch
+        {
+            VirtualKey.L or VirtualKey.F6 => "address",
+            VirtualKey.D when alt => "address",
+            VirtualKey.D => "bookmark",
+            VirtualKey.B => "sidebar",
+            VirtualKey.Left => "back",
+            VirtualKey.Right => "forward",
+            VirtualKey.F5 or VirtualKey.R => "reload",
+            VirtualKey.T when shift => "reopenTab",
+            VirtualKey.T => "newTab",
+            VirtualKey.W => "closeTab",
+            VirtualKey.Tab when shift => "prevTab",
+            VirtualKey.Tab => "nextTab",
+            >= VirtualKey.Number1 and <= VirtualKey.Number9 when ctrl => "tab" + (sender.Key - VirtualKey.Number0),
+            _ => null,
+        };
+        if (command is null) return;
         e.Handled = true;
-        if (fullScreen) return;
-        AddressBox.Focus(FocusState.Keyboard);
-        AddressBox.SelectAll();
+        RunCommand(command, keyboard: true);
     }
 
-    void Back_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
-    {
-        e.Handled = true;
-        core?.GoBack();
-    }
+    void RunCommand(string command) => RunCommand(command, keyboard: true);
 
-    void Forward_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
+    void RunCommand(string command, bool keyboard)
     {
-        e.Handled = true;
-        core?.GoForward();
-    }
-
-    void Reload_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
-    {
-        e.Handled = true;
-        core?.Reload();
+        if (fullScreen && command is not ("closeTab" or "back" or "forward" or "reload")) return;
+        switch (command)
+        {
+            case "address":
+                AddressBox.Focus(FocusState.Keyboard);
+                AddressBox.SelectAll();
+                break;
+            case "sidebar": ToggleSidebar(keyboard); break;
+            case "bookmark": ToggleBookmark(); break;
+            case "back": core?.GoBack(); break;
+            case "forward": core?.GoForward(); break;
+            case "reload": core?.Reload(); break;
+            case "newTab": NewTab(); break;
+            case "reopenTab": ReopenTab(); break;
+            case "closeTab": if (active is not null) CloseTab(active); break;
+            case "nextTab": CycleTab(1); break;
+            case "prevTab": CycleTab(-1); break;
+            case { Length: 4 } when command.StartsWith("tab", StringComparison.Ordinal) && char.IsAsciiDigit(command[3]):
+                var n = command[3] - '0';
+                if (tabs.Count > 0) Activate(n == 9 ? tabs[^1] : tabs[Math.Min(n, tabs.Count) - 1]);
+                break;
+        }
     }
 
     void SetFullScreen(bool on)
@@ -282,6 +334,7 @@ public sealed partial class MainWindow : Window
 
     void Restart()
     {
+        SaveSession();
         var start = new ProcessStartInfo(Environment.ProcessPath!);
         foreach (var arg in Environment.GetCommandLineArgs().Skip(1)) start.ArgumentList.Add(arg);
         Process.Start(start);
@@ -290,12 +343,28 @@ public sealed partial class MainWindow : Window
 
     void OnClosed(object sender, WindowEventArgs e)
     {
+        SaveSession();
         engine.CloseWindows();
         themes.Dispose();
         engine.UserContent.Dispose();
-        engine.Detach(core);
-        view.Close();
+        foreach (var tab in tabs)
+        {
+            engine.Detach(tab.Core);
+            tab.View?.Close();
+        }
     }
+
+    void Print_Click(object sender, RoutedEventArgs e) => core?.ShowPrintUI();
+    void DevTools_Click(object sender, RoutedEventArgs e) => core?.OpenDevToolsWindow();
+    void CustomizeMenu_Click(object sender, RoutedEventArgs e) => CustomizeFlyout.ShowAt(CustomizeButton);
+
+    void DownloadsMenu_Click(object sender, RoutedEventArgs e)
+    {
+        DownloadsButton.Visibility = Visibility.Visible;
+        DownloadsFlyout.ShowAt(DownloadsButton);
+    }
+
+    void MainMenu_Opening(object sender, object e) => FillImportMenu(ImportMenu.Items);
 
     // ---- Theme ----
 
@@ -307,9 +376,9 @@ public sealed partial class MainWindow : Window
         var colors = highContrast ? ThemeResources.HighContrast() : t.Colors;
         ThemeResources.Apply(Application.Current.Resources, colors);
         Root.RequestedTheme = highContrast ? ElementTheme.Default : t.Base == ThemeBase.Light ? ElementTheme.Light : ElementTheme.Dark;
-        ApplyBackdrop(highContrast ? Backdrop.None : t.Backdrop);
+        ApplyBackdrop(highContrast ? new BackdropSpec(Backdrop.None) : t.Backdrop, t.Base, colors.Background);
         ApplyCaptionColors(colors);
-        view.DefaultBackgroundColor = ThemeResources.ToColor(colors.Page.Opaque);
+        foreach (var tab in tabs) SetPageBackground(tab);
         engine.SetPageColorScheme(t.Pages.ColorScheme, t.Base);
 
         var m = metrics;
@@ -317,7 +386,7 @@ public sealed partial class MainWindow : Window
         Toolbar.Height = m.ToolbarHeight;
         Toolbar.Padding = new Thickness(m.Unit, 0, 0, 0);
         Toolbar.BorderThickness = new Thickness(0, 0, 0, t.Shape.BorderWidth);
-        NavPanel.Spacing = Math.Max(2, m.Unit / 2);
+        NavPanel.Spacing = ActionsPanel.Spacing = Math.Max(2, m.Unit / 2);
         AddressHost.Margin = new Thickness(m.Unit, 0, m.Unit, 0);
         foreach (var b in ChromeButtons()) StyleButton(b);
 
@@ -328,20 +397,20 @@ public sealed partial class MainWindow : Window
         AddressBox.CornerRadius = radius;
         var pad = Math.Max(0, Math.Floor((m.ControlHeight - t.Typography.Size * 1.33) / 2) - 1);
         AddressBox.Padding = new Thickness(m.Unit * 1.5, pad, m.Unit, pad);
-        AddressBox.FontFamily = family;
-        AddressBox.FontSize = t.Typography.Size;
+        AddressBox.FontFamily = BookmarkSearch.FontFamily = family;
+        AddressBox.FontSize = BookmarkSearch.FontSize = t.Typography.Size;
         AddressBox.FontWeight = weight;
+        BookmarkSearch.CornerRadius = radius;
+        TabList.FontFamily = BookmarkList.FontFamily = family;
+        TabList.FontSize = BookmarkList.FontSize = t.Typography.Size;
         foreach (var tb in new[] { ThemeName, ThemeStatus, MemoryText, NoDownloads, InsecureText })
         {
             tb.FontFamily = family;
             tb.FontSize = t.Typography.Size;
             tb.FontWeight = weight;
         }
-        foreach (var tb in new[] { LayoutHeader, ThemeHeader, DownloadsHeader, MemoryHeader })
-        {
-            tb.FontFamily = family;
-            tb.FontSize = Math.Max(9, t.Typography.Size - 2);
-        }
+        TabsTitle.FontFamily = family;
+        TabsTitle.FontSize = Math.Max(9, t.Typography.Size - 2);
         AppWindow.TitleBar.PreferredHeightOption = m.TallCaption ? TitleBarHeightOption.Tall : TitleBarHeightOption.Standard;
 
         // The file is the source of truth for layout, but only fields that changed in it override what you set in the sidebar.
@@ -350,6 +419,7 @@ public sealed partial class MainWindow : Window
         LayoutSidebar();
 
         ThemeName.Text = $"{t.Name} · {(t.Base == ThemeBase.Light ? "light" : "dark")}";
+        WriteHomeData();
         UpdateDragRegions();
     }
 
@@ -362,32 +432,22 @@ public sealed partial class MainWindow : Window
 
     Control[] ChromeButtons() =>
     [
-        BackButton, ForwardButton, ReloadButton, SidebarButton,
-        EdgeLeft, EdgeRight, EdgeTop, EdgeBottom, PinToggle,
+        BackButton, ForwardButton, ReloadButton, HomeButton, StarButton, DownloadsButton, CustomizeButton, SidebarButton, MenuButton,
+        NewTabButton, BookmarkImportButton, EdgeLeft, EdgeRight, EdgeTop, EdgeBottom, PinToggle,
         ReloadThemeButton, EditThemeButton, DataFolderButton, UserContentButton, MeasureButton,
     ];
 
-    void ApplyBackdrop(Backdrop requested)
+    void ApplyBackdrop(BackdropSpec spec, ThemeBase themeBase, Rgba fallback)
     {
-        var effective = requested switch
+        var supported = GlassBackdrop.IsSupported(spec.Material);
+        var key = supported ? $"{spec}|{themeBase}|{fallback}" : "none";
+        if (key != backdropKey)
         {
-            Backdrop.Mica or Backdrop.MicaAlt when MicaController.IsSupported() => requested,
-            Backdrop.Acrylic when DesktopAcrylicController.IsSupported() => requested,
-            _ => Backdrop.None,
-        };
-        if (effective != activeBackdrop)
-        {
-            SystemBackdrop = effective switch
-            {
-                Backdrop.Mica => new MicaBackdrop { Kind = MicaKind.Base },
-                Backdrop.MicaAlt => new MicaBackdrop { Kind = MicaKind.BaseAlt },
-                Backdrop.Acrylic => new DesktopAcrylicBackdrop(),
-                _ => null,
-            };
-            activeBackdrop = effective;
+            SystemBackdrop = supported ? new GlassBackdrop(spec, themeBase, fallback) : null;
+            backdropKey = key;
         }
-        Root.Background = effective == Backdrop.None ? ThemeResources.Get("LiltBackgroundBrush") : new SolidColorBrush(Colors.Transparent);
-        backdropNote = effective == requested ? "" : $" · {requested} unavailable, using a solid background";
+        Root.Background = supported ? new SolidColorBrush(Colors.Transparent) : ThemeResources.Get("LiltBackgroundBrush");
+        backdropNote = supported || spec.Material == Backdrop.None ? "" : $" · {spec.Material} unavailable, using a solid background";
     }
 
     void ApplyCaptionColors(ThemeColors c)
@@ -403,10 +463,19 @@ public sealed partial class MainWindow : Window
         bar.ButtonPressedForegroundColor = ThemeResources.ToColor(c.Text);
     }
 
+    // The home tab can be see-through (its page is transparent and so is the view behind it); every other page gets the theme's page color.
+    void SetPageBackground(BrowserTab tab, string? url = null)
+    {
+        if (tab.View is null) return;
+        var home = Uri.TryCreate(url ?? tab.Url, UriKind.Absolute, out var u) && u.Host == BrowserEngine.NewTabHost;
+        tab.View.DefaultBackgroundColor = home && HomeGlass ? Colors.Transparent : ThemeResources.ToColor(theme.Colors.Page.Opaque);
+    }
+
     void OnThemeReloaded(ThemeLoadResult result)
     {
         if (result.Failed)
         {
+            themeLoadFailed = true;
             ThemeStatus.Text = $"Last save had errors · previous theme kept · {DateTime.Now:t}";
             ShowNotice(new($"Theme not applied: {result.Issues[0]}. Keeping the previous theme.", NoticeKind.Error, "Edit", OpenThemeFile));
             return;
@@ -418,6 +487,7 @@ public sealed partial class MainWindow : Window
     void ShowThemeLoad(ThemeLoadResult result, bool startup)
     {
         var n = result.Issues.Count;
+        themeLoadFailed = result.Failed;
         ThemeStatus.Text = result.Failed
             ? "Using the built-in theme"
             : n == 0 ? $"Applied {DateTime.Now:t}{backdropNote}" : $"{n} warning{(n == 1 ? "" : "s")} · {DateTime.Now:t}{backdropNote}";
@@ -526,23 +596,28 @@ public sealed partial class MainWindow : Window
             _ => VerticalAlignment.Stretch,
         };
 
+        // Vertical: tabs, bookmarks, then the layout buttons stacked. Horizontal: a tab strip with the layout buttons at the end.
         var u = metrics.Unit;
-        SidebarStack.Orientation = vertical ? Orientation.Vertical : Orientation.Horizontal;
-        SidebarStack.Spacing = vertical ? u : u * 2;
-        SidebarStack.Padding = vertical ? new Thickness(u * 2) : new Thickness(u * 2, 0, u * 2, 0);
-        SidebarStack.VerticalAlignment = vertical ? VerticalAlignment.Top : VerticalAlignment.Center;
-        foreach (var header in new[] { LayoutHeader, ThemeHeader, DownloadsHeader, MemoryHeader })
-            header.Visibility = vertical ? Visibility.Visible : Visibility.Collapsed;
-        DownloadList.Orientation = vertical ? Orientation.Vertical : Orientation.Horizontal;
-        foreach (var text in new[] { ThemeStatus, MemoryText })
+        SidebarGrid.RowDefinitions.Clear();
+        SidebarGrid.ColumnDefinitions.Clear();
+        SidebarGrid.Padding = vertical ? new Thickness(u * 1.5) : new Thickness(u, 0, u, 0);
+        SidebarGrid.RowSpacing = SidebarGrid.ColumnSpacing = u;
+        FrameworkElement[] parts = [TabsHeader, TabList, BookmarksPanel, SidebarFooter];
+        var star = new GridLength(1, GridUnitType.Star);
+        var sizes = vertical
+            ? new[] { GridLength.Auto, star, GridLength.Auto, GridLength.Auto }
+            : new[] { GridLength.Auto, star, new GridLength(0), GridLength.Auto };
+        for (var i = 0; i < parts.Length; i++)
         {
-            text.TextWrapping = vertical ? TextWrapping.Wrap : TextWrapping.NoWrap;
-            text.MaxWidth = vertical ? double.PositiveInfinity : 340;
+            if (vertical) SidebarGrid.RowDefinitions.Add(new RowDefinition { Height = sizes[i] });
+            else SidebarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = sizes[i] });
+            Grid.SetRow(parts[i], vertical ? i : 0);
+            Grid.SetColumn(parts[i], vertical ? 0 : i);
         }
-        SidebarScroll.HorizontalScrollMode = vertical ? ScrollMode.Disabled : ScrollMode.Auto;
-        SidebarScroll.HorizontalScrollBarVisibility = vertical ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto;
-        SidebarScroll.VerticalScrollMode = vertical ? ScrollMode.Auto : ScrollMode.Disabled;
-        SidebarScroll.VerticalScrollBarVisibility = vertical ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
+        BookmarksPanel.Visibility = vertical ? Visibility.Visible : Visibility.Collapsed;
+        TabsTitle.Visibility = vertical ? Visibility.Visible : Visibility.Collapsed;
+        TabsHeader.VerticalAlignment = SidebarFooter.VerticalAlignment = vertical ? VerticalAlignment.Stretch : VerticalAlignment.Center;
+        SetTabStripOrientation(vertical);
 
         foreach (var (button, e) in EdgeToggles()) button.IsChecked = e == edge;
         PinToggle.IsChecked = !sidebar.AutoHide;
@@ -574,7 +649,7 @@ public sealed partial class MainWindow : Window
             return;
         }
         pointerInBand = false;
-        if (IsFocusWithin(Sidebar)) view.Focus(FocusState.Programmatic);
+        if (IsFocusWithin(Sidebar)) active?.View?.Focus(FocusState.Programmatic);
         var (x, y) = HiddenOffset();
         Slide(x, y, animate, () =>
         {
@@ -695,16 +770,10 @@ public sealed partial class MainWindow : Window
         e.Handled = true;
         sidebar.Dismiss();
         SyncSidebar();
-        view.Focus(FocusState.Programmatic);
+        active?.View?.Focus(FocusState.Programmatic);
     }
 
     void SidebarButton_Click(object sender, RoutedEventArgs e) => ToggleSidebar(keyboard: false);
-
-    void ToggleSidebar_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
-    {
-        e.Handled = true;
-        ToggleSidebar(keyboard: true);
-    }
 
     void ToggleSidebar(bool keyboard)
     {
@@ -712,8 +781,8 @@ public sealed partial class MainWindow : Window
         sidebar.Toggle();
         pointerInBand = false;
         SyncSidebar();
-        if (!sidebar.Open) return;
-        if (keyboard) EdgeToggles().First(b => b.Edge == sidebar.Edge).Button.Focus(FocusState.Keyboard);
+        if (!sidebar.Open || !keyboard) return;
+        if (active is not null) TabList.Focus(FocusState.Keyboard);
     }
 
     void Edge_Click(object sender, RoutedEventArgs e)
@@ -749,7 +818,7 @@ public sealed partial class MainWindow : Window
         var scale = root.RasterizationScale;
         CaptionColumn.Width = new GridLength(AppWindow.TitleBar.RightInset / scale);
         var rects = new List<RectInt32>();
-        foreach (var element in new FrameworkElement[] { NavPanel, AddressHost, SidebarButton })
+        foreach (var element in new FrameworkElement[] { NavPanel, AddressHost, ActionsPanel })
         {
             if (element.ActualWidth <= 0 || element.Visibility != Visibility.Visible) continue;
             var b = element.TransformToVisual(null).TransformBounds(new Windows.Foundation.Rect(0, 0, element.ActualWidth, element.ActualHeight));
@@ -782,116 +851,6 @@ public sealed partial class MainWindow : Window
             NoticeBar.ActionButton = button;
         }
         NoticeBar.IsOpen = true;
-    }
-
-    // ---- Downloads ----
-
-    void OnDownloadStarted(CoreWebView2DownloadOperation op)
-    {
-        var body = (Style)Application.Current.Resources["BodyText"];
-        var name = new TextBlock { Style = body, Text = Path.GetFileName(op.ResultFilePath), FontSize = theme.Typography.Size };
-        var status = new TextBlock { Style = body, Foreground = ThemeResources.Get("LiltTextMutedBrush"), FontSize = Math.Max(9, theme.Typography.Size - 1) };
-        var icon = new FontIcon { Glyph = "" };
-        var action = new Button { Style = (Style)Application.Current.Resources["ChromeButton"], Content = icon, VerticalAlignment = VerticalAlignment.Center };
-        StyleButton(action);
-        var row = new Grid { ColumnSpacing = 6, Width = sidebar.Edge.IsVertical() ? double.NaN : 240 };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        text.Children.Add(name);
-        text.Children.Add(status);
-        row.Children.Add(text);
-        Grid.SetColumn(action, 1);
-        row.Children.Add(action);
-        DownloadList.Children.Insert(0, row);
-        NoDownloads.Visibility = Visibility.Collapsed;
-
-        long lastUpdate = 0;
-        void Update()
-        {
-            status.Text = DownloadStatus(op);
-            var (glyph, tip) = op.State switch
-            {
-                CoreWebView2DownloadState.InProgress => ("", "Cancel download"),
-                CoreWebView2DownloadState.Completed => ("", "Show in folder"),
-                _ when op.CanResume => ("", "Resume download"),
-                _ => ("", "Remove from list"),
-            };
-            icon.Glyph = glyph;
-            ToolTipService.SetToolTip(action, tip);
-            AutomationProperties.SetName(action, tip);
-        }
-
-        action.Click += (_, _) =>
-        {
-            switch (op.State)
-            {
-                case CoreWebView2DownloadState.InProgress:
-                    op.Cancel();
-                    break;
-                case CoreWebView2DownloadState.Completed:
-                    ShowInFolder(op.ResultFilePath);
-                    break;
-                case CoreWebView2DownloadState.Interrupted when op.CanResume:
-                    op.Resume();
-                    break;
-                default:
-                    DownloadList.Children.Remove(row);
-                    if (DownloadList.Children.Count == 0) NoDownloads.Visibility = Visibility.Visible;
-                    break;
-            }
-        };
-        op.BytesReceivedChanged += (_, _) =>
-        {
-            var now = Environment.TickCount64;
-            if (now - lastUpdate < 250) return;
-            lastUpdate = now;
-            Update();
-        };
-        op.StateChanged += (_, _) =>
-        {
-            Update();
-            if (op.State == CoreWebView2DownloadState.Completed)
-                ShowNotice(new($"Downloaded {name.Text}", NoticeKind.Success, "Show in folder", () => ShowInFolder(op.ResultFilePath)));
-            else if (op.State == CoreWebView2DownloadState.Interrupted)
-                ShowNotice(new($"{name.Text} didn't finish downloading: {Humanize(op.InterruptReason.ToString())}.", NoticeKind.Warning));
-        };
-        Update();
-        ShowNotice(new($"Downloading {name.Text} to {Path.GetDirectoryName(op.ResultFilePath)}", NoticeKind.Info));
-    }
-
-    static string DownloadStatus(CoreWebView2DownloadOperation op)
-    {
-        double received = op.BytesReceived;
-        double total = op.TotalBytesToReceive is { } t ? t : 0;
-        return op.State switch
-        {
-            CoreWebView2DownloadState.Completed => $"Done · {Size(received)}",
-            CoreWebView2DownloadState.Interrupted => $"Stopped · {Humanize(op.InterruptReason.ToString())}",
-            _ => total > 0 ? $"{received / total:P0} · {Size(received)} of {Size(total)}" : Size(received),
-        };
-    }
-
-    static string Size(double bytes) => bytes switch
-    {
-        >= 1 << 30 => $"{bytes / (1 << 30):N1} GB",
-        >= 1 << 20 => $"{bytes / (1 << 20):N1} MB",
-        >= 1 << 10 => $"{bytes / (1 << 10):N0} KB",
-        _ => $"{bytes:N0} B",
-    };
-
-    static string Humanize(string pascal) => Regex.Replace(pascal, "(?<=[a-z])(?=[A-Z])", " ").ToLowerInvariant();
-
-    static void ShowInFolder(string path)
-    {
-        try
-        {
-            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\""));
-        }
-        catch (Win32Exception e)
-        {
-            LiltPaths.LogError(e);
-        }
     }
 
     // ---- Diagnostics ----

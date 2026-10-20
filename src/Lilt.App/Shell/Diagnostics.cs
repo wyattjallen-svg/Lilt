@@ -9,10 +9,12 @@ sealed class StartupReport(string? path)
 {
     readonly DateTime start = Process.GetCurrentProcess().StartTime;
     double? windowShown, environmentReady, engineReady;
+    string[] extensions = [];
 
     public void WindowShown() => windowShown ??= Since();
     public void EnvironmentReady() => environmentReady ??= Since();
     public void EngineReady() => engineReady ??= Since();
+    public void Extensions(IEnumerable<string> list) => extensions = list.ToArray();
 
     public void FirstNavigation(string url, bool succeeded, string status)
     {
@@ -27,6 +29,7 @@ sealed class StartupReport(string? path)
             ["url"] = url,
             ["firstNavigationSucceeded"] = succeeded,
             ["firstNavigationStatus"] = status,
+            ["extensions"] = extensions,
             ["pid"] = Environment.ProcessId,
             ["time"] = DateTimeOffset.Now.ToString("O"),
         }, new JsonSerializerOptions { WriteIndented = true });

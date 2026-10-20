@@ -11,6 +11,7 @@ sealed class ThemeService : IDisposable
     readonly DispatcherQueueTimer debounce;
     FileSystemWatcher? watcher;
     int retries;
+    string? lastWritten;
 
     public ThemeService(string? filePath, DispatcherQueue queue)
     {
@@ -48,8 +49,23 @@ sealed class ThemeService : IDisposable
         watcher.EnableRaisingEvents = true;
     }
 
+    // Saves from the Customize panel; the watcher's echo of this write is ignored.
+    public void Save(Theme theme)
+    {
+        if (FilePath is null) return;
+        var text = ThemeWriter.ToJson(theme);
+        lastWritten = text;
+        Lilt.Core.Files.WriteAtomic(FilePath, text);
+        Current = theme;
+    }
+
     public void Reload()
     {
+        try
+        {
+            if (lastWritten is not null && FilePath is not null && File.ReadAllText(FilePath) == lastWritten) return;
+        }
+        catch (IOException) { }
         var result = Load();
         if (result.ReadError && retries++ < 3)
         {

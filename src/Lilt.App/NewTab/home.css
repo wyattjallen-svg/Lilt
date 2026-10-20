@@ -1,0 +1,33 @@
+:root {
+  color-scheme: light dark;
+  --background: #141318; --text: #ece9f1; --textMuted: #a19cab; --surfaceRaised: #2a2733cc;
+  --border: #ffffff14; --accent: #c4a7ff; --onAccent: #1a1325; --hover: #ffffff0f;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  display: grid; place-items: center; background: var(--background); color: var(--text);
+  font: 15px/1.4 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+}
+body.glass { background: transparent; }
+main { width: min(720px, calc(100% - 32px)); margin-top: -8vh; display: grid; gap: 24px; justify-items: center; }
+.time { font: 300 72px/1 "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; letter-spacing: -0.02em; margin: 0; text-align: center; }
+.date { color: var(--textMuted); margin: 6px 0 0; text-align: center; }
+form { width: min(560px, 100%); }
+input {
+  width: 100%; font: inherit; color: inherit; background: var(--surfaceRaised);
+  border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; outline: none;
+}
+input:focus { border-color: var(--accent); }
+#tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; width: 100%; }
+#tiles a {
+  display: grid; justify-items: center; gap: 8px; padding: 12px 6px; border-radius: 12px;
+  color: var(--text); text-decoration: none; font-size: 12px; outline: none;
+}
+#tiles a:hover, #tiles a:focus-visible { background: var(--hover); }
+#tiles .badge {
+  width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--accent); color: var(--onAccent); font-weight: 600; font-size: 18px;
+}
+#tiles .label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hint { color: var(--textMuted); font-size: 12px; margin: 0; }

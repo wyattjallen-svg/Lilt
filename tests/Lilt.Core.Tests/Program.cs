@@ -1,7 +1,11 @@
 using System.Text.Json;
 using System.Diagnostics;
 using Lilt.Core;
+using Lilt.Core.Bookmarks;
 using Lilt.Core.Customization;
+using Lilt.Core.Extensions;
+using System.Security.Cryptography;
+using System.Buffers.Binary;
 using Lilt.Core.Layout;
 using Lilt.Core.Navigation;
 using Lilt.Core.Theming;
@@ -30,7 +34,7 @@ Test("bundled paper.json loads cleanly as a light theme", () =>
     var r = ThemeParser.LoadFile(RepoFile($"{themes}/paper.json"));
     Equal(0, r.Issues.Count);
     Equal(ThemeBase.Light, r.Theme.Base);
-    Equal(Backdrop.MicaAlt, r.Theme.Backdrop);
+    Equal(Backdrop.MicaAlt, r.Theme.Backdrop.Material);
     Equal(DockEdge.Right, r.Theme.Sidebar.Edge);
     True(r.Theme.Sidebar.AutoHide);
 });
@@ -111,7 +115,7 @@ Test("newer schema version loads with a warning", () =>
 Test("enums are case-insensitive and list choices when wrong", () =>
 {
     var r = ThemeParser.Parse("""{ "schemaVersion": 1, "backdrop": "MicaAlt", "base": "dim", "sidebar": { "edge": "TOP" } }""");
-    Equal(Backdrop.MicaAlt, r.Theme.Backdrop);
+    Equal(Backdrop.MicaAlt, r.Theme.Backdrop.Material);
     Equal(DockEdge.Top, r.Theme.Sidebar.Edge);
     Equal(ThemeBase.Dark, r.Theme.Base);
     True(r.Issues.Single().Message.Contains("dark, light"));
@@ -146,7 +150,10 @@ Test("schema file and validator know the same settings", () =>
     var props = doc.RootElement.GetProperty("properties");
     foreach (var (section, keys) in ThemeParser.KnownKeys)
     {
-        var node = section.Length == 0 ? props : props.GetProperty(section).GetProperty("properties");
+        var sectionNode = section.Length == 0 ? default : props.GetProperty(section);
+        if (section.Length > 0 && sectionNode.TryGetProperty("anyOf", out var anyOf))
+            sectionNode = anyOf.EnumerateArray().First(a => a.TryGetProperty("properties", out _));
+        var node = section.Length == 0 ? props : sectionNode.GetProperty("properties");
         var schemaKeys = node.EnumerateObject().Select(p => p.Name).Order().ToArray();
         Equal(string.Join(",", keys.Order()), string.Join(",", schemaKeys));
     }
@@ -451,6 +458,215 @@ Test("user content: generated scripts match hosts in a JS engine", () =>
     Equal("""{"css":["a{x:1}"],"ran":["syntax","other"]}""", RunInPage(all, "https:", "other.org"));
     Equal("""{"css":[],"ran":["syntax"]}""", RunInPage(all, "about:", ""));
     Equal("""{"css":["a{x:1}"],"ran":["syntax"]}""", RunInPage(all, "https:", "notexample.com"));
+});
+
+Test("frost.json: backdrop object with tint", () =>
+{
+    var r = ThemeParser.LoadFile(RepoFile($"{themes}/frost.json"));
+    Equal(0, r.Issues.Count);
+    Equal(Backdrop.AcrylicThin, r.Theme.Backdrop.Material);
+    Equal(Rgba.Parse("#10131A"), r.Theme.Backdrop.Tint);
+    Equal(0.15, r.Theme.Backdrop.TintOpacity);
+    True(r.Theme.Home.Glass);
+});
+
+Test("backdrop object: bad values are ignored, material falls back", () =>
+{
+    var r = ThemeParser.Parse("""{ "schemaVersion": 1, "backdrop": { "material": "glass", "tint": "blue", "tintOpacity": 2 } }""");
+    Equal(new BackdropSpec(Backdrop.Mica), r.Theme.Backdrop);
+    Equal(3, r.Issues.Count);
+    Equal(Backdrop.Acrylic, ThemeParser.Parse("""{"schemaVersion":1,"backdrop":"acrylic"}""").Theme.Backdrop.Material);
+});
+
+Test("theme writer round-trips through the parser", () =>
+{
+    foreach (var name in new[] { "dusk", "paper", "frost" })
+    {
+        var t = ThemeParser.LoadFile(RepoFile($"{themes}/{name}.json")).Theme;
+        var back = ThemeParser.Parse(ThemeWriter.ToJson(t));
+        Equal(0, back.Issues.Count);
+        Equal(t, back.Theme);
+    }
+    var tweaked = Theme.Default with { Backdrop = new BackdropSpec(Backdrop.Acrylic, null, 0.2, null), Home = new HomeSpec(false, true, false, true) };
+    Equal(tweaked, ThemeParser.Parse(ThemeWriter.ToJson(tweaked)).Theme);
+});
+
+Test("bookmarks: Chromium JSON with folders", () =>
+{
+    var json = """
+        { "roots": {
+            "bookmark_bar": { "children": [
+              { "type": "url", "name": "GitHub", "url": "https://github.com/" },
+              { "type": "folder", "name": "Dev", "children": [
+                { "type": "url", "name": "Docs", "url": "https://learn.microsoft.com/" },
+                { "type": "url", "name": "Bad", "url": "javascript:alert(1)" } ] } ] },
+            "other": { "children": [ { "type": "url", "name": "News", "url": "https://news.ycombinator.com" },
+                                     { "type": "url", "name": "Dup", "url": "https://github.com" } ] },
+            "synced": { "children": [] } } }
+        """;
+    var r = BookmarkImport.Parse(json);
+    Equal("Chromium bookmarks", r.Format);
+    Equal(3, r.Bookmarks.Count);
+    Equal(2, r.Skipped);
+    Equal(new Bookmark("GitHub", "https://github.com/", ""), r.Bookmarks[0]);
+    Equal("Dev", r.Bookmarks[1].Folder);
+    Equal(new Bookmark("News", "https://news.ycombinator.com/", "Other bookmarks"), r.Bookmarks[2]);
+});
+
+Test("bookmarks: Netscape HTML from Chrome/Google", () =>
+{
+    var html = """
+        <!DOCTYPE NETSCAPE-Bookmark-file-1>
+        <DL><p>
+          <DT><H3 ADD_DATE="1" PERSONAL_TOOLBAR_FOLDER="true">Bookmarks bar</H3>
+          <DL><p>
+            <DT><A HREF="https://example.com/?a=1&amp;b=2" ADD_DATE="1">Example &amp; Co</A>
+            <DT><H3>Folder</H3>
+            <DL><p>
+              <DT><A HREF="https://inner.example.org">Inner</A>
+            </DL><p>
+          </DL><p>
+          <DT><H3>Other bookmarks</H3>
+          <DL><p><DT><A HREF="file:///C:/x">Local</A></DL><p>
+        </DL><p>
+        """;
+    var r = BookmarkImport.Parse(html);
+    Equal("HTML bookmarks", r.Format);
+    Equal(2, r.Bookmarks.Count);
+    Equal(1, r.Skipped);
+    Equal(new Bookmark("Example & Co", "https://example.com/?a=1&b=2", ""), r.Bookmarks[0]);
+    Equal(new Bookmark("Inner", "https://inner.example.org/", "Folder"), r.Bookmarks[1]);
+});
+
+Test("bookmarks: CSV with header, quotes, and without header", () =>
+{
+    var r = BookmarkImport.Parse("Name,URL,Folder\r\n\"Hello, world\",https://a.example.com,Home\r\n\"Say \"\"hi\"\"\",https://b.example.com,\r\n");
+    Equal("CSV", r.Format);
+    Equal(new Bookmark("Hello, world", "https://a.example.com/", "Home"), r.Bookmarks[0]);
+    Equal("Say \"hi\"", r.Bookmarks[1].Title);
+    var bare = BookmarkImport.Parse("https://c.example.com,C site\nnot a url,also not\n");
+    Equal(1, bare.Bookmarks.Count);
+    Equal(new Bookmark("C site", "https://c.example.com/", ""), bare.Bookmarks[0]);
+    Equal(1, bare.Skipped);
+});
+
+Test("bookmark store: add, dedupe, remove, persist", () =>
+{
+    var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json");
+    try
+    {
+        var store = new BookmarkStore(path);
+        store.Load();
+        True(store.Add("A", "https://Example.com"));
+        True(!store.Add("A again", "https://example.com/"));
+        True(!store.Add("bad", "javascript:void(0)"));
+        True(store.Contains("https://example.com"));
+        Equal(1, store.Merge([new Bookmark("B", "https://b.example"), new Bookmark("A", "https://example.com/")]));
+        store.Save();
+        var again = new BookmarkStore(path);
+        again.Load();
+        Equal(2, again.Items.Count);
+        True(again.Remove("https://example.com/"));
+        Equal(1, again.Items.Count);
+
+        File.WriteAllText(path, "[{\"url\":\"https://c.example\"},{\"title\":\"no url\"},null]");
+        again.Load();
+        Equal(new Bookmark("https://c.example/", "https://c.example/", ""), again.Items.Single());
+        File.WriteAllText(path, "{ broken");
+        again.Load();
+        Equal(0, again.Items.Count);
+        True(File.ReadAllText(path + ".bak") == "{ broken");
+    }
+    finally
+    {
+        File.Delete(path);
+        File.Delete(path + ".bak");
+    }
+});
+
+Test("session: save, load, clamp, empty", () =>
+{
+    var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json");
+    try
+    {
+        new Session([new("https://a.example/", "A"), new("https://b.example/", "B")], 5).Save(path);
+        var s = Session.Load(path)!;
+        Equal(2, s.Tabs.Count);
+        Equal(1, s.Active);
+        Equal("B", s.Tabs[1].Title);
+        new Session([], 0).Save(path);
+        Equal(null, Session.Load(path));
+        File.WriteAllText(path, "{ not json");
+        Equal(null, Session.Load(path));
+    }
+    finally { File.Delete(path); }
+});
+
+static byte[] Field(int field, byte[] data)
+{
+    var o = new List<byte>();
+    void Varint(ulong v) { while (v >= 0x80) { o.Add((byte)(v | 0x80)); v >>= 7; } o.Add((byte)v); }
+    Varint((ulong)field << 3 | 2);
+    Varint((ulong)data.Length);
+    o.AddRange(data);
+    return [.. o];
+}
+
+static byte[] MakeCrx(RSA key, byte[] zip, byte[]? idOverride = null)
+{
+    var pub = key.ExportSubjectPublicKeyInfo();
+    var id = idOverride ?? SHA256.HashData(pub)[..16];
+    var signed = Field(1, id);
+    var message = "CRX3 SignedData\0"u8.ToArray().Concat(BitConverter.GetBytes((uint)signed.Length)).Concat(signed).Concat(zip).ToArray();
+    var sig = key.SignData(message, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+    var header = Field(2, [.. Field(1, pub), .. Field(2, sig)]).Concat(Field(10000, signed)).ToArray();
+    var crx = new List<byte>("Cr24"u8.ToArray());
+    crx.AddRange(BitConverter.GetBytes(3u));
+    crx.AddRange(BitConverter.GetBytes((uint)header.Length));
+    crx.AddRange(header);
+    crx.AddRange(zip);
+    return [.. crx];
+}
+
+Test("CRX3: valid package verifies; tampering and wrong IDs are rejected", () =>
+{
+    using var key = RSA.Create(2048);
+    var zip = "PK fake zip bytes"u8.ToArray();
+    var crx = MakeCrx(key, zip);
+    var id = ExtensionId.FromPublicKey(key.ExportSubjectPublicKeyInfo());
+    var pkg = Crx3.Verify(crx, id);
+    True(pkg.Zip.SequenceEqual(zip));
+    True(pkg.PublicKey.SequenceEqual(key.ExportSubjectPublicKeyInfo()));
+
+    static void Throws(Action a, string why) { try { a(); } catch (InvalidDataException) { return; } throw new Exception("expected rejection: " + why); }
+    var tampered = (byte[])crx.Clone();
+    tampered[^1] ^= 1;
+    Throws(() => Crx3.Verify(tampered, id), "tampered zip");
+    Throws(() => Crx3.Verify(crx, new string('a', 32)), "wrong expected id");
+    using var other = RSA.Create(2048);
+    Throws(() => Crx3.Verify(MakeCrx(other, zip, SHA256.HashData(key.ExportSubjectPublicKeyInfo())[..16]), id), "key doesn't match id");
+    Throws(() => Crx3.Verify("PK\u0003\u0004"u8.ToArray(), id), "not a crx");
+    Throws(() => Crx3.Verify([.. "Cr24"u8, 3, 0, 0, 0, 255, 255, 0, 0], id), "truncated");
+});
+
+Test("extension IDs: from key, parse from URLs, store URL", () =>
+{
+    Equal("pnpnpkpkbopgcebjepaopplahkdnmbfc", ExtensionId.FromPublicKey(Convert.FromBase64String(File.ReadAllText(RepoFile("src/Lilt.App/Extensions/ubol-key.txt")).Trim())));
+    Equal("ghmbeldphafepmbegfdlkpapadhbakde", ExtensionId.Parse("https://chromewebstore.google.com/detail/proton-pass-free-password/ghmbeldphafepmbegfdlkpapadhbakde?hl=en"));
+    Equal("ghmbeldphafepmbegfdlkpapadhbakde", ExtensionId.Parse("  ghmbeldphafepmbegfdlkpapadhbakde "));
+    Equal(null, ExtensionId.Parse("proton pass"));
+    Equal(null, ExtensionId.Parse(null));
+    True(ExtensionId.WebStoreDownload("ghmbeldphafepmbegfdlkpapadhbakde", "153.0.4234.48").AbsoluteUri.Contains("prodversion=153.0"));
+});
+
+Test("addresses: extension pages open from the address bar, not other schemes", () =>
+{
+    Nav("chrome-extension://pnpnpkpkbopgcebjepaopplahkdnmbfc/dashboard.html", "chrome-extension://pnpnpkpkbopgcebjepaopplahkdnmbfc/dashboard.html");
+    Rejected("chrome://settings");
+    True(!UrlPolicy.IsNavigable("chrome-extension://pnpnpkpkbopgcebjepaopplahkdnmbfc/popup.html"));
+    var o = LaunchOptions.Parse(["--install-extension", "ghmbeldphafepmbegfdlkpapadhbakde", "--no-extensions"]);
+    Equal("ghmbeldphafepmbegfdlkpapadhbakde", o.InstallExtension);
+    True(o.NoExtensions);
 });
 
 return Summary();

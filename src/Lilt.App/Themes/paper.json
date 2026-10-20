@@ -34,5 +34,6 @@
     "hideDelay": 400
   },
   "motion": { "animations": true, "duration": 180 },
-  "pages": { "colorScheme": "auto" }
+  "pages": { "colorScheme": "auto" },
+  "home": { "clock": true, "search": true, "tiles": true, "glass": false }
 }
