@@ -15,6 +15,14 @@ public sealed partial class MainWindow
 {
     sealed record PaletteItem(string Title, string Hint, string Glyph, Action Run, bool Listed = false);
 
+    static readonly Dictionary<string, string> commandGlyphs = new()
+    {
+        ["newTab"] = "\uE710", ["reopenTab"] = "\uE7A7", ["closeTab"] = "\uE711", ["nextTab"] = "\uE72A", ["prevTab"] = "\uE72B",
+        ["address"] = "\uE721", ["back"] = "\uE72B", ["forward"] = "\uE72A", ["reload"] = "\uE72C", ["home"] = "\uE80F",
+        ["bookmark"] = "\uE734", ["sidebar"] = "\uE8A0", ["menu"] = "\uE712", ["customize"] = "\uE790", ["palette"] = "\uE945",
+        ["split"] = "\uE8A9", ["media"] = "\uE8D6", ["visualizer"] = "\uE9D9", ["pip"] = "\uE8A7",
+    };
+
     void ShowPalette()
     {
         PaletteBox.Text = "";
@@ -109,7 +117,7 @@ public sealed partial class MainWindow
     IEnumerable<PaletteItem> PaletteItems()
     {
         foreach (var (id, label) in Commands.Labels)
-            yield return new(label, Shortcut(id), "", () => RunCommand(id, keyboard: true), Listed: true);
+            yield return new(label, Shortcut(id), commandGlyphs.GetValueOrDefault(id, "\uE756"), () => RunCommand(id, keyboard: true), Listed: true);
         foreach (var tab in tabs)
             yield return new(tab.DisplayTitle, tab == active ? "This tab" : "Switch to tab", "", () => Activate(tab), Listed: true);
         if (active is { } a && Partner(a) is not null)

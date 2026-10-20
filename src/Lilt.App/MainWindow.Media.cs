@@ -159,9 +159,11 @@ public sealed partial class MainWindow
         try
         {
             smtc ??= await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+            var title = mediaTab?.Media?.Title;
             foreach (var session in smtc.GetSessions())
             {
-                if (!IsLiltSession(session.SourceAppUserModelId)) continue;
+                // WebView2's sessions all come from msedgewebview2.exe, other apps' included; the title tells them apart.
+                if (!IsLiltSession(session.SourceAppUserModelId) || (await session.TryGetMediaPropertiesAsync()).Title != title) continue;
                 var done = which == "next" ? await session.TrySkipNextAsync() : await session.TrySkipPreviousAsync();
                 report.Key("media", $"{which} via Windows: {done}");
                 return;

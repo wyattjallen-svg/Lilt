@@ -303,6 +303,11 @@
       <Grid x:Name="PaletteHost" Grid.Column="1" Width="0" HorizontalAlignment="Center">
         <FlyoutBase.AttachedFlyout>
           <Flyout x:Name="PaletteFlyout" Placement="Bottom" Opened="PaletteFlyout_Opened" Closed="PaletteFlyout_Closed">
+            <Flyout.FlyoutPresenterStyle>
+              <Style TargetType="FlyoutPresenter">
+                <Setter Property="MaxWidth" Value="640" />
+              </Style>
+            </Flyout.FlyoutPresenterStyle>
             <Grid Width="520" RowSpacing="6">
               <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />

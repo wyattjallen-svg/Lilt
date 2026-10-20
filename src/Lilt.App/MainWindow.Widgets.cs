@@ -39,7 +39,14 @@ public sealed partial class MainWindow
             _ => s.Height,
         };
         h = Math.Min(h, height);
-        return new Rect(Math.Clamp(s.X * width, 0, Math.Max(0, width - w)), Math.Clamp(s.Y * height, 0, Math.Max(0, height - h)), w, h);
+        return new Rect(Inside(s.X * width, w, width), Inside(s.Y * height, h, height), w, h);
+    }
+
+    // Keeps a widget a few pixels inside the page area's edges (or at the edge when it barely fits).
+    static double Inside(double at, double size, double room)
+    {
+        var margin = Math.Clamp((room - size) / 2, 0, 6);
+        return Math.Clamp(at, margin, Math.Max(margin, room - size - margin));
     }
 
     void PlaceWidgets()
@@ -91,7 +98,7 @@ public sealed partial class MainWindow
             var w = Math.Clamp(f.Width + Math.Max(dx, dy / aspect), 200, Math.Max(200, Math.Min(900, Math.Min(width - f.X, (height - f.Y - PipBar) / aspect))));
             live = new Rect(f.X, f.Y, w, w * aspect + PipBar);
         }
-        else live = new Rect(Math.Clamp(f.X + dx, 0, Math.Max(0, width - f.Width)), Math.Clamp(f.Y + dy, 0, Math.Max(0, height - f.Height)), f.Width, f.Height);
+        else live = new Rect(Inside(f.X + dx, f.Width, width), Inside(f.Y + dy, f.Height, height), f.Width, f.Height);
         PlaceWidgets();
     }
 

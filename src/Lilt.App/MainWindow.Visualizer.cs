@@ -21,7 +21,7 @@ public sealed partial class MainWindow
     bool loopbackFailed;
     CoreWebView2? captureCore;
     float[] levels = [];
-    long lastLevels, quietSince;
+    long lastLevels, quietSince, loopbackSince, heardAt;
     DispatcherQueueTimer? vizTimer;
     string vizShape = "";
     int vizFrames;
@@ -88,6 +88,7 @@ public sealed partial class MainWindow
                 {
                     lock (s) s.AddPcm16(pcm, 2);
                 });
+                loopbackSince = Environment.TickCount64;
                 report.Key("visualizer", "system sound");
                 return;
             }
@@ -162,6 +163,19 @@ public sealed partial class MainWindow
         double w = VisualizerCanvas.ActualWidth, h = VisualizerCanvas.ActualHeight, peak = 0;
         if (w <= 0 || h <= 0) return;
         foreach (var b in bars) peak = Math.Max(peak, b);
+        if (peak > 0.02) heardAt = now;
+        // Loopback that has heard nothing at all while a tab plays (no audio device, or sound Windows can't loop back):
+        // listen to the playing tab instead. Once it has heard something it's working, and quiet passages are just quiet.
+        if (loopback is not null && m.Source == VisualizerSource.Auto && now - loopbackSince > 2500 && heardAt == 0
+            && tabs.Any(t => t.Media is { Playing: true } && !t.IsMuted))
+        {
+            loopbackFailed = true;
+            loopback.Dispose();
+            loopback = null;
+            spectrum = null;
+            report.Key("visualizer", "loopback silent, using the page");
+            StartSound();
+        }
         vizFrames++;
         vizPeak = Math.Max(vizPeak * 0.99, peak);
 
