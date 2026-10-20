@@ -15,7 +15,7 @@ concurrency:
 jobs:
   build:
     runs-on: windows-2025
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       DOTNET_NOLOGO: true
       DOTNET_CLI_TELEMETRY_OPTOUT: true
@@ -215,18 +215,6 @@ jobs:
           @('### Feature checks', '', '| Check | Result | Detail |', '|---|---|---|') + $script:checks | Tee-Object smoke-checks.md | Add-Content $env:GITHUB_STEP_SUMMARY
           if ($script:failed.Count) { Write-Host "::error::Smoke test failed: $($script:failed -join ', ')"; exit 1 }
 
-      - name: Idle measurements
-        shell: pwsh
-        continue-on-error: true
-        timeout-minutes: 25
-        run: |
-          ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Runs 3 -Settle 20 -Sample 30 -Label "CI runner, visible, first start" -Out measure-visible.json
-          ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Runs 3 -Settle 20 -Sample 30 -Label "CI runner, visible, no extensions" -Out measure-noext.json -ExtraArgs '--no-extensions'
-          $page = 'https://en.wikipedia.org/wiki/Web_browser'
-          ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Url $page -Runs 3 -Settle 20 -Sample 30 -Warm -Label "CI runner, Wikipedia page, in front" -Out measure-warm.json
-          ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Url $page -Runs 3 -Settle 20 -Sample 30 -Warm -Minimize -AfterMinimize 40 -Label "CI runner, Wikipedia page, minimized 40 s (efficiency mode)" -Out measure-minimized.json
-          Get-Content measure-visible.md, measure-noext.md, measure-warm.md, measure-minimized.md | Add-Content $env:GITHUB_STEP_SUMMARY
-
       - name: Publish prerelease
         shell: pwsh
         env:
@@ -243,6 +231,37 @@ jobs:
             Start-Sleep -Seconds (10 * $try)
           }
           exit 1
+
+      - name: Idle measurements
+        shell: pwsh
+        continue-on-error: true
+        timeout-minutes: 30
+        run: |
+          # Each scenario runs in its own process with a hard time limit, so one stuck run can't hold up the rest.
+          function Measure([string]$out, [string[]]$a) {
+            $argList = @('-NoProfile', '-File', 'tools/measure.ps1', '-Exe', 'out/Lilt/Lilt.exe', '-Runs', '3', '-Settle', '20', '-Sample', '30', '-Out', $out) + $a
+            $m = Start-Process pwsh -ArgumentList $argList -NoNewWindow -PassThru
+            if (-not $m.WaitForExit(480000)) {
+              Write-Host "::warning::$out timed out"
+              Stop-Process -Id $m.Id -Force -ErrorAction SilentlyContinue
+              Get-Process Lilt, msedgewebview2 -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            }
+          }
+          $page = 'https://en.wikipedia.org/wiki/Web_browser'
+          Measure measure-visible.json @('-Label', '"CI runner, about:blank, first start"')
+          Measure measure-noext.json @('-Label', '"CI runner, about:blank, no extensions"', '-ExtraArgs', '--no-extensions')
+          Measure measure-warm.json @('-Url', $page, '-Warm', '-Label', '"CI runner, Wikipedia page, in front"')
+          Measure measure-minimized.json @('-Url', $page, '-Warm', '-Minimize', '-AfterMinimize', '40', '-Label', '"CI runner, Wikipedia page, minimized 40 s (efficiency mode)"')
+          Get-Content measure-*.md -ErrorAction SilentlyContinue | Add-Content $env:GITHUB_STEP_SUMMARY
+
+      - name: Add measurements to the release
+        if: always()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $files = @(Get-ChildItem measure-*.json, measure-*.md -ErrorAction SilentlyContinue | ForEach-Object Name)
+          if ($files) { gh release upload prototype-build @files --clobber }
 
       - name: Upload log on failure
         if: failure()
