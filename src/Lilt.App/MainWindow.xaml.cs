@@ -379,6 +379,9 @@ public sealed partial class MainWindow : Window
 
     void OnClosed(object sender, WindowEventArgs e)
     {
+        closing = true;
+        powerTimer?.Stop();
+        suspendTimer.Stop();
         SaveSession();
         engine.CloseWindows();
         themes.Dispose();

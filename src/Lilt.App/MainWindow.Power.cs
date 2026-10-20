@@ -16,7 +16,7 @@ public sealed partial class MainWindow
 {
     DispatcherQueueTimer? powerTimer;
     long awaySince = -1;
-    bool focused = true, energySaver, pageHiddenForPower;
+    bool focused = true, energySaver, pageHiddenForPower, closing;
     PowerLevel powerLevel = PowerLevel.Full;
     IntPtr hwnd;
 
@@ -51,10 +51,10 @@ public sealed partial class MainWindow
 
     void UpdatePower()
     {
-        if (powerTimer is null) return;
+        if (powerTimer is null || closing) return;
         var minimized = AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized };
         var away = awaySince < 0 ? 0 : (Environment.TickCount64 - awaySince) / 1000.0;
-        var audible = tabs.Any(t => t.Core?.IsDocumentPlayingAudio == true);
+        var audible = tabs.Any(t => t.IsAudible);
         var covered = !focused && !minimized && theme.Power.HideWhenCovered && Native.IsCovered(hwnd);
         var level = PowerPolicy.Decide(theme.Power, focused, minimized, away, audible, covered, energySaver);
         if (level == powerLevel) return;
@@ -69,8 +69,14 @@ public sealed partial class MainWindow
         var changed = pids.Count(pid => Native.SetEfficient(pid, efficient));
 
         foreach (var tab in tabs)
-            if (tab.Core is { } c)
+        {
+            if (tab.Core is not { } c) continue;
+            try
+            {
                 c.MemoryUsageTargetLevel = efficient || tab != active ? CoreWebView2MemoryUsageTargetLevel.Low : CoreWebView2MemoryUsageTargetLevel.Normal;
+            }
+            catch (Exception) { } // a view that's closing
+        }
 
         if (level == PowerLevel.Paused && active?.View is { Visibility: Visibility.Visible } view)
         {

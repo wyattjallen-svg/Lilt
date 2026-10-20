@@ -282,14 +282,14 @@ public sealed partial class MainWindow
         var spec = theme.Power;
         foreach (var tab in tabs.ToArray())
         {
-            if (tab.Core is not { IsSuspended: false, IsDocumentPlayingAudio: false } c) continue;
+            if (closing || tab.Core is not { } c || tab.IsAudible) continue;
             var hidden = tab != active || force;
             if (!hidden || (!force && !PowerPolicy.ShouldSuspend(spec, (now - tab.LastActive) / 60000.0, energySaver))) continue;
             try
             {
-                if (await c.TrySuspendAsync()) report.Key("power", $"suspended {UrlPolicy.DisplayHost(tab.Url)}");
+                if (!c.IsSuspended && await c.TrySuspendAsync()) report.Key("power", $"suspended {UrlPolicy.DisplayHost(tab.Url)}");
             }
-            catch (Exception) { }
+            catch (Exception) { } // best effort: visible or closing views refuse
         }
     }
 

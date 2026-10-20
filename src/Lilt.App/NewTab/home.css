@@ -32,14 +32,15 @@ input {
 }
 input::placeholder { color: var(--textMuted); }
 input:focus { border-color: var(--accent); }
-form svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.lens { position: absolute; left: 16px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); color: var(--textMuted); pointer-events: none; }
+/* Windows' own icon font, so the page needs no image files for its icons. */
+.icon { font-family: "Segoe Fluent Icons", "Segoe MDL2 Assets"; font-style: normal; line-height: 1; }
+.lens { position: absolute; z-index: 1; left: 18px; top: 50%; font-size: 15px; transform: translateY(-50%); color: var(--textMuted); pointer-events: none; }
 form button {
   position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border-radius: 50%;
   border: 0; background: transparent; color: var(--textMuted); cursor: pointer; display: grid; place-items: center;
 }
 form button:hover, form button:focus-visible { background: var(--hover); color: var(--text); outline: none; }
-form button svg { width: 18px; height: 18px; }
+form button .icon { font-size: 14px; }
 
 #tiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; width: 100%; }
 #tiles .tile { position: relative; }
@@ -68,5 +69,5 @@ form button svg { width: 18px; height: 18px; }
   color: var(--textMuted); background: transparent;
 }
 #gear:hover, #gear:focus-visible { background: var(--hover); color: var(--text); outline: none; }
-#gear svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+#gear .icon { font-size: 17px; }
 @media (prefers-reduced-motion: no-preference) { #tiles a.open, #gear, form button { transition: background .15s; } }

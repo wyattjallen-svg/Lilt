@@ -105,6 +105,7 @@ jobs:
             try { Shot "screenshot-$name.png" } catch { Write-Host "::warning::screenshot failed: $_" }
             $alive = -not $p.HasExited
             if (Test-Path $report) { Copy-Item $report "smoke-$name.json"; Get-Content $report | Out-Host }
+            if (Test-Path "$report.keys.txt") { Copy-Item "$report.keys.txt" "smoke-$name.keys.txt" }
             else { Write-Host "::warning::$name produced no startup report (exited: $($p.HasExited))" }
             if (Test-Path "$dir/logs/error.log") {
               Copy-Item "$dir/logs/error.log" "smoke-$name.log"
@@ -242,5 +243,5 @@ jobs:
         run: |
           gh release delete prototype-log --yes --cleanup-tag 2>$null
           if (-not (Test-Path build.log)) { 'No build log (failure before publish).' | Set-Content build.log }
-          $files = @('build.log') + @(Get-ChildItem screenshot-*.png, smoke-*.json, smoke-*.log -ErrorAction SilentlyContinue | ForEach-Object Name)
+          $files = @('build.log') + @(Get-ChildItem screenshot-*.png, smoke-*.json, smoke-*.log, smoke-*.txt, smoke-*.md -ErrorAction SilentlyContinue | ForEach-Object Name)
           gh release create prototype-log --prerelease --target $env:GITHUB_SHA --title "CI log $($env:GITHUB_SHA.Substring(0, 7))" --notes "Failed run $env:GITHUB_RUN_ID" @files

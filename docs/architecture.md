@@ -1,6 +1,6 @@
 # Lilt architecture (Stage 1)
 
-Status: revised 2026-10-19 for v0.2. Built so far: the prototype in section 11, plus tabs, saved sessions, bookmarks and import, the home tab, the glass backdrop and Customize panel, bundled uBlock Origin Lite and Chrome Web Store extensions (section 13).
+Status: revised 2026-10-20 for v0.3 (sections 6.5, 6.6, 8.0, 14). Revised 2026-10-19 for v0.2. Built so far: the prototype in section 11, plus tabs, saved sessions, bookmarks and import, the home tab, the glass backdrop and Customize panel, bundled uBlock Origin Lite and Chrome Web Store extensions (section 13).
 
 Lilt is a personal Windows 11 browser built on WebView2. Priorities, in order: customization, performance, content blocking, privacy, import convenience. This document records what the platform allows, what Lilt has to build itself, what is still unproven, and what is not possible.
 
@@ -314,6 +314,33 @@ The edge is detected from the content grid's `PointerMoved` with `handledEventsT
 | Window material | Built (v0.2). `backdrop` is a name or `{ "material", "tint", "tintOpacity", "luminosityOpacity" }`; materials: Mica, Mica Alt, Acrylic, thin Acrylic ("glass"), solid. The controller stays "active" when the window loses focus so the glass doesn't flip to solid. Surface alpha controls how much of it shows through the toolbar and sidebar. The see-through home tab relies on an undocumented WinUI detail (the WebView2's bridge background brush) and is [Experimental]. |
 | Customize panel | Built (v0.2). Presets (Dusk, Paper, Frost), material, glass tint, toolbar/sidebar opacity, accent, corner radius, text size, sidebar width, spacing, home switches. Changes apply live and are written back to `theme.json`; a theme file with errors is never overwritten. |
 
+### 6.5 Design language (v0.3)
+
+From the design sheet: calm, focused, adaptable, yours.
+
+| | |
+|---|---|
+| Palette | Deep charcoal `#171A1E`, slate `#2A2F36`, warm white `#F3F4F1`, pale sage `#DCE9E4`, sage green `#638B7B`, muted green `#496B5D`, blue gray `#687C93`, sand `#E6D6CC` |
+| Themes | **Minimal** (default: charcoal over Mica), **Glass** (translucent chrome over Acrylic, hills scenery on the home tab), **Light** (warm white and pale sage). Untouched v0.1/v0.2 default theme files move to Minimal on first start; customized ones are left alone. |
+| Type | Segoe UI Variable; chrome text 13 px by default, changeable |
+| Tab states | Normal, hover, active (accent outline and soft fill), loading (spinner), playing sound / muted (speaker button that mutes), pinned (icon only, kept on top), error (red mark and outline) |
+| Layout presets | Compact (default), Research (wide sidebar), Vertical tabs (no bookmark list), Top tabs, Bottom bar |
+| Home tab | Logo, clock, pill search, favicon tiles with an Add tile, shortcut hint, Customize button; background none, generated hills in theme colors, or your own image |
+| Icon | The two-stroke sage wave on a charcoal tile (`tools/make-icon.py` draws it; 16 to 256 px in `Assets/lilt.ico`) |
+| Materials | Mica (recommended), Acrylic (stronger blur), thin Acrylic, solid fallback |
+
+### 6.6 Everything movable and removable (v0.3)
+
+Each arrangeable area is an ordered list of ids in the theme. Position in the list is position on screen; leaving an id out hides that element. The Customize panel edits the same lists with a check box (show/hide) and arrows (move) per element, so the file and the panel never disagree.
+
+| Area | Ids | Notes |
+|---|---|---|
+| `toolbar.items` | back, forward, reload, home, address, bookmark, downloads, extensions, customize, sidebar, menu | Ids before `address` sit left of it, the rest right. Downloads only appears once something has downloaded. If the menu or Customize button is hidden, Alt+F and Ctrl+Shift+, still open them. |
+| `sidebar.sections` | tabs, bookmarks, layout | Order top to bottom; bookmarks only when docked left or right. With tabs hidden, the bookmark list takes the height. |
+| `home.items` | logo, clock, search, tiles, hint, gear | Order top to bottom; gear is the corner Customize button. |
+
+Also changeable from the panel: window material, glass tint, chrome opacity, any of the 11 colors (color picker with alpha), accent swatches, font, text size, corner radius, toolbar height, spacing, sidebar width and edge, auto-hide, home background and see-through, and the power settings. The toolbar stays at the top because it is also the title bar; moving it is a later option.
+
 ## 7. Security and privacy
 
 ### 7.1 Threat model
@@ -361,6 +388,30 @@ Personal builds only: self-contained, unpackaged, updated by rebuilding. No upda
 ## 8. Performance
 
 Principles: one environment and profile; environment creation started with the window; a pre-warmed spare view for new tabs (Stage 2); no polling timers in the shell; no blur beyond the system backdrop; measurements before claims. ReadyToRun is on; Native AOT is not planned for a WinUI 3 app (at most a spike expected to fail).
+
+### 8.0 Efficiency mode (v0.3)
+
+The goal: Lilt open in the background, a game in front, and Lilt taking as little CPU, power and memory as it can without breaking anything you're listening to.
+
+What Windows and Chromium already do, so Lilt doesn't duplicate it:
+
+- Windows gives windowed apps a QoS level by state: focused is High, visible but unfocused is Medium, minimized or fully covered is Low, and the levels apply to the window's child processes too (WebView2's processes are Lilt's children).
+- Chromium lowers background renderers to idle priority and EcoQoS by default (`UseEcoQoSForBackgroundProcess`), and throttles timers in hidden pages.
+- Microsoft's WebView2 guidance: set `MemoryUsageTargetLevel = Low` on inactive views and `TrySuspendAsync` views that won't be used for a while; keep the GPU on.
+
+What Lilt adds (rules in `Lilt.Core.PowerPolicy`, unit-tested; code in `MainWindow.Power.cs`):
+
+| Situation | Level | What happens |
+|---|---|---|
+| Lilt in front, or any tab playing sound | Full | Normal priority, Windows decides QoS, the active page's memory target is Normal |
+| In another app for 10 s (immediately with Battery saver) | Reduced | Below-normal priority and EcoQoS on Lilt, the WebView2 browser, GPU and utility processes; every page's memory target Low |
+| Minimized, or a full-screen app or game covers Lilt's monitor, or the session is locked | Paused | Reduced, plus the visible page is hidden (stops rendering, gets Chromium's background throttling) and all silent tabs are suspended |
+| Any tab not shown for `power.suspendMinutes` (default 5; 1 with Battery saver) | | That tab is suspended; it resumes when shown |
+| Tabs you aren't looking at | | Memory target Low at all times |
+
+"Covered" uses `SHQueryUserNotificationState` (the call Chromium uses to detect full-screen apps) plus a same-monitor check, so a page on your second monitor next to a game isn't paused. While you're in Lilt nothing polls; a 10-second timer runs only while you're away (30 s once paused). All of it is in the theme's `power` block and the Customize panel's Power tab, and can be turned off.
+
+Not done: discarding tabs (loses page state; suspend keeps it), disabling the GPU (Microsoft advises against it; software rendering costs more CPU), trimming working sets by force (Windows does it under pressure).
 
 ### 8.1 Method
 
@@ -458,6 +509,10 @@ Command line: `--url <url>`, `--theme <file>`, `--user-data <folder>`, `--startu
 1. ~~Password manager~~: answered in v0.2: Proton Pass, with WebView2's saving as fallback (section 7.2).
 2. **Rust in the build.** If the filtering spike shows Path A is needed, is adding a Rust toolchain acceptable? Without it, cosmetic filtering and path rules wait or fall to Path B.
 
+## 14. v0.3
+
+After your design sheet and power request (2026-10-20): the design language in section 6.5, arrangeable toolbar, sidebar and home (6.6), the tabbed Customize panel with a full color picker, tab states and a tab context menu (pin, mute, duplicate, bookmark, close others), the app icon, and efficiency mode (8.0).
+
 ## 13. v0.2
 
 Built on the prototype after your review (2026-10-19):
@@ -483,3 +538,4 @@ Command line additions: `--install-extension <id or Web Store link>`, `--no-exte
 - Filtering: [adblock-rust](https://app.unpkg.com/adblock-rs@0.13.2/files/README.md), [adblock-rust in Firefox 149](https://www.gigazine.net/gsc_news/en/20260427-adblock-rust-on-firefox), [uBO Lite in WebView2](https://github.com/Lukas-Bohez/ConvertTheSpireFlutter/issues/10)
 - Licensing: [Windows App SDK license](https://www.nuget.org/packages/Microsoft.WindowsAppSDK.WinUI/2.3.9/license), [WebView2 SDK license](https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.4258.31/license)
 - Comparison: [Helium for Windows](https://github.com/imputnet/helium-windows/releases)
+- Power: [Windows quality of service levels](https://github.com/MicrosoftDocs/win32/blob/docs/desktop-src/ProcThread/quality-of-service.md), [SetProcessInformation / EcoQoS](https://learn.microsoft.com/windows/win32/api/processthreadsapi/nf-processthreadsapi-setprocessinformation), [Chromium process priority and EcoQoS](https://chromium.googlesource.com/chromium/src/+/main/base/process/process_win.cc), [Chromium full-screen detection](https://chromium.googlesource.com/chromium/src/+/main/ui/base/fullscreen_win.cc), [SHQueryUserNotificationState](https://msdn.microsoft.com/en-us/library/bb762242(v=vs.85)), [MemoryUsageTargetLevel](https://learn.microsoft.com/en-us/dotnet/api/microsoft.web.webview2.core.corewebview2.memoryusagetargetlevel), [V8 Runtime.addBinding internals](https://chromium.googlesource.com/v8/v8/+/refs/heads/main/src/inspector/v8-runtime-agent-impl.cc)
