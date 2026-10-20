@@ -10,13 +10,13 @@ New features are driven by `--run` scripts (commands, waits and `state` snapshot
 
 | Check | Result |
 |---|---|
-| Core unit tests (56: theme parsing and writing, shortcuts, media info, spectrum, power rules, session, …) | Pass |
+| Core unit tests (56 groups: theme parsing and writing, shortcuts, media info, spectrum, power rules, session, …) | Pass |
 | All scenarios load their first page; no crashes; no `error.log`; every run closes within 15 s | Pass |
 | Media reported from the page (title, artist, duration, playing) | Pass |
 | Player stays out of the way while the playing tab is on screen; shows when it isn't | Pass |
 | Visualizer draws and hears the sound (loopback where Windows can hear it; CI's VM has no audio device, so it switched to the tab's sound by itself) | Pass |
 | Split view pairs two tabs; picture in picture opens Windows' floating video window (WebView2 supports it) and closes again | Pass |
-| In-window pop-out: the tab floats in a frame over another tab, can be dragged with the mouse (the new place is saved to the theme) and goes back | See the release's `smoke-checks.md` |
+| In-window pop-out: the tab floats in a frame over another tab, is dragged with real mouse input (the new place is saved to the theme) and goes back | Pass |
 | Peek opens a link over the page; the command palette opens | Pass |
 | A shortcut changed in the theme works inside pages; a removed one does nothing | Pass |
 | Efficiency mode pauses behind a full-screen window and when minimized, suspends the page, returns to full in front | Pass |
@@ -24,7 +24,7 @@ New features are driven by `--run` scripts (commands, waits and `state` snapshot
 
 What the engine on CI's VM reported (`--run probe`): picture in picture, document picture in picture, media session, `captureStream` and full screen all available; Windows lists Lilt's media as a session of `msedgewebview2.exe` with the page's title; process loopback works.
 
-Bugs CI caught in this round: selecting the first tab at startup laid out pages before the media panel existed (crash at launch); a media element that started before the page helper arrived went unreported; screenshots raced the script; a minimized window that Windows left as the foreground window counted as "in front", so minimizing didn't pause Lilt.
+Bugs CI caught in this round: selecting the first tab at startup laid out pages before the media panel existed (crash at launch); a media element that started before the page helper arrived went unreported; screenshots raced the script; a minimized window that Windows left as the foreground window counted as "in front", so minimizing didn't pause Lilt; drags now follow the pointer at the content area instead of depending on pointer capture.
 
 ## Measured resource use
 
@@ -32,18 +32,18 @@ Bugs CI caught in this round: selecting the first tab at startup laid out pages 
 
 | Scenario | Private bytes | Working set | CPU, % of one core | Power level |
 |---|---|---|---|---|
-| `about:blank`, first start (installs uBlock Origin Lite) | 170.7 MB | 444.4 MB | 0.5% | Full |
-| `about:blank`, no extensions | 145.0 MB | 415.3 MB | 0.2% | Full |
-| Animated page, in front | 263.4 MB | 561.1 MB | 20.4% | Full |
-| Animated page, behind another app's maximized window | 155.7 MB | 95.0 MB | 0.6% | Hidden |
-| Animated page, behind a full-screen window | 161.5 MB | 61.1 MB | 0.3% | Paused |
-| Animated page, behind a full-screen window, efficiency mode off | 258.8 MB | 557.8 MB | 0.8% | (off) |
+| `about:blank`, first start (installs uBlock Origin Lite) | 173.7 MB | 449.7 MB | 0.2% | Full |
+| `about:blank`, no extensions | 144.9 MB | 414.8 MB | 0.4% | Full |
+| Animated page, in front | 266.0 MB | 570.6 MB | 7–20% (varies by run) | Full |
+| Animated page, behind another app's maximized window | 161.1 MB | 72.3 MB | 0.6–2.9% | Hidden |
+| Animated page, behind a full-screen window | 162.3 MB | 61.9 MB | 0.3–0.6% | Paused |
+| Animated page, behind a full-screen window, efficiency mode off | 259.3 MB | 560.6 MB | 0.7–0.8% | (off) |
 
 Reading these:
 
 - Windows and Chromium already stop most drawing for a covered window (0.8% CPU with efficiency mode off). What efficiency mode adds is memory: behind another window Lilt's whole process tree drops from about 560 MB to 95 MB resident (Hidden) or 61 MB (Paused), and about 100 MB of private memory is released, so a game in front gets that RAM back. Everything returns when Lilt comes to the front; Hidden pages aren't suspended, so they repaint at once.
 - CPU in front is the animated page itself (software rendering); Lilt's own UI process idles near zero, and its drawing (visualizer, player clock) stops whenever the window can't be seen.
-- Minimized: fixed in this release (see above); the measurement is in the release's `measure-minimized.md`.
+- Minimized: the measurement exposed that a window minimized with nothing else to activate stays the foreground window and never got deactivated, so Lilt didn't pause; v0.4.0 checks on minimize itself and keeps its timer running whenever it isn't in front. The prototype build's `measure-minimized.md` has the numbers after the fix.
 
 ## Testing this build
 

@@ -27,13 +27,9 @@ public sealed partial class MainWindow
         powerTimer = DispatcherQueue.CreateTimer();
         powerTimer.Interval = TimeSpan.FromSeconds(10);
         powerTimer.Tick += (_, _) => UpdatePower();
-        // Activation changes trigger a check; while Lilt isn't in front (including a window that never got focus) a timer keeps checking.
-        Activated += (_, e) =>
-        {
-            if (e.WindowActivationState == WindowActivationState.Deactivated) powerTimer.Start();
-            else powerTimer.Stop();
-            DispatcherQueue.TryEnqueue(() => UpdatePower());
-        };
+        // Activation, foreground and minimize changes trigger a check; while Lilt isn't in front (including a window that
+        // never got focus, or one minimized without anything else taking the foreground) the timer keeps checking.
+        Activated += (_, _) => DispatcherQueue.TryEnqueue(() => UpdatePower());
         powerTimer.Start();
         Native.OnForegroundChanged(() => UpdatePower());
         try
@@ -59,6 +55,8 @@ public sealed partial class MainWindow
         var focused = !minimized && Native.LiltInFront();
         if (focused) awaySince = -1;
         else if (awaySince < 0) awaySince = Environment.TickCount64;
+        if (focused) powerTimer.Stop();
+        else if (!powerTimer.IsRunning) powerTimer.Start();
         var away = awaySince < 0 ? 0 : (Environment.TickCount64 - awaySince) / 1000.0;
         var audible = tabs.Any(t => t.IsAudible);
         var covered = !focused && !minimized && Native.IsCovered(hwnd);
