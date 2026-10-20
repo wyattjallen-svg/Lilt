@@ -58,7 +58,9 @@ public sealed record SidebarSpec(DockEdge Edge, double Width, double Height, boo
 public sealed record MotionSpec(bool Animations, int Duration);
 
 // Peek: Shift+click a link to preview it in a panel over the page.
-public sealed record PagesSpec(PageColorScheme ColorScheme, bool Peek);
+// Search: the address bar's search engine (a name like "duckduckgo" or "google", or an https address with %s).
+// History: remember visited pages for address-bar suggestions (never in InPrivate windows).
+public sealed record PagesSpec(PageColorScheme ColorScheme, bool Peek, string Search = "duckduckgo", bool History = true);
 
 // The home tab. Glass makes its background transparent so the window material shows through.
 // Background: "" for none, "hills" for the built-in scenery, or an image file name in the newtab folder.

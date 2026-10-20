@@ -30,7 +30,7 @@ public sealed partial class MainWindow
     void InitTabs()
     {
         TabList.ItemsSource = tabs;
-        var start = AddressResolver.Resolve(options.Url);
+        var start = AddressResolver.Resolve(options.Url, SearchEngines.For(themes.Current.Pages.Search).Template);
         startProblem = start.Kind == AddressKind.Rejected ? start.Reason : null;
 
         BrowserTab? pick = null, partner = null;
@@ -91,7 +91,9 @@ public sealed partial class MainWindow
             tab.IsLoading = true;
             tab.HasError = false;
             SetPageBackground(tab, e.Uri);
-            if (tab == active) UpdateNavigation();
+            if (tab != active) return;
+            HideSuggestions();
+            UpdateNavigation();
         };
         c.NavigationCompleted += (_, e) =>
         {
@@ -103,6 +105,7 @@ public sealed partial class MainWindow
                 UpdateNavigation();
                 UpdateTitle();
             }
+            if (e.IsSuccess) RecordVisit(c.Source, c.DocumentTitle);
             if (!firstNavigation) return;
             firstNavigation = false;
             report.FirstNavigation(c.Source, e.IsSuccess, e.WebErrorStatus.ToString());
@@ -111,6 +114,8 @@ public sealed partial class MainWindow
         {
             tab.Url = c.Source;
             if (!e.IsNewDocument && tab.IsHome) HomeCommand(c);
+            // In-page navigations (most single-page sites) count as visits too.
+            else if (!e.IsNewDocument) RecordVisit(c.Source, c.DocumentTitle);
             if (tab == active) UpdateNavigation();
             ScheduleSave();
         };
@@ -122,6 +127,7 @@ public sealed partial class MainWindow
         {
             tab.Title = c.DocumentTitle;
             if (tab == active) UpdateTitle();
+            RetitleVisit(c.Source, c.DocumentTitle);
             ScheduleSave();
         };
         c.FaviconChanged += (_, _) => LoadFavicon(tab, c);
@@ -218,23 +224,42 @@ public sealed partial class MainWindow
         ScheduleSave();
     }
 
-    BrowserTab AddTab(string url, bool atEnd = false)
+    // activate: false opens it behind the current tab (Ctrl+click, middle-click), loading right away.
+    BrowserTab AddTab(string url, bool atEnd = false, bool activate = true)
     {
         var tab = new BrowserTab(url);
-        tabs.Insert(atEnd || active is null ? tabs.Count : Math.Max(tabs.IndexOf(active) + 1, PinnedCount()), tab);
-        Activate(tab);
+        tabs.Insert(atEnd || active is null ? tabs.Count : NextTabIndex(activate), tab);
+        if (activate) Activate(tab);
+        else
+        {
+            lastBehind = tab;
+            if (started) Load(tab);
+        }
         return tab;
+    }
+
+    // New tabs go right after the current one; several opened behind it in a row stay in the order they were opened.
+    BrowserTab? lastBehind, lastBehindFrom;
+
+    int NextTabIndex(bool activate)
+    {
+        var at = lastBehindFrom == active && lastBehind is { } last && tabs.Contains(last) ? tabs.IndexOf(last) + 1 : tabs.IndexOf(active!) + 1;
+        if (!activate) lastBehindFrom = active;
+        return Math.Max(at, PinnedCount());
     }
 
     int PinnedCount() => tabs.TakeWhile(t => t.IsPinned).Count();
 
     // A page asked for a new window (target=_blank, window.open): the tab's view must exist but not navigate yet.
-    async Task<CoreWebView2> OpenTabForPageAsync()
+    // Links opened with Ctrl+click or middle-click open behind the current tab.
+    async Task<CoreWebView2> OpenTabForPageAsync(bool behind)
     {
         var tab = new BrowserTab("about:blank");
-        tabs.Insert(active is null ? tabs.Count : Math.Max(tabs.IndexOf(active) + 1, PinnedCount()), tab);
+        var at = active is null ? tabs.Count : NextTabIndex(!behind);
+        tabs.Insert(at, tab);
+        if (behind) lastBehind = tab;
         var load = LoadAsync(tab, navigate: false);
-        Activate(tab);
+        if (!behind) Activate(tab);
         return await load;
     }
 
@@ -416,6 +441,7 @@ public sealed partial class MainWindow
             else Activate(tab);
         });
         Add("Duplicate", "", () => AddTab(tab.Url));
+        Add("Copy address", "\uE8C8", () => CopyText(tab.Url));
         if (InSplit(tab))
         {
             Add("Swap split panes", "\uE8AB", SwapSplit);

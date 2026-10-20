@@ -13,6 +13,8 @@ Download the latest release from [Releases](https://github.com/wyattjallen-svg/L
 | Keys | |
 |---|---|
 | Ctrl+K | Command palette: commands, tabs, bookmarks, presets, settings |
+| Ctrl+L, type | Address bar: completes sites you visit; ↑↓ to pick, Shift+Delete forgets a page, Ctrl+Enter adds www/.com |
+| Ctrl+click / middle-click a link | Open it in a tab behind this one |
 | Ctrl+Shift+S | Split view |
 | Shift+click a link | Peek |
 | Ctrl+Shift+M / Ctrl+Shift+U | Now-playing player / visualizer |
@@ -49,6 +51,7 @@ Everything lives in `%LOCALAPPDATA%\Lilt`:
 |---|---|
 | `theme.json` | Everything you can customize: colors, materials, sizes, the order and visibility of toolbar items, sidebar sections and home elements, where the player, visualizer and popped-out videos float, split view, shortcuts and power settings. The Customize panel writes it; you can also edit and save it and the window updates live. `theme.schema.json` beside it gives editor completion; `minimal.json`, `glass.json` and `light.json` are the presets. |
 | `session.json` | Open tabs (and the split-view pair), restored on the next start. |
+| `history.json` | Pages you've visited, for address-bar suggestions (`pages.history`; never in InPrivate; Menu → Clear history). |
 | `bookmarks.json` | Bookmarks. A bookmark folder named `Home` picks the home tab's tiles. |
 | `user\` | Per-site CSS and JS: `example.com.css`, `github.com.js`, `all.css`. Reloaded on save. |
 | `newtab\` | The home tab. Lilt refreshes its own files on start; put changes in `custom.css` and `custom.js`. A background image you pick is copied here; `icons\` holds favicons for your tiles. |

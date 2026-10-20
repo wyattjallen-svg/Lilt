@@ -15,6 +15,8 @@ function apply(data) {
   if (typeof data.font === 'string' && /^[\w \-]{1,100}$/.test(data.font)) root.style.setProperty('--font', `"${data.font}", "Segoe UI", system-ui, sans-serif`);
   if (typeof data.radius === 'number') root.style.setProperty('--radius', Math.max(0, Math.min(24, data.radius)) + 'px');
   root.style.colorScheme = data.base === 'light' ? 'light' : 'dark';
+  if (typeof data.hint === 'string') $('hint').textContent = data.hint.slice(0, 300);
+  if (typeof data.search === 'string') $('search').q.placeholder = `Search with ${data.search.slice(0, 40)} or type an address`;
   document.body.classList.toggle('glass', !!data.glass);
   background(data);
 
@@ -73,6 +75,13 @@ function tiles(list) {
   add.append(plus, label);
   $('tiles').append(add);
 }
+
+// Lilt does the searching (your search engine) or opens the address, same as the address bar.
+$('search').addEventListener('submit', e => {
+  e.preventDefault();
+  const q = $('search').q.value.trim();
+  if (q) location.hash = 'go=' + encodeURIComponent(q.slice(0, 2000));
+});
 
 const letter = name => name.replace(/^www\./i, '').charAt(0).toUpperCase();
 

@@ -11,6 +11,7 @@ sealed record LiltPaths(string Root)
     public string UserContent => Path.Combine(Root, "user");
     public string Session => Path.Combine(Root, "session.json");
     public string Bookmarks => Path.Combine(Root, "bookmarks.json");
+    public string History => Path.Combine(Root, "history.json");
     public string Extensions => Path.Combine(Root, "Extensions");
     public static string Bundled => Path.Combine(AppContext.BaseDirectory, "Themes");
     static string BundledNewTab => Path.Combine(AppContext.BaseDirectory, "NewTab");

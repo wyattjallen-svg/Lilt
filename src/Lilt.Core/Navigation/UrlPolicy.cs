@@ -20,6 +20,15 @@ public static class UrlPolicy
 
     public static bool IsInsecure(Uri uri) => uri.IsAbsoluteUri && uri.Scheme == Uri.UriSchemeHttp && !IsLoopback(uri.Host);
 
+    // How the address bar shows a page while you aren't editing it: https:// and a lone trailing slash left off
+    // (http:// stays, so an insecure page never looks like a secure one).
+    public static string Pretty(Uri uri)
+    {
+        var s = uri.AbsoluteUri;
+        if (uri.Scheme == Uri.UriSchemeHttps) s = s["https://".Length..];
+        return uri.AbsolutePath == "/" && uri.Query.Length == 0 && uri.Fragment.Length == 0 ? s.TrimEnd('/') : s;
+    }
+
     public static string DisplayHost(string? uri) =>
         Uri.TryCreate(uri, UriKind.Absolute, out var parsed) && parsed.Host.Length > 0 ? parsed.Host : uri ?? "";
 

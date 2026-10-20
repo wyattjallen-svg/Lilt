@@ -38,14 +38,27 @@ public sealed class BookmarkStore(string path)
 
     public bool Remove(string? url) => Normalize(url) is { } u && Items.RemoveAll(b => b.Url == u) > 0;
 
-    public int Merge(IEnumerable<Bookmark> incoming) => incoming.Count(b => Add(b.Title, b.Url, b.Folder));
+    // Replaces a bookmark (title, address, folder). False if the new address is invalid or already another bookmark.
+    public bool Update(Bookmark old, string title, string url, string folder)
+    {
+        var i = Items.IndexOf(old);
+        if (i < 0 || Normalize(url) is not { } u || (u != old.Url && Contains(u))) return false;
+        Items[i] = new Bookmark(string.IsNullOrWhiteSpace(title) ? u : title.Trim(), u, folder.Trim().Trim('/'));
+        return true;
+    }
+
+    // The bookmarks actually added (already saved ones are skipped), so an import can be undone.
+    public List<Bookmark> Merge(IEnumerable<Bookmark> incoming) => incoming.Where(b => Add(b.Title, b.Url, b.Folder)).Select(b => Items[^1]).ToList();
 
     // Only web addresses are kept: javascript: bookmarklets and file: links are dropped on import.
     public static string? Normalize(string? url) =>
         Uri.TryCreate(url?.Trim(), UriKind.Absolute, out var u) && UrlPolicy.IsWeb(u) && u.Host.Length > 0 ? u.AbsoluteUri : null;
 }
 
-public sealed record ImportResult(IReadOnlyList<Bookmark> Bookmarks, int Skipped, string Format);
+// Passwords: the file was a password export (it has a password column). Nothing in it is imported as bookmarks;
+// PasswordSites lists its sites (name and address only, never the passwords) as they'd have looked as bookmarks, so
+// bookmarks left by importing it earlier can be found and removed.
+public sealed record ImportResult(IReadOnlyList<Bookmark> Bookmarks, int Skipped, string Format, bool Passwords = false, IReadOnlyList<Bookmark>? PasswordSites = null);
 
 // Reads Chromium's Bookmarks JSON (Chrome, Edge, Helium, Brave...), the Netscape HTML every browser exports,
 // and CSV files with a url column (title/name and folder columns optional).
@@ -74,7 +87,12 @@ public static partial class BookmarkImport
         else
         {
             format = "CSV";
-            ParseCsv(trimmed, raw);
+            if (ParseCsv(trimmed, raw))
+            {
+                var sites = raw.Select(b => BookmarkStore.Normalize(b.Url) is { } u ? b with { Url = u, Title = string.IsNullOrWhiteSpace(b.Title) ? u : b.Title.Trim() } : null)
+                    .OfType<Bookmark>().DistinctBy(b => b.Url).ToList();
+                return new([], 0, "passwords", true, sites);
+            }
         }
 
         var seen = new HashSet<string>();
@@ -144,12 +162,22 @@ public static partial class BookmarkImport
 
     static string Text(string html) => WebUtility.HtmlDecode(Tag().Replace(html, "")).Trim();
 
-    static void ParseCsv(string text, List<Bookmark> into)
+    // True for a password export (Chrome, Edge, Firefox, Bitwarden, 1Password...: a header with a password column);
+    // then only each row's name and address are read.
+    static bool ParseCsv(string text, List<Bookmark> into)
     {
         var rows = Csv(text);
-        if (rows.Count == 0) return;
+        if (rows.Count == 0) return false;
         var header = rows[0].Select(h => h.Trim().ToLowerInvariant()).ToList();
         int Col(params string[] names) => header.FindIndex(h => names.Contains(h));
+        if (header.Any(h => h.Contains("password")))
+        {
+            int url = Col("url", "login_uri", "website", "origin", "address"), name = Col("name", "title");
+            if (url >= 0)
+                foreach (var row in rows.Skip(1))
+                    into.Add(new(name >= 0 && name < row.Count ? row[name] : "", url < row.Count ? row[url] : ""));
+            return true;
+        }
         var urlCol = Col("url", "href", "link", "address");
         var titleCol = Col("title", "name");
         var folderCol = Col("folder", "category", "path", "tags");
@@ -166,6 +194,7 @@ public static partial class BookmarkImport
             var url = row.FirstOrDefault(c => BookmarkStore.Normalize(c) is not null) ?? row.FirstOrDefault() ?? "";
             into.Add(new(row.FirstOrDefault(c => c != url) ?? "", url));
         }
+        return false;
     }
 
     // RFC 4180: quoted fields, doubled quotes, newlines inside quotes.

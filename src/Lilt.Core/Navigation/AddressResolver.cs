@@ -36,6 +36,9 @@ public static partial class AddressResolver
         return Search(text, searchTemplate);
     }
 
+    // Always a search, even for text that looks like an address.
+    public static Uri SearchUri(string text, string template = DefaultSearch) => Search(text.Trim(), template).Uri!;
+
     static AddressResult Search(string text, string template) =>
         new(AddressKind.Search, new Uri(string.Format(System.Globalization.CultureInfo.InvariantCulture, template, Uri.EscapeDataString(text))));
 

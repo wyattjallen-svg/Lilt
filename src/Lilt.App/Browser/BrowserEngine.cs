@@ -78,7 +78,9 @@ sealed class BrowserEngine
     public event Action<string>? Trace;
 
     // Set by the main window: open a page-requested window as a tab (returns its not-yet-navigated core), or open a URL in a new tab.
-    public Func<Task<CoreWebView2>>? OpenTabForPage { get; set; }
+    public Func<bool, Task<CoreWebView2>>? OpenTabForPage { get; set; }
+    // The link last Ctrl+clicked or middle-clicked in a page (page helper), so the tab it opens can stay behind.
+    (string Url, long At) behindLink;
     public Action<string>? OpenUrlInTab { get; set; }
 
     Task<CoreWebView2Environment> CreateEnvironmentAsync()
@@ -207,6 +209,9 @@ sealed class BrowserEngine
                 break;
             case "peek" when m.TryGetProperty("url", out var u) && UrlPolicy.IsNavigable(u.GetString()):
                 PeekRequested?.Invoke(core, u.GetString()!);
+                break;
+            case "behind" when m.TryGetProperty("url", out var b) && b.GetString() is { } link:
+                behindLink = (link, Environment.TickCount64);
                 break;
         }
     }
@@ -344,7 +349,9 @@ sealed class BrowserEngine
             var features = e.WindowFeatures;
             if (OpenTabForPage is { } openTab && features is not { HasSize: true } and not { HasPosition: true })
             {
-                e.NewWindow = await openTab();
+                var behind = behindLink.Url == uri && Environment.TickCount64 - behindLink.At < 2000;
+                behindLink = default;
+                e.NewWindow = await openTab(behind);
                 return;
             }
             var popup = Track(new PopupWindow(this, features));

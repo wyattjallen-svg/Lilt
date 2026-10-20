@@ -100,7 +100,14 @@
         </StackPanel>
         <TextBox x:Name="AddressBox" Grid.Column="1" PlaceholderText="Search or enter address" IsSpellCheckEnabled="False"
                  InputScope="Url" AutomationProperties.Name="Address and search bar"
-                 KeyDown="AddressBox_KeyDown" GotFocus="AddressBox_GotFocus" />
+                 KeyDown="AddressBox_KeyDown" GotFocus="AddressBox_GotFocus" LostFocus="AddressBox_LostFocus" TextChanged="AddressBox_TextChanged" />
+        <!-- Suggestions as you type. The rows can't take focus, so typing carries on in the address box. -->
+        <Popup x:Name="SuggestPopup" Grid.Column="1" ShouldConstrainToRootBounds="True">
+          <Border x:Name="SuggestPanel" Padding="4" CornerRadius="10" BorderThickness="1" Background="{StaticResource LiltOverlayBrush}"
+                  BorderBrush="{StaticResource LiltBorderBrush}">
+            <StackPanel x:Name="SuggestList" Spacing="1" />
+          </Border>
+        </Popup>
       </Grid>
 
       <StackPanel x:Name="RightPanel" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" />
@@ -199,6 +206,9 @@
                     <Slider x:Name="SplitRatioSlider" Header="First pane (%)" Minimum="15" Maximum="85" StepFrequency="1" ValueChanged="Customize_Changed" />
                     <Slider x:Name="SplitGapSlider" Header="Gap between panes" Minimum="0" Maximum="24" StepFrequency="1" ValueChanged="Customize_Changed" />
                     <TextBlock Text="Pages" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
+                    <ComboBox x:Name="SearchCombo" Header="Search with" HorizontalAlignment="Stretch" SelectionChanged="Customize_Changed" />
+                    <CheckBox x:Name="HistoryCheck" Content="Suggest pages I've visited in the address bar" Click="Customize_Changed" />
+                    <Button Content="Clear history…" Click="ClearHistory_Click" />
                     <CheckBox x:Name="PeekCheck" Content="Shift+click a link to peek at it" Click="Customize_Changed" />
                     <ComboBox x:Name="ColorSchemeCombo" Header="Websites see" HorizontalAlignment="Stretch" SelectionChanged="Customize_Changed">
                       <ComboBoxItem Content="The theme's light or dark" Tag="theme" />
@@ -325,14 +335,20 @@
       <Grid x:Name="MenuHost" Grid.Column="2" Width="0" HorizontalAlignment="Right">
         <FlyoutBase.AttachedFlyout>
             <MenuFlyout x:Name="MainMenu" Placement="BottomEdgeAlignedRight" Opening="MainMenu_Opening">
-              <MenuFlyoutItem Text="New tab" KeyboardAcceleratorTextOverride="Ctrl+T" Click="NewTab_Click">
+              <MenuFlyoutItem x:Name="MenuNewTab" Text="New tab" KeyboardAcceleratorTextOverride="Ctrl+T" Click="NewTab_Click">
                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE710;" /></MenuFlyoutItem.Icon>
               </MenuFlyoutItem>
-              <MenuFlyoutItem Text="Reopen closed tab" KeyboardAcceleratorTextOverride="Ctrl+Shift+T" Click="ReopenTab_Click">
+              <MenuFlyoutItem x:Name="MenuReopen" Text="Reopen closed tab" KeyboardAcceleratorTextOverride="Ctrl+Shift+T" Click="ReopenTab_Click">
                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE7A7;" /></MenuFlyoutItem.Icon>
               </MenuFlyoutItem>
+              <MenuFlyoutItem x:Name="MenuSplit" Text="Split view" KeyboardAcceleratorTextOverride="Ctrl+Shift+S" Click="SplitButton_Click">
+                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8A9;" /></MenuFlyoutItem.Icon>
+              </MenuFlyoutItem>
+              <MenuFlyoutItem x:Name="MenuPalette" Text="Find a command, tab or setting" KeyboardAcceleratorTextOverride="Ctrl+K" Click="PaletteButton_Click">
+                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE945;" /></MenuFlyoutItem.Icon>
+              </MenuFlyoutItem>
               <MenuFlyoutSeparator />
-              <MenuFlyoutItem Text="Bookmark this page" KeyboardAcceleratorTextOverride="Ctrl+D" Click="Star_Click">
+              <MenuFlyoutItem x:Name="MenuBookmark" Text="Bookmark this page" KeyboardAcceleratorTextOverride="Ctrl+D" Click="Star_Click">
                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE734;" /></MenuFlyoutItem.Icon>
               </MenuFlyoutItem>
               <MenuFlyoutSubItem x:Name="ImportMenu" Text="Import bookmarks">
@@ -345,7 +361,7 @@
               <MenuFlyoutItem x:Name="ExtensionsMenuItem" Text="Extensions" Click="Extensions_Click">
                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xEA86;" /></MenuFlyoutItem.Icon>
               </MenuFlyoutItem>
-              <MenuFlyoutItem Text="Customize" KeyboardAcceleratorTextOverride="Ctrl+Shift+," Click="CustomizeMenu_Click">
+              <MenuFlyoutItem x:Name="MenuCustomize" Text="Customize" KeyboardAcceleratorTextOverride="Ctrl+Shift+," Click="CustomizeMenu_Click">
                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE790;" /></MenuFlyoutItem.Icon>
               </MenuFlyoutItem>
               <MenuFlyoutItem Text="Downloads" Click="DownloadsMenu_Click">
@@ -360,6 +376,9 @@
               </MenuFlyoutItem>
               <MenuFlyoutItem Text="Open data folder" Click="OpenDataFolder_Click">
                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE838;" /></MenuFlyoutItem.Icon>
+              </MenuFlyoutItem>
+              <MenuFlyoutItem Text="Clear history…" Click="ClearHistory_Click">
+                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE74D;" /></MenuFlyoutItem.Icon>
               </MenuFlyoutItem>
               <MenuFlyoutSeparator />
               <MenuFlyoutItem x:Name="VersionItem" IsEnabled="False" />
@@ -628,7 +647,7 @@
                       ItemClick="BookmarkList_ItemClick" RightTapped="BookmarkList_RightTapped" AutomationProperties.Name="Bookmarks">
               <ListView.ItemTemplate>
                 <DataTemplate x:DataType="bm:Bookmark">
-                  <StackPanel Padding="0,4" ToolTipService.ToolTip="{x:Bind Url}">
+                  <StackPanel Padding="0,4" ToolTipService.ToolTip="{x:Bind Url}" PointerPressed="Bookmark_PointerPressed">
                     <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" />
                     <TextBlock Text="{x:Bind Folder}" FontSize="11" Foreground="{StaticResource LiltTextMutedBrush}" TextTrimming="CharacterEllipsis" />
                   </StackPanel>
@@ -637,7 +656,12 @@
               <FlyoutBase.AttachedFlyout>
                 <MenuFlyout x:Name="BookmarkMenu">
                   <MenuFlyoutItem Text="Open in new tab" Click="BookmarkNewTab_Click" />
+                  <MenuFlyoutItem Text="Open in split view" Click="BookmarkSplit_Click" />
+                  <MenuFlyoutItem Text="Edit…" Click="BookmarkEdit_Click" />
+                  <MenuFlyoutItem Text="Copy address" Click="BookmarkCopy_Click" />
+                  <MenuFlyoutSeparator />
                   <MenuFlyoutItem Text="Remove" Click="BookmarkRemove_Click" />
+                  <MenuFlyoutItem x:Name="BookmarkRemoveFolder" Click="BookmarkRemoveFolder_Click" />
                 </MenuFlyout>
               </FlyoutBase.AttachedFlyout>
             </ListView>

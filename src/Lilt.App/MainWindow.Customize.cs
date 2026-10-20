@@ -81,6 +81,13 @@ public sealed partial class MainWindow
         SplitRatioSlider.Value = Math.Round(t.Split.Ratio * 100);
         SplitGapSlider.Value = t.Split.Gap;
         PeekCheck.IsChecked = t.Pages.Peek;
+        HistoryCheck.IsChecked = t.Pages.History;
+        // The known engines, plus your own address when theme.json has one.
+        SearchCombo.Items.Clear();
+        foreach (var (key, engine) in Lilt.Core.Navigation.SearchEngines.Known) SearchCombo.Items.Add(new ComboBoxItem { Content = engine.Name, Tag = key });
+        if (!Lilt.Core.Navigation.SearchEngines.Known.ContainsKey(t.Pages.Search.ToLowerInvariant()))
+            SearchCombo.Items.Add(new ComboBoxItem { Content = Lilt.Core.Navigation.SearchEngines.For(t.Pages.Search).Name + " (yours)", Tag = t.Pages.Search });
+        SearchCombo.SelectedItem = SearchCombo.Items.OfType<ComboBoxItem>().FirstOrDefault(i => string.Equals((string)i.Tag, t.Pages.Search, StringComparison.OrdinalIgnoreCase));
         Select(ColorSchemeCombo, Camel(t.Pages.ColorScheme.ToString()));
         var m = t.Media;
         Select(PlayerShowCombo, Camel(m.Player.Show.ToString()));
@@ -175,7 +182,8 @@ public sealed partial class MainWindow
             Sidebar = t.Sidebar with { Width = SidebarWidthSlider.Value },
             Density = DensityCombo.SelectedItem is ComboBoxItem { Tag: string d } && Enum.TryParse<Density>(d, true, out var density) ? density : t.Density,
             Home = t.Home with { Glass = HomeGlassCheck.IsChecked == true },
-            Pages = new PagesSpec(Pick(ColorSchemeCombo, t.Pages.ColorScheme), PeekCheck.IsChecked == true),
+            Pages = new PagesSpec(Pick(ColorSchemeCombo, t.Pages.ColorScheme), PeekCheck.IsChecked == true,
+                SearchCombo.SelectedItem is ComboBoxItem { Tag: string engine } ? engine : t.Pages.Search, HistoryCheck.IsChecked == true),
             Power = new PowerSpec(EfficiencySwitch.IsOn, (int)SuspendSlider.Value, CoveredSwitch.IsOn, OccludedSwitch.IsOn, LeanSwitch.IsOn),
             Split = new SplitSpec(Pick(SplitOrientationCombo, t.Split.Orientation), SplitRatioSlider.Value / 100, SplitGapSlider.Value),
             Media = t.Media with

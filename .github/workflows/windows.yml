@@ -285,6 +285,40 @@ jobs:
           Check 'Dragging the frame moves it and saves the place to the theme' ($moved -and $savedX -ge 0 -and $savedX -lt 0.59) "bar $(if ($s.Count -gt 1) { "$($s[0].pipBar -join ',') -> $($s[1].pipBar -join ',')" }), theme x $savedX"
           Check 'Popped-out video goes back' ($s.Count -gt 2 -and $s[2].floating -lt 0) "$(if ($s.Count -gt 2) { $s[2] | ConvertTo-Json -Compress })"
 
+          # Everyday use: a Chrome password export must not become bookmarks (and bookmarks an earlier import left behind
+          # are found); typing completes a visited site; Ctrl+click opens behind; searches use the chosen engine.
+          $qdir = Join-Path $env:RUNNER_TEMP 'lilt-everyday'
+          New-Item -ItemType Directory $qdir -Force | Out-Null
+          Set-Content (Join-Path $qdir 'bookmarks.json') '[{"title":"accounts.google.com","url":"https://accounts.google.com/signin","folder":""},{"title":"https://x.example/login","url":"https://x.example/login","folder":""},{"title":"Real one","url":"https://real.example/","folder":""}]'
+          $csv = Join-Path $env:RUNNER_TEMP 'Chrome Passwords.csv'
+          Set-Content $csv "name,url,username,password,note`naccounts.google.com,https://accounts.google.com/signin,me,secret1,`n,https://x.example/login,me2,secret2,"
+          $gt = Join-Path $env:RUNNER_TEMP 'google-theme.json'
+          (Get-Content out/Lilt/Themes/minimal.json -Raw) -replace '"search": "duckduckgo"', '"search": "google"' | Set-Content $gt
+          # The middle-click is real mouse input on the page's link, placed from the link's position the script reports.
+          $script = "wait 3000; import $csv; wait 1500; state; mark import; wait 1000; go example.com; wait 4000; newTab; wait 1500; type exa; wait 1500; state; mark suggest; wait 1000; " +
+            "prevTab; wait 2000; eval JSON.stringify(document.querySelector('a').getBoundingClientRect()); state; mark click; wait 4000; state; mark behind; wait 500; " +
+            "go lilt browser; wait 3000; state"
+          [void](Smoke 'everyday' @('--theme', "`"$gt`"", '--run', "`"$script`"") {
+            param($p)
+            $p.Refresh(); [void][Lilt.Input]::SetForegroundWindow($p.MainWindowHandle)
+            $keys = Join-Path $env:RUNNER_TEMP 'lilt-everyday/startup.json.keys.txt'
+            $deadline = (Get-Date).AddSeconds(90)
+            while ((Get-Date) -lt $deadline -and -not ((Test-Path $keys) -and (Get-Content $keys) -match ' run mark click')) { Start-Sleep -Milliseconds 250 }
+            $rect = @(Get-Content $keys | Where-Object { $_ -match '^\d+ eval \{' } | ForEach-Object { ($_ -split ' eval ', 2)[1] | ConvertFrom-Json })[-1]
+            $st = @(States 'everyday')[-1]
+            if ($rect -and $st.page) {
+              $x = [int]($st.page[0] + $rect.x + [math]::Min(20, $rect.width / 2)); $y = [int]($st.page[1] + $rect.y + $rect.height / 2)
+              [void][Lilt.Input]::SetCursorPos($x, $y); Start-Sleep -Milliseconds 200
+              [Lilt.Input]::mouse_event(0x20, 0, 0, 0, 0); Start-Sleep -Milliseconds 80; [Lilt.Input]::mouse_event(0x40, 0, 0, 0, 0)
+            }
+            Follow 'everyday'
+          } -settle 1)
+          $s = States 'everyday'
+          Check 'A password export imports no bookmarks and offers to remove ones it left before' ($s.Count -gt 0 -and $s[0].bookmarks -eq 3 -and $s[0].noticeAction -eq 'Remove those 2') "$(if ($s.Count) { "$($s[0].bookmarks) bookmarks; $($s[0].notice) [$($s[0].noticeAction)]" })"
+          Check 'Typing completes a visited site and suggests it' ($s.Count -gt 1 -and $s[1].address -eq 'example.com' -and ($s[1].suggestions -contains 'Example Domain')) "$(if ($s.Count -gt 1) { "address '$($s[1].address)'; suggestions: $($s[1].suggestions -join ' | ')" })"
+          Check 'Middle-click opens a link in a tab behind' ($s.Count -gt 3 -and $s[3].tabs -eq 3 -and $s[3].active -eq 0) "$(if ($s.Count -gt 3) { "tabs $($s[2].tabs) -> $($s[3].tabs), active $($s[3].active)" })"
+          Check 'Searches use the chosen engine' ($s.Count -gt 4 -and $s[4].url -like 'https://www.google.com/search?q=lilt*') "$(if ($s.Count -gt 4) { $s[4].url })"
+
           # Shortcuts from the theme: the palette moved to Ctrl+Shift+Y, split view's shortcut removed.
           $kt = Join-Path $env:RUNNER_TEMP 'keys-theme.json'
           (Get-Content out/Lilt/Themes/minimal.json -Raw) -replace '"shortcuts": \{\}', '"shortcuts": { "palette": "Ctrl+Shift+Y", "split": "" }' | Set-Content $kt

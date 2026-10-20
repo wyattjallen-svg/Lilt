@@ -33,7 +33,8 @@ public sealed class BrowserTab(string url, string title = "", bool pinned = fals
     public bool HasError { get => failed; set => Set(ref failed, value, nameof(Glyph), nameof(GlyphBrush), nameof(StateBorder), nameof(IconVisibility), nameof(GlyphVisibility)); }
 
     public string DisplayTitle => !string.IsNullOrWhiteSpace(title) ? title : IsHome ? "Home" : UrlPolicy.DisplayHost(url);
-    public bool IsHome => Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Host == BrowserEngine.NewTabHost;
+    public bool IsHome => IsHomeUrl(url);
+    public static bool IsHomeUrl(string? url) => Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Host == BrowserEngine.NewTabHost;
 
     public Brush StateBorder => failed ? error : active ? ThemeResources.Get("LiltAccentBrush") : shown ? ThemeResources.Get("LiltTextMutedBrush") : clear;
     public string Glyph => failed ? "" : IsHome ? "" : "";

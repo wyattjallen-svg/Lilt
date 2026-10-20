@@ -61,6 +61,7 @@ public sealed partial class MainWindow : Window
         var typography = themes.Current.Typography;
         Application.Current.Resources["ContentControlThemeFontFamily"] = new FontFamily(typography.Family);
         Application.Current.Resources["ControlContentThemeFontSize"] = typography.Size;
+        firstRun = !options.InPrivate && !File.Exists(paths.Session) && !File.Exists(paths.Bookmarks);
         bookmarks = new BookmarkStore(paths.Bookmarks);
         bookmarks.Load();
 
@@ -75,6 +76,7 @@ public sealed partial class MainWindow : Window
             SyncSidebar();
         };
         InitMedia();
+        InitHistory();
         InitTabs();
         InitPower();
 
@@ -186,8 +188,13 @@ public sealed partial class MainWindow : Window
         if (active is not null && Partner(active) is { View: null, Loading: null } partner) Load(partner);
         if (tab.IsHome && tab == active) AddressBox.Focus(FocusState.Programmatic);
         if (startProblem is not null) ShowNotice(new(startProblem, NoticeKind.Warning));
+        if (firstRun && startProblem is null)
+            ShowNotice(new("Welcome to Lilt. Bring your bookmarks over from another browser, and press Ctrl+K whenever you're looking for something.",
+                NoticeKind.Info, "Import bookmarks", () => ShowFlyout(ImportFlyout, BookmarkImportButton, FlyoutHost)));
         if (options.Run is { } script) await RunScriptAsync(script);
     }
+
+    bool firstRun;
 
     // --run: commands separated by ";". Besides any command name: wait <ms>, open <address>, peek <url>,
     // eval <script in Lilt's page world>, probe (what this PC's engine supports) and state (what's on screen), for tests.
@@ -208,6 +215,21 @@ public sealed partial class MainWindow : Window
                     case "eval": report.Key("eval", (core is { } c ? await engine.EvaluateAsync(c, arg, userGesture: true) : null) ?? "null"); break;
                     case "probe": await ProbeAsync(); break;
                     case "state": report.Key("state", State()); break;
+                    // Types into the address bar, as if by hand (completion and suggestions included).
+                    case "type":
+                        AddressBox.Focus(FocusState.Keyboard);
+                        await Task.Delay(300);
+                        foreach (var ch in arg)
+                        {
+                            // A key press replaces the selection (an inline completion) with the character.
+                            AddressBox.Text = AddressBox.Text[..AddressBox.SelectionStart] + ch;
+                            AddressBox.Select(AddressBox.Text.Length, 0);
+                            await Task.Delay(60);
+                        }
+                        await Task.Delay(300);
+                        break;
+                    case "import": Import(arg, Path.GetFileName(arg)); break;
+                    case "go": Go(arg); break;
                     case "mark": break;
                     default: RunCommand(verb, "run"); break;
                 }
@@ -236,7 +258,15 @@ public sealed partial class MainWindow : Window
         media = mediaTab?.Media is { } m ? new { m.Title, m.Artist, m.Playing, m.Video, m.Duration, m.PictureInPicture } : null,
         power = powerLevel.ToString(),
         shortcuts = Root.KeyboardAccelerators.Count,
-        // Screen pixels of a point on the pop-out frame's bar, for tests that drag it.
+        address = AddressBox.Text,
+        url = active?.Url,
+        suggestions = SuggestPopup.IsOpen ? suggestRows.Select(r => r.Title).ToArray() : [],
+        bookmarks = bookmarks.Items.Count,
+        history = history.Count,
+        notice = NoticeBar.IsOpen ? NoticeBar.Message : null,
+        noticeAction = NoticeBar.IsOpen && NoticeBar.ActionButton is Button { Content: string label } ? label : null,
+        // Screen pixels of the page area's corner and of a point on the pop-out frame's bar, for tests that click and drag.
+        page = PageHost.XamlRoot is { } pr ? Native.ClientToScreen(hwnd, PageHost.TransformToVisual(null).TransformPoint(default), pr.RasterizationScale) : null,
         pipBar = PipFrame.Visibility == Visibility.Visible && PipFrame.XamlRoot is { } xr
             ? Native.ClientToScreen(hwnd, PipFrame.TransformToVisual(null).TransformPoint(new Windows.Foundation.Point(40, 15)), xr.RasterizationScale)
             : null,
@@ -308,12 +338,9 @@ public sealed partial class MainWindow : Window
         AppWindow.Title = tab is null || tab.IsHome || string.IsNullOrWhiteSpace(tab.Title) ? appName : $"{tab.Title} – {appName}";
     }
 
-    static string Display(Uri? uri) =>
-        uri is null || UrlPolicy.IsBlank(uri) || uri.Host == BrowserEngine.NewTabHost ? "" : uri.AbsoluteUri;
-
     void Go(string text)
     {
-        var result = AddressResolver.Resolve(text);
+        var result = AddressResolver.Resolve(text, Engine.Template);
         switch (result.Kind)
         {
             case AddressKind.Empty:
@@ -335,24 +362,6 @@ public sealed partial class MainWindow : Window
         else _ = LoadAsync(active, navigate: true);
         active.View?.Focus(FocusState.Programmatic);
     }
-
-    void AddressBox_KeyDown(object sender, KeyRoutedEventArgs e)
-    {
-        if (e.Key == VirtualKey.Enter)
-        {
-            e.Handled = true;
-            Go(AddressBox.Text);
-        }
-        else if (e.Key == VirtualKey.Escape)
-        {
-            e.Handled = true;
-            AddressBox.Text = Display(Uri.TryCreate(active?.Url, UriKind.Absolute, out var u) ? u : null);
-            active?.View?.Focus(FocusState.Programmatic);
-        }
-    }
-
-    // A lambda, not a method group: CsWinRT can't marshal a delegate whose target is a projected control.
-    void AddressBox_GotFocus(object sender, RoutedEventArgs e) => DispatcherQueue.TryEnqueue(() => AddressBox.SelectAll());
 
     void Back_Click(object sender, RoutedEventArgs e) => core?.GoBack();
     void Forward_Click(object sender, RoutedEventArgs e) => core?.GoForward();
@@ -401,6 +410,11 @@ public sealed partial class MainWindow : Window
             (MediaPip, "Picture in picture", "pip"), (MediaVisualizer, "Visualizer", "visualizer"), (NewTabButton, "New tab", "newTab"),
         })
             ToolTipService.SetToolTip(button, Shortcut(command) is { Length: > 0 } keys ? $"{label} ({keys})" : label);
+        foreach (var (item, command) in new (MenuFlyoutItem, string)[]
+        {
+            (MenuNewTab, "newTab"), (MenuReopen, "reopenTab"), (MenuSplit, "split"), (MenuPalette, "palette"), (MenuBookmark, "bookmark"), (MenuCustomize, "customize"),
+        })
+            item.KeyboardAcceleratorTextOverride = Shortcut(command);
     }
 
     string Shortcut(string command) => (appliedKeys ?? theme.Shortcuts).For(command) is [var first, ..] ? first.ToString() : "";
@@ -470,6 +484,7 @@ public sealed partial class MainWindow : Window
         closing = true;
         StopVisualizer();
         ClosePeek();
+        SaveHistory();
         powerTimer?.Stop();
         suspendTimer.Stop();
         SaveSession();
@@ -1032,6 +1047,11 @@ public sealed partial class MainWindow : Window
 
     // ---- Notices ----
 
+    // Information and confirmations go away by themselves (later if there's a button, and not while the pointer is on
+    // them); warnings and errors stay until closed.
+    DispatcherQueueTimer? noticeTimer;
+    TimeSpan noticeLife;
+
     void ShowNotice(Notice notice)
     {
         NoticeBar.Severity = notice.Kind switch
@@ -1054,6 +1074,22 @@ public sealed partial class MainWindow : Window
             NoticeBar.ActionButton = button;
         }
         NoticeBar.IsOpen = true;
+        if (noticeTimer is not { } timer)
+        {
+            noticeTimer = timer = DispatcherQueue.CreateTimer();
+            timer.IsRepeating = false;
+            timer.Tick += (_, _) => NoticeBar.IsOpen = false;
+            NoticeBar.PointerEntered += (_, _) => timer.Stop();
+            NoticeBar.PointerExited += (_, _) =>
+            {
+                if (noticeLife > TimeSpan.Zero && NoticeBar.IsOpen) timer.Start();
+            };
+        }
+        timer.Stop();
+        noticeLife = notice.Kind is NoticeKind.Info or NoticeKind.Success ? TimeSpan.FromSeconds(notice.Action is null ? 6 : 15) : TimeSpan.Zero;
+        if (noticeLife <= TimeSpan.Zero) return;
+        timer.Interval = noticeLife;
+        timer.Start();
     }
 
     // ---- Diagnostics ----

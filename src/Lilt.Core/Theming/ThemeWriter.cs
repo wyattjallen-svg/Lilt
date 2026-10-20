@@ -36,7 +36,7 @@ public static class ThemeWriter
                 ("edge", Camel(t.Sidebar.Edge)), ("width", t.Sidebar.Width), ("height", t.Sidebar.Height),
                 ("autoHide", t.Sidebar.AutoHide), ("revealEdge", t.Sidebar.RevealEdge), ("hideDelay", t.Sidebar.HideDelay)), "sections", t.Sidebar.Sections),
             ["motion"] = Obj(("animations", t.Motion.Animations), ("duration", t.Motion.Duration)),
-            ["pages"] = Obj(("colorScheme", Camel(t.Pages.ColorScheme)), ("peek", t.Pages.Peek)),
+            ["pages"] = Obj(("colorScheme", Camel(t.Pages.ColorScheme)), ("peek", t.Pages.Peek), ("search", t.Pages.Search), ("history", t.Pages.History)),
             ["home"] = With(Obj(("glass", t.Home.Glass), ("background", t.Home.Background)), "items", t.Home.Items),
             ["power"] = Obj(("efficiency", t.Power.Efficiency), ("suspendMinutes", t.Power.SuspendMinutes), ("hideWhenCovered", t.Power.HideWhenCovered),
                 ("hideWhenOccluded", t.Power.HideWhenOccluded), ("lean", t.Power.Lean)),

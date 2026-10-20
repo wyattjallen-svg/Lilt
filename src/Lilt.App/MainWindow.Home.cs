@@ -51,6 +51,10 @@ public sealed partial class MainWindow
             @base = t.Base == ThemeBase.Light ? "light" : "dark",
             font = t.Typography.Family,
             radius = t.Shape.Radius,
+            search = SearchEngines.For(t.Pages.Search).Name,
+            // The shortcut hint shows your own keys.
+            hint = string.Join(" · ", new[] { ("palette", "find anything"), ("newTab", "new tab"), ("address", "address"), ("bookmark", "bookmark"), ("split", "split view"), ("customize", "customize") }
+                .Select(x => t.Shortcuts.For(x.Item1) is [var g, ..] ? $"{g} {x.Item2}" : null).OfType<string>()),
             colors = new Dictionary<string, string>
             {
                 ["background"] = c.Background.Opaque.ToString(),
@@ -119,6 +123,12 @@ public sealed partial class MainWindow
         if (!Uri.TryCreate(core.Source, UriKind.Absolute, out var u) || u.Fragment.Length < 2) return;
         var command = Uri.UnescapeDataString(u.Fragment[1..]);
         if (command == "customize") ShowCustomize("home");
+        else if (command.StartsWith("go=", StringComparison.Ordinal))
+        {
+            // Navigating away replaces this document, so there's no fragment to clean up.
+            Go(command[3..]);
+            return;
+        }
         else if (command == "add-tile") _ = AddTileAsync();
         else if (command.StartsWith("remove-tile=", StringComparison.Ordinal))
         {

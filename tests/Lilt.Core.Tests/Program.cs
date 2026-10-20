@@ -717,7 +717,11 @@ Test("bookmark store: add, dedupe, remove, persist", () =>
         True(!store.Add("A again", "https://example.com/"));
         True(!store.Add("bad", "javascript:void(0)"));
         True(store.Contains("https://example.com"));
-        Equal(1, store.Merge([new Bookmark("B", "https://b.example"), new Bookmark("A", "https://example.com/")]));
+        Equal(new Bookmark("B", "https://b.example/"), store.Merge([new Bookmark("B", "https://b.example"), new Bookmark("A", "https://example.com/")]).Single());
+        True(store.Update(store.Items[1], "Bee", "https://b.example/x", "Work"));
+        Equal(new Bookmark("Bee", "https://b.example/x", "Work"), store.Items[1]);
+        True(!store.Update(store.Items[1], "dup", "https://example.com", ""));
+        True(store.Update(store.Items[1], "B", "https://b.example/", ""));
         store.Save();
         var again = new BookmarkStore(path);
         again.Load();
@@ -830,6 +834,105 @@ Test("addresses: extension pages open from the address bar, not other schemes", 
     Equal("ghmbeldphafepmbegfdlkpapadhbakde", o.InstallExtension);
     True(o.NoExtensions);
     Equal("split; wait 200", LaunchOptions.Parse(["--run", "split; wait 200", "x.com"]).Run);
+});
+
+Test("password exports never become bookmarks", () =>
+{
+    var chrome = BookmarkImport.Parse("name,url,username,password,note\naccounts.google.com,https://accounts.google.com/signin,me,hunter2,\n,https://x.example/login,me2,pw,\n");
+    True(chrome.Passwords);
+    Equal(0, chrome.Bookmarks.Count);
+    Equal("passwords", chrome.Format);
+    Equal(new Bookmark("accounts.google.com", "https://accounts.google.com/signin"), chrome.PasswordSites![0]);
+    Equal(new Bookmark("https://x.example/login", "https://x.example/login"), chrome.PasswordSites[1]);
+    True(chrome.PasswordSites.All(b => !b.Title.Contains("hunter2") && !b.Url.Contains("hunter2")));
+    var bitwarden = BookmarkImport.Parse("folder,favorite,type,name,notes,fields,reprompt,login_uri,login_username,login_password,login_totp\n,,login,Site,,,0,https://site.example,u,p,\n");
+    True(bitwarden.Passwords);
+    Equal("https://site.example/", bitwarden.PasswordSites!.Single().Url);
+    var firefox = BookmarkImport.Parse("\"url\",\"username\",\"password\",\"httpRealm\"\n\"https://ff.example\",\"u\",\"p\",\"\"\n");
+    True(firefox.Passwords);
+    True(!BookmarkImport.Parse("title,url\nA,https://a.example\n").Passwords);
+});
+
+Test("search engines: names, custom templates, rejects", () =>
+{
+    Equal("Google", SearchEngines.For("google").Name);
+    Equal("https://www.google.com/search?q=a%20b", AddressResolver.Resolve("a b", SearchEngines.For("Google").Template).Uri!.AbsoluteUri);
+    var custom = SearchEngines.Resolve("https://search.example.org/find?{x}&q=%s")!.Value;
+    Equal("search.example.org", custom.Name);
+    Equal("https://search.example.org/find?%7Bx%7D&q=cats", AddressResolver.Resolve("cats", custom.Template).Uri!.AbsoluteUri);
+    Equal(null, SearchEngines.Resolve("http://insecure.example/?q=%s"));
+    Equal(null, SearchEngines.Resolve("https://no-placeholder.example/"));
+    Equal("DuckDuckGo", SearchEngines.For("nonsense").Name);
+    Equal("google", ThemeParser.Parse("{\"schemaVersion\":1,\"pages\":{\"search\":\"google\",\"history\":false}}").Theme.Pages.Search);
+    var bad = ThemeParser.Parse("{\"schemaVersion\":1,\"pages\":{\"search\":\"altavista\"}}");
+    Equal("duckduckgo", bad.Theme.Pages.Search);
+    True(bad.Issues.Any(i => i.Path == "pages.search"));
+});
+
+Test("history: records, merges fragments, ages, caps, persists", () =>
+{
+    var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json");
+    try
+    {
+        var h = new History(path);
+        long day = 86400000, now = 100 * day;
+        h.Record("https://a.example/page#top", "A", now);
+        h.Record("https://a.example/page", "", now);
+        h.Record("about:blank", "no", now);
+        h.Record("https://newtab.example/", "", now);
+        Equal(2, h.Count);
+        var a = h.All.First(v => v.Url == "https://a.example/page");
+        Equal(2, a.Count);
+        Equal("A", a.Title);
+        h.Retitle("https://a.example/page#x", "Better");
+        Equal("Better", h.All.First(v => v.Url == "https://a.example/page").Title);
+        True(History.Score(a with { Last = now - 14 * day }, now) < History.Score(a, now) * 0.51);
+        h.Save();
+        var again = new History(path);
+        again.Load();
+        Equal(2, again.Count);
+        True(again.Remove("https://a.example/page"));
+        Equal(1, again.Count);
+        for (var i = 0; i < History.Max + 10; i++) again.Record($"https://n{i}.example/", "", now + i);
+        Equal(History.Max, again.Count);
+    }
+    finally
+    {
+        File.Delete(path);
+    }
+});
+
+Test("address suggestions: every word matches, sites rank first, inline completion", () =>
+{
+    long now = 1000L * 86400000;
+    var history = new[]
+    {
+        new Visit("https://www.youtube.com/", "YouTube", 50, now),
+        new Visit("https://www.youtube.com/watch?v=1", "Cats video", 2, now),
+        new Visit("https://news.ycombinator.com/", "Hacker News", 10, now),
+    };
+    var marks = new[] { new Bookmark("Your bank", "https://bank.example/") };
+    var tabs = new[] { ("Docs", "https://docs.example/") };
+    var r = Suggestions.Find("you", tabs, marks, history, now);
+    Equal("https://www.youtube.com/", r[0].Url);
+    True(r.Any(x => x.Title == "Cats video"));
+    True(r.Any(x => x.Kind == SuggestionKind.Bookmark));
+    Equal("Cats video", Suggestions.Find("cats you", tabs, marks, history, now).Single().Title);
+    Equal(SuggestionKind.Tab, Suggestions.Find("docs", tabs, [new Bookmark("Docs", "https://docs.example/")], history, now).Single().Kind);
+    Equal(0, Suggestions.Find("  ", tabs, marks, history, now).Count);
+    Equal("youtube.com", Suggestions.Complete("you", marks, history, now));
+    Equal("YOutube.com", Suggestions.Complete("YOu", marks, history, now));
+    Equal("news.ycombinator.com", Suggestions.Complete("news", marks, history, now));
+    Equal(null, Suggestions.Complete("youtube.com", marks, history, now));
+    Equal(null, Suggestions.Complete("you tube", marks, history, now));
+});
+
+Test("address bar shows pages without https:// and a lone slash", () =>
+{
+    Equal("example.com", UrlPolicy.Pretty(new Uri("https://example.com/")));
+    Equal("example.com/a/", UrlPolicy.Pretty(new Uri("https://example.com/a/")));
+    Equal("http://example.com", UrlPolicy.Pretty(new Uri("http://example.com/")));
+    Equal("example.com/?q=1", UrlPolicy.Pretty(new Uri("https://example.com/?q=1")));
 });
 
 return Summary();

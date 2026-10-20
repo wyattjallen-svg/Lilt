@@ -529,6 +529,10 @@ Command line: `--url <url>`, `--theme <file>`, `--user-data <folder>`, `--startu
 1. ~~Password manager~~: answered in v0.2: Proton Pass, with WebView2's saving as fallback (section 7.2).
 2. **Rust in the build.** If the filtering spike shows Path A is needed, is adding a Rust toolchain acceptable? Without it, cosmetic filtering and path rules wait or fall to Path B.
 
+## 16. v0.5
+
+After your first playtest (2026-10-20). Imports: password exports (any CSV with a password column) are recognized and never become bookmarks; bookmarks a previous import left are matched by exact name and address and can be removed; imports and removals can be undone. Address bar: Lilt keeps its own history (`Lilt.Core.Navigation.History`: one entry per page without its fragment, frecency = visits halved every two weeks, capped at 5,000) because WebView2's history can't be read; `Suggestions` ranks tabs, bookmarks and history by every typed word and completes hosts inline. `pages.search` picks the search engine (known names or an https template with `%s`); the home tab's search box hands its text to Lilt (`#go=`) so it searches the same way and accepts addresses. Ctrl+click and middle-click links open behind the current tab: the page helper tells Lilt which link was clicked, and the next new-window request for it isn't activated. Notices close by themselves unless they're warnings or errors.
+
 ## 15. v0.4
 
 After your request for well-received features from other browsers (2026-10-20): now-playing player and visualizer (6.7), picture in picture with an in-window pop-out fallback (6.7), split view, peek and the command palette (6.8), shortcuts from the theme (4.5), the Hidden power level, foreground hook and memory trim (8.0). CI drives the new features with `--run` scripts on a local test page and checks them through `state` snapshots; a new version reaching main (or a `v*` tag) publishes a release.

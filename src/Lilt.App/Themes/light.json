@@ -29,7 +29,7 @@
   },
   "sidebar": { "edge": "left", "width": 220, "height": 44, "autoHide": false, "revealEdge": 6, "hideDelay": 350, "sections": ["tabs", "bookmarks", "layout"] },
   "motion": { "animations": true, "duration": 160 },
-  "pages": { "colorScheme": "theme", "peek": true },
+  "pages": { "colorScheme": "theme", "peek": true, "search": "duckduckgo", "history": true },
   "home": { "items": ["logo", "search", "tiles", "gear"], "glass": false, "background": "hills" },
   "power": { "efficiency": true, "suspendMinutes": 5, "hideWhenCovered": true, "hideWhenOccluded": true, "lean": false },
   // The "now playing" panel and visualizer float over the page; drag them anywhere (x and y are fractions of the page area).

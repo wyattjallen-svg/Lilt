@@ -40,6 +40,14 @@
   }, true);
   let peek = true;
 
+  // Ctrl+click and middle-click open a link in a tab behind this one; Lilt is told which link so it doesn't switch to it.
+  const behind = e => {
+    const a = e.target instanceof Element ? e.target.closest('a[href]') : null;
+    if (a && /^https?:/i.test(a.href)) post({ t: 'behind', url: a.href.slice(0, 4096) });
+  };
+  addEventListener('click', e => { if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.button === 0) behind(e); }, true);
+  addEventListener('auxclick', e => { if (e.button === 1) behind(e); }, true);
+
   // Media: the element that's playing, or the one that played last.
   let current = null, last = '';
   const media = () => [...document.querySelectorAll('video, audio')];

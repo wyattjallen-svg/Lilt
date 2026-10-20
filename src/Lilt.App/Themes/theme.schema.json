@@ -292,6 +292,19 @@
         "peek": {
           "type": "boolean",
           "description": "Shift+click a link to preview it in a panel over the page."
+        },
+        "search": {
+          "type": "string",
+          "description": "Search engine: duckduckgo, google, bing, brave, startpage, ecosia, kagi, or an https address with %s where the words go.",
+          "examples": [
+            "duckduckgo",
+            "google",
+            "https://example.com/search?q=%s"
+          ]
+        },
+        "history": {
+          "type": "boolean",
+          "description": "Remember visited pages for address-bar suggestions (never in InPrivate)."
         }
       }
     },

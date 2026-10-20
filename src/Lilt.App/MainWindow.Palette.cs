@@ -71,7 +71,7 @@ public sealed partial class MainWindow
     {
         var q = query.Trim();
         var found = PaletteItems().Select(i => (Item: i, Score: Score(i, q))).Where(x => x.Score > 0).OrderByDescending(x => x.Score).Take(40).Select(x => x.Item).ToList();
-        if (q.Length > 0 && AddressResolver.Resolve(q) is { Kind: AddressKind.Navigate or AddressKind.Search } go)
+        if (q.Length > 0 && AddressResolver.Resolve(q, Engine.Template) is { Kind: AddressKind.Navigate or AddressKind.Search } go)
         {
             var item = new PaletteItem(go.Kind == AddressKind.Navigate ? $"Go to {go.Uri!.Host}" : $"Search for “{q}”", "Enter", "", () => Go(q));
             // An address goes first; a search goes after real matches.
@@ -129,6 +129,8 @@ public sealed partial class MainWindow
         yield return new("Developer tools", "F12", "", () => core?.OpenDevToolsWindow());
         yield return new("Downloads", "", "", () => ShowFlyout(DownloadsFlyout, DownloadsButton, FlyoutHost));
         if (engine.ExtensionsEnabled) yield return new("Extensions", "", "", () => Extensions_Click(this, new RoutedEventArgs()));
+        yield return new("Clear history", "Address-bar suggestions and the engine's history", "\uE74D", () => ClearHistory_Click(this, new RoutedEventArgs()));
+        yield return new("Import bookmarks", "From another browser or a file", "\uE8B5", () => ShowFlyout(ImportFlyout, BookmarkImportButton, FlyoutHost));
         yield return new("Edit theme file", "theme.json", "", OpenThemeFile);
         yield return new("Reload theme", "theme.json", "", () => themes.Reload());
         yield return new("Open data folder", "", "", () => Open("explorer.exe", paths.Root));
@@ -181,6 +183,10 @@ public sealed partial class MainWindow
         foreach (var density in Enum.GetValues<Density>())
             yield return new($"Spacing: {density.ToString().ToLowerInvariant()}", t.Density == density ? "Current" : "", "",
                 () => Queue(Current with { Density = density }));
+        foreach (var (key, engine) in SearchEngines.Known)
+            yield return new($"Search with {engine.Name}", string.Equals(t.Pages.Search, key, StringComparison.OrdinalIgnoreCase) ? "Current" : "Search engine", "\uE721",
+                () => Queue(Current with { Pages = Current.Pages with { Search = key } }));
+        yield return Toggle("Address-bar suggestions from history", t.Pages.History, x => x with { Pages = x.Pages with { History = !x.Pages.History } });
         foreach (var scheme in Enum.GetValues<PageColorScheme>())
             yield return new($"Websites see: {scheme.ToString().ToLowerInvariant()}", t.Pages.ColorScheme == scheme ? "Current" : "", "",
                 () => Queue(Current with { Pages = Current.Pages with { ColorScheme = scheme } }));

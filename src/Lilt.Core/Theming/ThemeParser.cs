@@ -26,7 +26,7 @@ public static class ThemeParser
         ["toolbar"] = ["height", "items"],
         ["sidebar"] = ["edge", "width", "height", "autoHide", "revealEdge", "hideDelay", "sections"],
         ["motion"] = ["animations", "duration"],
-        ["pages"] = ["colorScheme", "peek"],
+        ["pages"] = ["colorScheme", "peek", "search", "history"],
         // clock/search/tiles are the v0.2 switches, still read when "items" is absent.
         ["home"] = ["items", "glass", "background", "clock", "search", "tiles"],
         ["power"] = ["efficiency", "suspendMinutes", "hideWhenCovered", "hideWhenOccluded", "lean"],
@@ -144,7 +144,13 @@ public static class ThemeParser
                 r.Int(mo, "duration", 0, 1000, d.Motion.Duration));
 
             var pg = r.Section(root, "pages");
-            var pages = new PagesSpec(r.Enum(pg, "colorScheme", d.Pages.ColorScheme), r.Bool(pg, "peek", d.Pages.Peek));
+            var search = r.Str(pg, "search", 300, d.Pages.Search);
+            if (!Navigation.SearchEngines.IsValid(search))
+            {
+                issues.Add(new("pages.search", $"\"{search}\" isn't a search engine Lilt knows ({string.Join(", ", Navigation.SearchEngines.Known.Keys)}) or an https address with %s; using {d.Pages.Search}"));
+                search = d.Pages.Search;
+            }
+            var pages = new PagesSpec(r.Enum(pg, "colorScheme", d.Pages.ColorScheme), r.Bool(pg, "peek", d.Pages.Peek), search, r.Bool(pg, "history", d.Pages.History));
 
             var hm = r.Section(root, "home");
             var homeItems = d.Home.Items;
