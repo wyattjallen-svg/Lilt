@@ -144,7 +144,7 @@ jobs:
             $cover = @'
           Add-Type -AssemblyName System.Windows.Forms
           $f = New-Object System.Windows.Forms.Form
-          $f.FormBorderStyle = 'None'; $f.WindowState = 'Maximized'; $f.TopMost = $true; $f.BackColor = 'Black'; $f.ShowInTaskbar = $false
+          $f.FormBorderStyle = 'None'; $f.WindowState = 'Maximized'; $f.TopMost = $true; $f.BackColor = 'Black'; $f.Text = 'Game'
           $t = New-Object System.Windows.Forms.Timer; $t.Interval = 40000; $t.Add_Tick({ $f.Close() }); $t.Start()
           [System.Windows.Forms.Application]::Run($f)
           '@
@@ -166,6 +166,7 @@ jobs:
           $power = if (Test-Path "$dir/startup.json.keys.txt") { @(Get-Content "$dir/startup.json.keys.txt" | Where-Object { $_ -match ' power ' }) } else { @() }
           if ($power) { $power | Set-Content 'smoke-power.txt' }
           Check 'Efficiency mode pauses behind a full-screen window and when minimized' (($power -match 'power paused').Count -ge 2) ($power -join ' / ')
+          Check 'Paused pages get suspended' ([bool]($power -match 'suspended')) ($power -join ' / ')
           Check 'Efficiency mode returns to normal in front' ([bool]($power[-1] -match 'power full')) "last: $(if ($power) { $power[-1] } else { 'none' })"
           # A user script (Lilt's per-site JS) scrolls the tester to its score so the screenshot shows it.
           $userDir = Join-Path $env:RUNNER_TEMP 'lilt-adblock-test/user'

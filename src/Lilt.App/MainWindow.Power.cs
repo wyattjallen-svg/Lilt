@@ -57,7 +57,12 @@ public sealed partial class MainWindow
         var audible = tabs.Any(t => t.IsAudible);
         var covered = !focused && !minimized && theme.Power.HideWhenCovered && Native.IsCovered(hwnd);
         var level = PowerPolicy.Decide(theme.Power, focused, minimized, away, audible, covered, energySaver);
-        if (level == powerLevel) return;
+        if (level == powerLevel)
+        {
+            // Suspending can fail while a just-hidden view still counts as visible; each paused tick tries again.
+            if (level == PowerLevel.Paused) SuspendIdleTabs(force: true);
+            return;
+        }
         powerLevel = level;
         report.Key("power", level.ToString().ToLowerInvariant());
         var efficient = level != PowerLevel.Full;
@@ -84,6 +89,11 @@ public sealed partial class MainWindow
             view.Visibility = Visibility.Collapsed;
             pageHiddenForPower = true;
             SuspendIdleTabs(force: true);
+            // The view reports itself hidden a moment later; suspend again then.
+            _ = Task.Delay(2000).ContinueWith(_ => DispatcherQueue.TryEnqueue(() =>
+            {
+                if (powerLevel == PowerLevel.Paused) SuspendIdleTabs(force: true);
+            }));
         }
         else if (level != PowerLevel.Paused && pageHiddenForPower)
         {
