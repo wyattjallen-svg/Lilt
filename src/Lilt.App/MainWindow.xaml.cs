@@ -143,27 +143,20 @@ public sealed partial class MainWindow : Window
         }
         report.EngineReady();
 
-        // Extensions are set up before the first page loads, so the ad blocker covers it.
-        try
-        {
-            await engine.EnsureBundledExtensionsAsync(first.Profile);
-        }
-        catch (Exception e)
-        {
-            LiltPaths.LogError(e);
-            ShowNotice(new($"The ad blocker couldn't be set up: {e.Message}", NoticeKind.Warning));
-        }
+        // The ad blocker is checked before the first page loads, so it covers it. Installing it the first time takes
+        // a few seconds, so after a short wait the page goes ahead and the blocker joins when ready.
+        var adBlock = SetUpAdBlockAsync(first.Profile);
+        var waited = await Task.WhenAny(adBlock, Task.Delay(1500)) == adBlock;
         if (options.InstallExtension is { } install) await InstallAsync(install);
-        if (engine.ExtensionsEnabled)
+        if (waited) await ReportExtensionsAsync(first.Profile);
+        else _ = LateAdBlockAsync();
+
+        async Task LateAdBlockAsync()
         {
-            try
-            {
-                report.Extensions((await engine.ListExtensionsAsync(first.Profile)).Select(x => $"{x.Name} ({x.Id}, {(x.Enabled ? "on" : "off")})"));
-            }
-            catch (Exception e)
-            {
-                LiltPaths.LogError(e);
-            }
+            await adBlock;
+            await ReportExtensionsAsync(first.Profile);
+            if (tabs.Any(t => !t.IsHome && t.Core is not null))
+                ShowNotice(new("uBlock Origin Lite is set up. Reload open pages to block their ads.", NoticeKind.Success, "Reload", () => core?.Reload()));
         }
 
         first.Navigate(tab.Url);
@@ -171,6 +164,32 @@ public sealed partial class MainWindow : Window
         if (active is { View: null, Loading: null } other) Load(other);
         if (tab.IsHome && tab == active) AddressBox.Focus(FocusState.Programmatic);
         if (startProblem is not null) ShowNotice(new(startProblem, NoticeKind.Warning));
+    }
+
+    async Task SetUpAdBlockAsync(CoreWebView2Profile profile)
+    {
+        try
+        {
+            await engine.EnsureBundledExtensionsAsync(profile);
+        }
+        catch (Exception e)
+        {
+            LiltPaths.LogError(e);
+            ShowNotice(new($"The ad blocker couldn't be set up: {e.Message}", NoticeKind.Warning));
+        }
+    }
+
+    async Task ReportExtensionsAsync(CoreWebView2Profile profile)
+    {
+        if (!engine.ExtensionsEnabled) return;
+        try
+        {
+            report.Extensions((await engine.ListExtensionsAsync(profile)).Select(x => $"{x.Name} ({x.Id}, {(x.Enabled ? "on" : "off")})"));
+        }
+        catch (Exception e)
+        {
+            LiltPaths.LogError(e);
+        }
     }
 
     void OnProcessFailed(BrowserTab tab, CoreWebView2ProcessFailedEventArgs e)

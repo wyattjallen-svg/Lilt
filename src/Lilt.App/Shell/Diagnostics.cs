@@ -4,18 +4,26 @@ using Microsoft.Web.WebView2.Core;
 
 namespace Lilt.App.Shell;
 
-// Written once, only when --startup-report is given. Times are milliseconds since the Lilt process started.
+// Written at the first page load (and again if the extension list arrives later), only when --startup-report is given.
+// Times are milliseconds since the Lilt process started.
 sealed class StartupReport(string? path)
 {
     readonly DateTime start = Process.GetCurrentProcess().StartTime;
-    double? windowShown, environmentReady, engineReady;
+    double? windowShown, environmentReady, engineReady, firstNavigation;
     string[] extensions = [];
+    string url = "", status = "";
+    bool succeeded;
     public string? Backdrop { get; set; }
 
     public void WindowShown() => windowShown ??= Since();
     public void EnvironmentReady() => environmentReady ??= Since();
     public void EngineReady() => engineReady ??= Since();
-    public void Extensions(IEnumerable<string> list) => extensions = list.ToArray();
+
+    public void Extensions(IEnumerable<string> list)
+    {
+        extensions = list.ToArray();
+        if (firstNavigation is not null) Write();
+    }
 
     // Which path delivered each shortcut ("xaml" accelerator or "page" key shim), for the CI keyboard test.
     public void Key(string source, string command)
@@ -30,14 +38,20 @@ sealed class StartupReport(string? path)
 
     public void FirstNavigation(string url, bool succeeded, string status)
     {
+        firstNavigation = Since();
+        (this.url, this.succeeded, this.status) = (url, succeeded, status);
+        Write();
+    }
+
+    void Write()
+    {
         if (path is null) return;
-        var first = Since();
         var json = JsonSerializer.Serialize(new Dictionary<string, object?>
         {
             ["processToWindowShownMs"] = Round(windowShown),
             ["processToEnvironmentReadyMs"] = Round(environmentReady),
             ["processToWebViewReadyMs"] = Round(engineReady),
-            ["processToFirstNavigationMs"] = Round(first),
+            ["processToFirstNavigationMs"] = Round(firstNavigation),
             ["url"] = url,
             ["firstNavigationSucceeded"] = succeeded,
             ["firstNavigationStatus"] = status,

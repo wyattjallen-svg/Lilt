@@ -83,11 +83,18 @@ jobs:
             if (-not $ok) { Write-Host "::warning::$name failed: $detail" }
           }
           # Starts Lilt with a fresh data folder, waits for the first page, runs $during, screenshots, closes. Returns the data folder.
-          function Smoke([string]$name, [string[]]$extra, [scriptblock]$during = $null, [int]$settle = 6) {
+          function Smoke([string]$name, [string[]]$extra, [scriptblock]$during = $null, [int]$settle = 6, [switch]$warm) {
             $dir = Join-Path $env:RUNNER_TEMP "lilt-$name"
             $report = Join-Path $dir 'startup.json'
             New-Item -ItemType Directory $dir -Force | Out-Null
             $argList = @('--user-data', "`"$dir`"", '--startup-report', "`"$report`"") + $extra
+            if ($warm) {
+              # A first launch installs the ad blocker; the measured launch is the second one.
+              $w = Start-Process (Resolve-Path out/Lilt/Lilt.exe) -ArgumentList $argList -PassThru
+              Start-Sleep -Seconds 30
+              if (-not $w.HasExited) { [void]$w.CloseMainWindow(); if (-not $w.WaitForExit(15000)) { Stop-Process -Id $w.Id -Force } }
+              Remove-Item $report, "$report.keys.txt" -ErrorAction SilentlyContinue
+            }
             $p = Start-Process (Resolve-Path out/Lilt/Lilt.exe) -ArgumentList $argList -PassThru
             $deadline = (Get-Date).AddSeconds(120)
             while (-not (Test-Path $report) -and -not $p.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
@@ -114,7 +121,7 @@ jobs:
             if (Test-Path "smoke-$name.json") { @((Get-Content "smoke-$name.json" -Raw | ConvertFrom-Json).extensions) } else { @() }
           }
 
-          [void](Smoke 'newtab' @())
+          [void](Smoke 'newtab' @() -settle 25)
           $ubol = Extensions 'newtab'
           Check 'uBlock Origin Lite installed' ([bool]($ubol -match 'uBlock')) ($ubol -join '; ')
           [void](Smoke 'dusk-page' @('--url', 'https://example.com'))
@@ -132,7 +139,7 @@ jobs:
             (el || document.body).scrollIntoView({ block: 'start' });
           }, 12000));
           '@
-          [void](Smoke 'adblock-test' @('--url', 'https://adblock-tester.com/') -settle 22)
+          [void](Smoke 'adblock-test' @('--url', 'https://adblock-tester.com/') -settle 22 -warm)
 
           # From the home tab (address box focused): Ctrl+T as a XAML accelerator, then type a site into the new tab,
           # click into that page and press Ctrl+T again (the in-page key shim). Closing should save three tabs.
