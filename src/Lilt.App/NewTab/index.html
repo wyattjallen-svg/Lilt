@@ -8,23 +8,34 @@
 <!--
   Lilt's home tab, served locally as https://newtab.lilt.example/ with no access to Lilt itself.
   Lilt refreshes these files on start. Put your changes in custom.css and custom.js beside them;
-  lilt-data.json (theme colors, layout switches, bookmark tiles) is rewritten whenever they change.
+  lilt-data.json (colors, layout, tiles) is rewritten whenever they change.
+  Links to #customize, #add-tile and #remove-tile=<url> are the only things this page can ask Lilt to do.
 -->
 <link rel="stylesheet" href="home.css">
 <link rel="stylesheet" href="custom.css">
 </head>
 <body>
-<main>
+<div id="scenery" aria-hidden="true"></div>
+<main id="main">
+  <h1 id="logo" hidden>
+    <svg viewBox="0 0 64 64" aria-hidden="true"><path class="w1" d="M8 40c6-10 14-14 22-8s16 2 22-8"/><path class="w2" d="M14 50c6-10 14-14 22-8s16 2 22-8"/></svg>
+    <span>lilt</span>
+  </h1>
   <section id="clock" hidden>
     <p class="time" id="time"></p>
     <p class="date" id="date"></p>
   </section>
   <form id="search" action="https://duckduckgo.com/" method="get" role="search" hidden>
-    <input name="q" placeholder="Search the web" aria-label="Search the web" autocomplete="off">
+    <svg class="lens" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg>
+    <input name="q" placeholder="Search with DuckDuckGo" aria-label="Search the web" autocomplete="off">
+    <button aria-label="Search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
   </form>
   <nav id="tiles" aria-label="Bookmarks" hidden></nav>
-  <p class="hint">Ctrl+T new tab · Ctrl+L address · Ctrl+D bookmark · Ctrl+Shift+B sidebar</p>
+  <p id="hint" class="hint" hidden>Ctrl+T new tab · Ctrl+L address · Ctrl+D bookmark · Ctrl+Shift+B sidebar · Ctrl+Shift+, customize</p>
 </main>
+<a id="gear" href="#customize" title="Customize" aria-label="Customize" hidden>
+  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>
+</a>
 <script src="home.js"></script>
 <script src="custom.js"></script>
 </body>

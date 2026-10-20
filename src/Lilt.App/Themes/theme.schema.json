@@ -182,6 +182,26 @@
           "minimum": 32,
           "maximum": 64,
           "description": "48 or more uses tall window buttons."
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "back",
+              "forward",
+              "reload",
+              "home",
+              "address",
+              "bookmark",
+              "downloads",
+              "extensions",
+              "customize",
+              "sidebar",
+              "menu"
+            ]
+          },
+          "uniqueItems": true,
+          "description": "Toolbar elements in order. Items before \"address\" sit left of it, the rest right. Leave one out to hide it."
         }
       }
     },
@@ -223,6 +243,18 @@
           "minimum": 0,
           "maximum": 5000,
           "description": "Milliseconds before an auto-hide sidebar closes after the pointer leaves."
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "tabs",
+              "bookmarks",
+              "layout"
+            ]
+          },
+          "uniqueItems": true,
+          "description": "Sidebar sections in order (top to bottom). Leave one out to hide it. Bookmarks only show when docked left or right."
         }
       }
     },
@@ -260,19 +292,62 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "clock": {
-          "type": "boolean"
-        },
-        "search": {
-          "type": "boolean"
-        },
-        "tiles": {
-          "type": "boolean",
-          "description": "Bookmark tiles: the 'Home' folder if you have one, otherwise the bookmarks bar."
+        "items": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "logo",
+              "clock",
+              "search",
+              "tiles",
+              "hint",
+              "gear"
+            ]
+          },
+          "uniqueItems": true,
+          "description": "Home tab elements in order, top to bottom. Leave one out to hide it."
         },
         "glass": {
           "type": "boolean",
           "description": "Transparent home tab so the window material shows through."
+        },
+        "background": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "\"\" for none, \"hills\" for built-in scenery, or an image file name (png, jpg, webp, gif, svg) in Lilt's newtab folder."
+        },
+        "clock": {
+          "type": "boolean",
+          "description": "Older setting; use items."
+        },
+        "search": {
+          "type": "boolean",
+          "description": "Older setting; use items."
+        },
+        "tiles": {
+          "type": "boolean",
+          "description": "Older setting; use items."
+        }
+      }
+    },
+    "power": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Power saving while you're in another app.",
+      "properties": {
+        "efficiency": {
+          "type": "boolean",
+          "description": "Lower Lilt's CPU priority (Windows efficiency mode) and memory use while another app is in front. Skipped while a tab plays sound."
+        },
+        "suspendMinutes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 240,
+          "description": "Suspend tabs you haven't looked at for this long. 0 never suspends."
+        },
+        "hideWhenCovered": {
+          "type": "boolean",
+          "description": "Pause the visible page while a full-screen app or game covers Lilt's screen."
         }
       }
     }

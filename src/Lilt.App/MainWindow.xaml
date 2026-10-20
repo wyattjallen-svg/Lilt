@@ -22,6 +22,7 @@
       <KeyboardAccelerator Key="Tab" Modifiers="Control" Invoked="Accelerator_Invoked" />
       <KeyboardAccelerator Key="Tab" Modifiers="Control,Shift" Invoked="Accelerator_Invoked" />
       <KeyboardAccelerator Key="D" Modifiers="Control" Invoked="Accelerator_Invoked" />
+      <KeyboardAccelerator Key="F" Modifiers="Menu" Invoked="Accelerator_Invoked" />
       <KeyboardAccelerator Key="Number1" Modifiers="Control" Invoked="Accelerator_Invoked" />
       <KeyboardAccelerator Key="Number2" Modifiers="Control" Invoked="Accelerator_Invoked" />
       <KeyboardAccelerator Key="Number3" Modifiers="Control" Invoked="Accelerator_Invoked" />
@@ -47,7 +48,8 @@
         <ColumnDefinition x:Name="CaptionColumn" Width="0" />
       </Grid.ColumnDefinitions>
 
-      <StackPanel x:Name="NavPanel" Orientation="Horizontal" VerticalAlignment="Center">
+      <!-- Toolbar elements are arranged by the theme's toolbar.items: those before the address bar go in LeftPanel, the rest in RightPanel. -->
+      <StackPanel x:Name="LeftPanel" Orientation="Horizontal" VerticalAlignment="Center">
         <Button x:Name="BackButton" Style="{StaticResource ChromeButton}" Click="Back_Click" IsEnabled="False"
                 ToolTipService.ToolTip="Back (Alt+Left)" AutomationProperties.Name="Back">
           <FontIcon Glyph="&#xE72B;" />
@@ -64,42 +66,10 @@
                 ToolTipService.ToolTip="Home" AutomationProperties.Name="Home">
           <FontIcon Glyph="&#xE80F;" />
         </Button>
-      </StackPanel>
-
-      <Grid x:Name="AddressHost" Grid.Column="1" MaxWidth="900" VerticalAlignment="Center">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="*" />
-          <ColumnDefinition Width="Auto" />
-        </Grid.ColumnDefinitions>
-        <StackPanel x:Name="InsecureChip" Orientation="Horizontal" Spacing="4" Margin="0,0,8,0" Visibility="Collapsed"
-                    VerticalAlignment="Center" ToolTipService.ToolTip="This page uses http, so others on the network can see or change it.">
-          <FontIcon Glyph="&#xE7BA;" FontSize="12" Foreground="{StaticResource LiltTextMutedBrush}" />
-          <TextBlock x:Name="InsecureText" Text="Not secure" Foreground="{StaticResource LiltTextMutedBrush}" VerticalAlignment="Center" />
-        </StackPanel>
-        <TextBox x:Name="AddressBox" Grid.Column="1" PlaceholderText="Search or enter address" IsSpellCheckEnabled="False"
-                 InputScope="Url" AutomationProperties.Name="Address and search bar"
-                 KeyDown="AddressBox_KeyDown" GotFocus="AddressBox_GotFocus" />
-        <Button x:Name="StarButton" Grid.Column="2" Style="{StaticResource ChromeButton}" Click="Star_Click" Margin="4,0,0,0"
+        <Button x:Name="StarButton" Style="{StaticResource ChromeButton}" Click="Star_Click"
                 ToolTipService.ToolTip="Bookmark this page (Ctrl+D)" AutomationProperties.Name="Bookmark this page">
           <FontIcon x:Name="StarIcon" Glyph="&#xE734;" />
         </Button>
-      </Grid>
-
-      <StackPanel x:Name="ActionsPanel" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-        <FlyoutBase.AttachedFlyout>
-          <Flyout x:Name="ExtensionsFlyout" Placement="BottomEdgeAlignedRight">
-        <StackPanel Width="340" Spacing="8">
-          <TextBlock Text="Extensions" Style="{StaticResource SectionHeader}" />
-          <StackPanel x:Name="ExtensionList" Spacing="6" />
-          <TextBlock Text="Add from the Chrome Web Store" Style="{StaticResource SectionHeader}" Margin="2,8,0,0" />
-          <TextBox x:Name="WebStoreBox" PlaceholderText="Paste a Chrome Web Store link or ID" />
-          <Button x:Name="InstallExtensionButton" Content="Install" Click="InstallExtension_Click" />
-          <TextBlock Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}" TextWrapping="Wrap" FontSize="12"
-                     Text="Experimental. Extensions run inside Lilt's engine without a toolbar; their popups open in a small window and may not know which tab you're on. Packages are signature-checked before install." />
-        </StackPanel>
-      </Flyout>
-        </FlyoutBase.AttachedFlyout>
         <Button x:Name="DownloadsButton" Style="{StaticResource ChromeButton}" Visibility="Collapsed"
                 ToolTipService.ToolTip="Downloads" AutomationProperties.Name="Downloads">
           <FontIcon Glyph="&#xE896;" />
@@ -113,93 +83,169 @@
             </Flyout>
           </Button.Flyout>
         </Button>
-        <Button x:Name="CustomizeButton" Style="{StaticResource ChromeButton}"
-                ToolTipService.ToolTip="Customize" AutomationProperties.Name="Customize">
+        <Button x:Name="ExtensionsButton" Style="{StaticResource ChromeButton}" Click="Extensions_Click"
+                ToolTipService.ToolTip="Extensions and ad blocker" AutomationProperties.Name="Extensions">
+          <FontIcon Glyph="&#xEA86;" />
+        </Button>
+        <Button x:Name="CustomizeButton" Style="{StaticResource ChromeButton}" Click="CustomizeButton_Click"
+                ToolTipService.ToolTip="Customize (Ctrl+Shift+,)" AutomationProperties.Name="Customize">
           <FontIcon Glyph="&#xE790;" />
-          <Button.Flyout>
-            <Flyout x:Name="CustomizeFlyout" Placement="BottomEdgeAlignedRight" Opening="CustomizeFlyout_Opening">
-              <ScrollViewer MaxHeight="620" Width="320" Padding="0,0,12,0">
-                <StackPanel Spacing="6">
-                  <TextBlock Text="Look" Style="{StaticResource SectionHeader}" />
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <Button Content="Dusk" Tag="dusk" Click="Preset_Click" />
-                    <Button Content="Paper" Tag="paper" Click="Preset_Click" />
-                    <Button Content="Frost" Tag="frost" Click="Preset_Click" />
-                  </StackPanel>
-                  <ComboBox x:Name="MaterialCombo" Header="Window material" HorizontalAlignment="Stretch" SelectionChanged="Customize_Changed">
-                    <ComboBoxItem Content="Mica" Tag="mica" />
-                    <ComboBoxItem Content="Mica Alt" Tag="micaAlt" />
-                    <ComboBoxItem Content="Acrylic" Tag="acrylic" />
-                    <ComboBoxItem Content="Glass (thin acrylic)" Tag="acrylicThin" />
-                    <ComboBoxItem Content="Solid" Tag="none" />
-                  </ComboBox>
-                  <Slider x:Name="TintSlider" Header="Glass tint" Minimum="0" Maximum="100" StepFrequency="1" ValueChanged="Customize_Changed" />
-                  <Slider x:Name="ChromeOpacitySlider" Header="Toolbar and sidebar opacity" Minimum="0" Maximum="100" StepFrequency="1" ValueChanged="Customize_Changed" />
-                  <TextBlock Text="Accent" Style="{StaticResource BodyText}" />
-                  <StackPanel x:Name="AccentSwatches" Orientation="Horizontal" Spacing="6" />
-                  <Slider x:Name="RadiusSlider" Header="Corner radius" Minimum="0" Maximum="16" StepFrequency="1" ValueChanged="Customize_Changed" />
-                  <Slider x:Name="FontSizeSlider" Header="Text size" Minimum="11" Maximum="16" StepFrequency="1" ValueChanged="Customize_Changed" />
-                  <Slider x:Name="SidebarWidthSlider" Header="Sidebar width" Minimum="160" Maximum="400" StepFrequency="4" ValueChanged="Customize_Changed" />
-                  <ComboBox x:Name="DensityCombo" Header="Spacing" HorizontalAlignment="Stretch" SelectionChanged="Customize_Changed">
-                    <ComboBoxItem Content="Compact" Tag="compact" />
-                    <ComboBoxItem Content="Standard" Tag="standard" />
-                    <ComboBoxItem Content="Comfortable" Tag="comfortable" />
-                  </ComboBox>
-
-                  <TextBlock Text="Home tab" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
-                  <CheckBox x:Name="HomeClockCheck" Content="Clock" Click="Customize_Changed" />
-                  <CheckBox x:Name="HomeSearchCheck" Content="Search box" Click="Customize_Changed" />
-                  <CheckBox x:Name="HomeTilesCheck" Content="Bookmark tiles" Click="Customize_Changed" />
-                  <CheckBox x:Name="HomeGlassCheck" Content="See-through background" Click="Customize_Changed" />
-
-                  <TextBlock Text="Theme file" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
-                  <TextBlock x:Name="ThemeName" Style="{StaticResource BodyText}" />
-                  <TextBlock x:Name="ThemeStatus" Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}" TextWrapping="Wrap" />
-                  <StackPanel Orientation="Horizontal" Spacing="2">
-                    <Button x:Name="ReloadThemeButton" Style="{StaticResource ChromeButton}" Click="ReloadTheme_Click"
-                            ToolTipService.ToolTip="Reload theme" AutomationProperties.Name="Reload theme">
-                      <FontIcon Glyph="&#xE895;" />
-                    </Button>
-                    <Button x:Name="EditThemeButton" Style="{StaticResource ChromeButton}" Click="EditTheme_Click"
-                            ToolTipService.ToolTip="Edit theme.json" AutomationProperties.Name="Edit theme file">
-                      <FontIcon Glyph="&#xE70F;" />
-                    </Button>
-                    <Button x:Name="DataFolderButton" Style="{StaticResource ChromeButton}" Click="OpenDataFolder_Click"
-                            ToolTipService.ToolTip="Open Lilt's data folder" AutomationProperties.Name="Open data folder">
-                      <FontIcon Glyph="&#xE838;" />
-                    </Button>
-                    <Button x:Name="UserContentButton" Style="{StaticResource ChromeButton}" Click="OpenUserContent_Click"
-                            ToolTipService.ToolTip="Per-site CSS and scripts folder" AutomationProperties.Name="Open user styles and scripts folder">
-                      <FontIcon Glyph="&#xE943;" />
-                    </Button>
-                  </StackPanel>
-
-                  <TextBlock Text="Memory" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
-                  <Grid ColumnSpacing="6">
-                    <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="Auto" />
-                      <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Button x:Name="MeasureButton" Style="{StaticResource ChromeButton}" Click="Measure_Click" VerticalAlignment="Top"
-                            ToolTipService.ToolTip="Measure Lilt and its WebView2 processes now" AutomationProperties.Name="Measure memory">
-                      <FontIcon Glyph="&#xE9D9;" />
-                    </Button>
-                    <TextBlock x:Name="MemoryText" Grid.Column="1" Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}"
-                               TextWrapping="Wrap" Text="Not measured" />
-                  </Grid>
-                </StackPanel>
-              </ScrollViewer>
-            </Flyout>
-          </Button.Flyout>
         </Button>
         <Button x:Name="SidebarButton" Style="{StaticResource ChromeButton}" Click="SidebarButton_Click"
                 ToolTipService.ToolTip="Sidebar (Ctrl+Shift+B)" AutomationProperties.Name="Show or hide sidebar">
           <FontIcon Glyph="&#xE8A0;" />
         </Button>
-        <Button x:Name="MenuButton" Style="{StaticResource ChromeButton}"
-                ToolTipService.ToolTip="Menu" AutomationProperties.Name="Menu">
+        <Button x:Name="MenuButton" Style="{StaticResource ChromeButton}" Click="MenuButton_Click"
+                ToolTipService.ToolTip="Menu (Alt+F)" AutomationProperties.Name="Menu">
           <FontIcon Glyph="&#xE712;" />
-          <Button.Flyout>
+        </Button>
+      </StackPanel>
+
+      <Grid x:Name="AddressHost" Grid.Column="1" MaxWidth="900" VerticalAlignment="Center">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <StackPanel x:Name="InsecureChip" Orientation="Horizontal" Spacing="4" Margin="0,0,8,0" Visibility="Collapsed"
+                    VerticalAlignment="Center" ToolTipService.ToolTip="This page uses http, so others on the network can see or change it.">
+          <FontIcon Glyph="&#xE7BA;" FontSize="12" Foreground="{StaticResource LiltTextMutedBrush}" />
+          <TextBlock x:Name="InsecureText" Text="Not secure" Foreground="{StaticResource LiltTextMutedBrush}" VerticalAlignment="Center" />
+        </StackPanel>
+        <TextBox x:Name="AddressBox" Grid.Column="1" PlaceholderText="Search or enter address" IsSpellCheckEnabled="False"
+                 InputScope="Url" AutomationProperties.Name="Address and search bar"
+                 KeyDown="AddressBox_KeyDown" GotFocus="AddressBox_GotFocus" />
+      </Grid>
+
+      <StackPanel x:Name="RightPanel" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" />
+
+      <Grid x:Name="CustomizeHost" Grid.Column="2" Width="0" HorizontalAlignment="Right">
+        <FlyoutBase.AttachedFlyout>
+          <Flyout x:Name="CustomizeFlyout" Placement="BottomEdgeAlignedRight" Opening="CustomizeFlyout_Opening">
+            <Grid Width="340" RowSpacing="8">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+              </Grid.RowDefinitions>
+              <SelectorBar x:Name="CustomizeTabs" SelectionChanged="CustomizeTabs_SelectionChanged">
+                <SelectorBarItem Text="Look" Tag="look" IsSelected="True" />
+                <SelectorBarItem Text="Layout" Tag="layout" />
+                <SelectorBarItem Text="Home" Tag="home" />
+                <SelectorBarItem Text="Power" Tag="power" />
+              </SelectorBar>
+              <ScrollViewer Grid.Row="1" MaxHeight="560" Padding="0,0,12,0">
+                <Grid>
+                  <StackPanel x:Name="LookPage" Spacing="6">
+                    <TextBlock Text="Theme" Style="{StaticResource SectionHeader}" />
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Button Content="Minimal" Tag="minimal" Click="Preset_Click" />
+                      <Button Content="Glass" Tag="glass" Click="Preset_Click" />
+                      <Button Content="Light" Tag="light" Click="Preset_Click" />
+                    </StackPanel>
+                    <ComboBox x:Name="MaterialCombo" Header="Window material" HorizontalAlignment="Stretch" SelectionChanged="Customize_Changed">
+                      <ComboBoxItem Content="Mica (recommended)" Tag="mica" />
+                      <ComboBoxItem Content="Mica Alt" Tag="micaAlt" />
+                      <ComboBoxItem Content="Acrylic (stronger blur)" Tag="acrylic" />
+                      <ComboBoxItem Content="Thin acrylic (clearer glass)" Tag="acrylicThin" />
+                      <ComboBoxItem Content="Solid" Tag="none" />
+                    </ComboBox>
+                    <Slider x:Name="TintSlider" Header="Glass tint" Minimum="0" Maximum="100" StepFrequency="1" ValueChanged="Customize_Changed" />
+                    <Slider x:Name="ChromeOpacitySlider" Header="Toolbar and sidebar opacity" Minimum="0" Maximum="100" StepFrequency="1" ValueChanged="Customize_Changed" />
+                    <TextBlock Text="Accent" Style="{StaticResource BodyText}" />
+                    <StackPanel x:Name="AccentSwatches" Orientation="Horizontal" Spacing="6" />
+                    <ComboBox x:Name="ColorTokenCombo" Header="Any color" HorizontalAlignment="Stretch" SelectionChanged="ColorToken_Changed" />
+                    <ColorPicker x:Name="TokenPicker" IsAlphaEnabled="True" IsMoreButtonVisible="False" IsColorChannelTextInputVisible="False"
+                                 IsHexInputVisible="True" ColorSpectrumShape="Ring" ColorChanged="TokenPicker_ColorChanged" />
+                    <ComboBox x:Name="FontCombo" Header="Font" HorizontalAlignment="Stretch" IsEditable="True" SelectionChanged="Customize_Changed" TextSubmitted="FontCombo_TextSubmitted" />
+                    <Slider x:Name="FontSizeSlider" Header="Text size" Minimum="11" Maximum="18" StepFrequency="1" ValueChanged="Customize_Changed" />
+                    <Slider x:Name="RadiusSlider" Header="Corner radius" Minimum="0" Maximum="20" StepFrequency="1" ValueChanged="Customize_Changed" />
+                    <Slider x:Name="ToolbarHeightSlider" Header="Toolbar height" Minimum="32" Maximum="64" StepFrequency="2" ValueChanged="Customize_Changed" />
+                    <ComboBox x:Name="DensityCombo" Header="Spacing" HorizontalAlignment="Stretch" SelectionChanged="Customize_Changed">
+                      <ComboBoxItem Content="Compact" Tag="compact" />
+                      <ComboBoxItem Content="Standard" Tag="standard" />
+                      <ComboBoxItem Content="Comfortable" Tag="comfortable" />
+                    </ComboBox>
+
+                    <TextBlock Text="Theme file" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
+                    <TextBlock x:Name="ThemeName" Style="{StaticResource BodyText}" />
+                    <TextBlock x:Name="ThemeStatus" Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}" TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="2">
+                      <Button x:Name="ReloadThemeButton" Style="{StaticResource ChromeButton}" Click="ReloadTheme_Click"
+                              ToolTipService.ToolTip="Reload theme" AutomationProperties.Name="Reload theme">
+                        <FontIcon Glyph="&#xE895;" />
+                      </Button>
+                      <Button x:Name="EditThemeButton" Style="{StaticResource ChromeButton}" Click="EditTheme_Click"
+                              ToolTipService.ToolTip="Edit theme.json" AutomationProperties.Name="Edit theme file">
+                        <FontIcon Glyph="&#xE70F;" />
+                      </Button>
+                      <Button x:Name="DataFolderButton" Style="{StaticResource ChromeButton}" Click="OpenDataFolder_Click"
+                              ToolTipService.ToolTip="Open Lilt's data folder" AutomationProperties.Name="Open data folder">
+                        <FontIcon Glyph="&#xE838;" />
+                      </Button>
+                      <Button x:Name="UserContentButton" Style="{StaticResource ChromeButton}" Click="OpenUserContent_Click"
+                              ToolTipService.ToolTip="Per-site CSS and scripts folder" AutomationProperties.Name="Open user styles and scripts folder">
+                        <FontIcon Glyph="&#xE943;" />
+                      </Button>
+                    </StackPanel>
+                  </StackPanel>
+
+                  <StackPanel x:Name="LayoutPage" Spacing="6" Visibility="Collapsed">
+                    <TextBlock Text="Presets" Style="{StaticResource SectionHeader}" />
+                    <VariableSizedWrapGrid Orientation="Horizontal" ItemWidth="104" ItemHeight="40">
+                      <Button Content="Compact" Tag="compact" Click="LayoutPreset_Click" ToolTipService.ToolTip="Minimal chrome, left sidebar" />
+                      <Button Content="Research" Tag="research" Click="LayoutPreset_Click" ToolTipService.ToolTip="Wider sidebar, more space" />
+                      <Button Content="Vertical tabs" Tag="vertical" Click="LayoutPreset_Click" ToolTipService.ToolTip="Tabs on the left, no bookmarks list" />
+                      <Button Content="Top tabs" Tag="top" Click="LayoutPreset_Click" ToolTipService.ToolTip="Traditional tab strip" />
+                      <Button Content="Bottom bar" Tag="bottom" Click="LayoutPreset_Click" ToolTipService.ToolTip="Tabs and tools below the page" />
+                    </VariableSizedWrapGrid>
+                    <Slider x:Name="SidebarWidthSlider" Header="Sidebar width" Minimum="160" Maximum="420" StepFrequency="4" ValueChanged="Customize_Changed" />
+                    <TextBlock Text="Toolbar (top to bottom = left to right)" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
+                    <StackPanel x:Name="ToolbarArrange" Spacing="2" />
+                    <TextBlock Text="Sidebar sections" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
+                    <StackPanel x:Name="SidebarArrange" Spacing="2" />
+                  </StackPanel>
+
+                  <StackPanel x:Name="HomePage" Spacing="6" Visibility="Collapsed">
+                    <TextBlock Text="Home tab" Style="{StaticResource SectionHeader}" />
+                    <StackPanel x:Name="HomeArrange" Spacing="2" />
+                    <ComboBox x:Name="BackgroundCombo" Header="Background" HorizontalAlignment="Stretch" SelectionChanged="Background_Changed">
+                      <ComboBoxItem Content="None" Tag="" />
+                      <ComboBoxItem Content="Hills" Tag="hills" />
+                      <ComboBoxItem Content="Pick an image…" Tag="pick" />
+                    </ComboBox>
+                    <CheckBox x:Name="HomeGlassCheck" Content="See-through (window material shows through)" Click="Customize_Changed" />
+                  </StackPanel>
+
+                  <StackPanel x:Name="PowerPage" Spacing="6" Visibility="Collapsed">
+                    <TextBlock Text="While you're in another app" Style="{StaticResource SectionHeader}" />
+                    <ToggleSwitch x:Name="EfficiencySwitch" Header="Efficiency mode" Toggled="Customize_Changed" />
+                    <TextBlock Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}" TextWrapping="Wrap" FontSize="12"
+                               Text="After 10 seconds away, Lilt lowers its priority, asks Windows for efficiency mode and frees page memory. Tabs playing sound keep running." />
+                    <ToggleSwitch x:Name="CoveredSwitch" Header="Pause pages behind full-screen games" Toggled="Customize_Changed" />
+                    <Slider x:Name="SuspendSlider" Header="Suspend unused tabs after (minutes, 0 = never)" Minimum="0" Maximum="60" StepFrequency="1" ValueChanged="Customize_Changed" />
+                    <TextBlock x:Name="PowerStatus" Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}" TextWrapping="Wrap" />
+                    <TextBlock Text="Memory" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
+                    <Grid ColumnSpacing="6">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                      </Grid.ColumnDefinitions>
+                      <Button x:Name="MeasureButton" Style="{StaticResource ChromeButton}" Click="Measure_Click" VerticalAlignment="Top"
+                              ToolTipService.ToolTip="Measure Lilt and its WebView2 processes now" AutomationProperties.Name="Measure memory">
+                        <FontIcon Glyph="&#xE9D9;" />
+                      </Button>
+                      <TextBlock x:Name="MemoryText" Grid.Column="1" Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}"
+                                 TextWrapping="Wrap" Text="Not measured" />
+                    </Grid>
+                  </StackPanel>
+                </Grid>
+              </ScrollViewer>
+            </Grid>
+          </Flyout>
+        </FlyoutBase.AttachedFlyout>
+      </Grid>
+
+      <Grid x:Name="MenuHost" Grid.Column="2" Width="0" HorizontalAlignment="Right">
+        <FlyoutBase.AttachedFlyout>
             <MenuFlyout x:Name="MainMenu" Placement="BottomEdgeAlignedRight" Opening="MainMenu_Opening">
               <MenuFlyoutItem Text="New tab" KeyboardAcceleratorTextOverride="Ctrl+T" Click="NewTab_Click">
                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE710;" /></MenuFlyoutItem.Icon>
@@ -221,7 +267,7 @@
               <MenuFlyoutItem x:Name="ExtensionsMenuItem" Text="Extensions" Click="Extensions_Click">
                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xEA86;" /></MenuFlyoutItem.Icon>
               </MenuFlyoutItem>
-              <MenuFlyoutItem Text="Customize" Click="CustomizeMenu_Click">
+              <MenuFlyoutItem Text="Customize" KeyboardAcceleratorTextOverride="Ctrl+Shift+," Click="CustomizeMenu_Click">
                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE790;" /></MenuFlyoutItem.Icon>
               </MenuFlyoutItem>
               <MenuFlyoutItem Text="Downloads" Click="DownloadsMenu_Click">
@@ -238,9 +284,25 @@
                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE838;" /></MenuFlyoutItem.Icon>
               </MenuFlyoutItem>
             </MenuFlyout>
-          </Button.Flyout>
-        </Button>
-      </StackPanel>
+        </FlyoutBase.AttachedFlyout>
+      </Grid>
+
+      <!-- Flyouts opened from buttons that can be moved or hidden; shown at the button, or here when it's hidden. -->
+      <Grid x:Name="FlyoutHost" Grid.Column="2" Width="0" HorizontalAlignment="Right">
+        <FlyoutBase.AttachedFlyout>
+          <Flyout x:Name="ExtensionsFlyout" Placement="BottomEdgeAlignedRight">
+            <StackPanel Width="340" Spacing="8">
+              <TextBlock Text="Extensions" Style="{StaticResource SectionHeader}" />
+              <StackPanel x:Name="ExtensionList" Spacing="6" />
+              <TextBlock Text="Add from the Chrome Web Store" Style="{StaticResource SectionHeader}" Margin="2,8,0,0" />
+              <TextBox x:Name="WebStoreBox" PlaceholderText="Paste a Chrome Web Store link or ID" />
+              <Button x:Name="InstallExtensionButton" Content="Install" Click="InstallExtension_Click" />
+              <TextBlock Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}" TextWrapping="Wrap" FontSize="12"
+                         Text="Experimental. Extensions run inside Lilt's engine without a toolbar; their popups open in a small window and may not know which tab you're on. Packages are signature-checked before install." />
+            </StackPanel>
+          </Flyout>
+        </FlyoutBase.AttachedFlyout>
+      </Grid>
     </Grid>
 
     <!-- Content: pages plus a sidebar that docks to any edge (pinned) or floats over the page (auto-hide). -->
@@ -280,22 +342,32 @@
                     SelectionChanged="TabList_SelectionChanged" AutomationProperties.Name="Tabs">
             <ListView.ItemTemplate>
               <DataTemplate x:DataType="browser:BrowserTab">
-                <Grid ColumnSpacing="8" Height="32" Background="Transparent" PointerPressed="Tab_PointerPressed">
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                  </Grid.ColumnDefinitions>
-                  <Grid Width="16" Height="16" VerticalAlignment="Center">
-                    <FontIcon Glyph="&#xE774;" FontSize="13" Visibility="{x:Bind GlyphVisibility, Mode=OneWay}" />
-                    <Image Source="{x:Bind Icon, Mode=OneWay}" Width="16" Height="16" />
+                <Border BorderBrush="{x:Bind StateBorder, Mode=OneWay}" BorderThickness="1" CornerRadius="6" Padding="6,0,2,0" Background="Transparent"
+                        PointerPressed="Tab_PointerPressed" RightTapped="Tab_RightTapped" ToolTipService.ToolTip="{x:Bind Url, Mode=OneWay}">
+                  <Grid ColumnSpacing="8" MinHeight="30">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid Width="16" Height="16" VerticalAlignment="Center">
+                      <FontIcon Glyph="{x:Bind Glyph, Mode=OneWay}" FontSize="13" Foreground="{x:Bind GlyphBrush, Mode=OneWay}" Visibility="{x:Bind GlyphVisibility, Mode=OneWay}" />
+                      <Image Source="{x:Bind Icon, Mode=OneWay}" Width="16" Height="16" Visibility="{x:Bind IconVisibility, Mode=OneWay}" />
+                      <ProgressRing IsActive="{x:Bind IsLoading, Mode=OneWay}" Width="14" Height="14" MinWidth="0" MinHeight="0" Visibility="{x:Bind IsLoading, Mode=OneWay}" />
+                    </Grid>
+                    <TextBlock Grid.Column="1" Text="{x:Bind DisplayTitle, Mode=OneWay}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                               Visibility="{x:Bind LabelVisibility, Mode=OneWay}" />
+                    <Button Grid.Column="2" Style="{StaticResource ChromeButton}" Width="22" Height="22" CornerRadius="4" Click="TabAudio_Click"
+                            Visibility="{x:Bind AudioVisibility, Mode=OneWay}" ToolTipService.ToolTip="Mute or unmute" AutomationProperties.Name="Mute or unmute tab">
+                      <FontIcon Glyph="{x:Bind AudioGlyph, Mode=OneWay}" FontSize="11" />
+                    </Button>
+                    <Button Grid.Column="3" Style="{StaticResource ChromeButton}" Width="22" Height="22" CornerRadius="4" Click="CloseTab_Click"
+                            Visibility="{x:Bind LabelVisibility, Mode=OneWay}" ToolTipService.ToolTip="Close tab (Ctrl+W)" AutomationProperties.Name="Close tab">
+                      <FontIcon Glyph="&#xE711;" FontSize="10" Foreground="{x:Bind GlyphBrush, Mode=OneWay}" />
+                    </Button>
                   </Grid>
-                  <TextBlock Grid.Column="1" Text="{x:Bind DisplayTitle, Mode=OneWay}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                  <Button Grid.Column="2" Style="{StaticResource ChromeButton}" Width="24" Height="24" CornerRadius="4" Click="CloseTab_Click"
-                          ToolTipService.ToolTip="Close tab (Ctrl+W)" AutomationProperties.Name="Close tab">
-                    <FontIcon Glyph="&#xE711;" FontSize="10" />
-                  </Button>
-                </Grid>
+                </Border>
               </DataTemplate>
             </ListView.ItemTemplate>
           </ListView>

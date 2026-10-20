@@ -15,7 +15,7 @@ public sealed partial class MainWindow
     async void Extensions_Click(object sender, RoutedEventArgs e)
     {
         await RefreshExtensionsAsync();
-        ExtensionsFlyout.ShowAt(MenuButton);
+        ShowFlyout(ExtensionsFlyout, ExtensionsButton, FlyoutHost);
     }
 
     async void AdBlockSettings_Click(object sender, RoutedEventArgs e)

@@ -7,30 +7,96 @@ fetch('lilt-data.json', { cache: 'no-store' })
   .then(apply);
 
 function apply(data) {
-  const home = Object.assign({ clock: true, search: true, tiles: true, glass: false }, data.home);
+  const items = Array.isArray(data.items) ? data.items : ['logo', 'search', 'tiles', 'gear'];
+  const root = document.documentElement;
   for (const [name, value] of Object.entries(data.colors || {})) {
-    if (/^#[0-9a-f]{3,8}$/i.test(value)) document.documentElement.style.setProperty('--' + name, value);
+    if (/^#[0-9a-f]{3,8}$/i.test(value)) root.style.setProperty('--' + name, value);
   }
-  document.body.classList.toggle('glass', !!home.glass);
-  if (home.clock) { $('clock').hidden = false; tick(); }
-  if (home.search) { $('search').hidden = false; }
-  const tiles = (data.tiles || []).filter(t => /^https?:\/\//i.test(t.url));
-  if (home.tiles && tiles.length) {
-    for (const t of tiles) {
-      const a = document.createElement('a');
-      a.href = t.url;
-      a.title = t.url;
-      const badge = document.createElement('span');
-      badge.className = 'badge';
-      const name = (t.title || new URL(t.url).hostname).trim();
-      badge.textContent = name.replace(/^www\./i, '').charAt(0).toUpperCase();
-      const label = document.createElement('span');
-      label.className = 'label';
-      label.textContent = name;
-      a.append(badge, label);
-      $('tiles').append(a);
+  if (typeof data.font === 'string' && /^[\w \-]{1,100}$/.test(data.font)) root.style.setProperty('--font', `"${data.font}", "Segoe UI", system-ui, sans-serif`);
+  if (typeof data.radius === 'number') root.style.setProperty('--radius', Math.max(0, Math.min(24, data.radius)) + 'px');
+  root.style.colorScheme = data.base === 'light' ? 'light' : 'dark';
+  document.body.classList.toggle('glass', !!data.glass);
+  background(data);
+
+  for (const id of items) {
+    const el = $(id);
+    if (!el) continue;
+    if (el.parentElement === $('main')) $('main').append(el);
+    el.hidden = false;
+    if (id === 'clock') tick();
+    if (id === 'tiles') tiles(data.tiles || []);
+  }
+}
+
+function tiles(list) {
+  for (const t of list.filter(t => /^https?:\/\//i.test(t.url))) {
+    const wrap = document.createElement('div');
+    wrap.className = 'tile';
+    const a = document.createElement('a');
+    a.className = 'open';
+    a.href = t.url;
+    a.title = t.url;
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    const name = (t.title || new URL(t.url).hostname).trim();
+    if (typeof t.icon === 'string' && /^icons\/[\w.\-]+\.png$/.test(t.icon)) {
+      const img = document.createElement('img');
+      img.alt = '';
+      img.src = t.icon;
+      img.onerror = () => { img.remove(); badge.textContent = letter(name); };
+      badge.append(img);
+    } else {
+      badge.textContent = letter(name);
     }
-    $('tiles').hidden = false;
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = name;
+    a.append(badge, label);
+    const remove = document.createElement('a');
+    remove.className = 'remove';
+    remove.href = '#remove-tile=' + encodeURIComponent(t.url);
+    remove.title = 'Remove ' + name;
+    remove.setAttribute('aria-label', 'Remove ' + name);
+    remove.textContent = '×';
+    wrap.append(a, remove);
+    $('tiles').append(wrap);
+  }
+  const add = document.createElement('a');
+  add.className = 'open add';
+  add.href = '#add-tile';
+  const plus = document.createElement('span');
+  plus.className = 'badge';
+  plus.textContent = '+';
+  const label = document.createElement('span');
+  label.className = 'label';
+  label.textContent = 'Add';
+  add.append(plus, label);
+  $('tiles').append(add);
+}
+
+const letter = name => name.replace(/^www\./i, '').charAt(0).toUpperCase();
+
+// "hills" draws layered hills from the theme's colors; any other value is an image file next to this page.
+function background(data) {
+  const bg = typeof data.background === 'string' ? data.background : '';
+  if (bg === 'hills') {
+    const css = n => getComputedStyle(document.documentElement).getPropertyValue('--' + n).trim();
+    const accent = css('accent'), muted = css('textMuted'), base = css('background');
+    const sky = data.glass ? 'transparent' : base;
+    const layers = [
+      [muted, 0.18, 'M0 520 C 180 430 320 470 480 420 S 820 330 1000 400 S 1280 380 1440 340 V 900 H 0 Z'],
+      [accent, 0.28, 'M0 600 C 200 520 360 560 560 500 S 900 460 1080 520 S 1320 470 1440 480 V 900 H 0 Z'],
+      [accent, 0.45, 'M0 690 C 240 610 420 660 640 610 S 1000 580 1200 640 S 1380 620 1440 600 V 900 H 0 Z'],
+      [base, 0.85, 'M0 790 C 260 730 520 770 760 740 S 1160 720 1440 760 V 900 H 0 Z'],
+    ];
+    const svg = `<svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
+      <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sky}" stop-opacity="${data.glass ? 0 : 1}"/><stop offset="1" stop-color="${accent}" stop-opacity="0.18"/></linearGradient></defs>
+      <rect width="1440" height="900" fill="url(#sky)"/>
+      ${layers.map(([c, o, d]) => `<path d="${d}" fill="${c}" fill-opacity="${o}"/>`).join('')}
+    </svg>`;
+    if ([accent, muted, base].every(c => /^#[0-9a-f]{3,8}$/i.test(c))) $('scenery').innerHTML = svg;
+  } else if (/^[\w .\-]{1,100}\.(png|jpe?g|webp|gif|svg)$/i.test(bg)) {
+    document.body.style.backgroundImage = `linear-gradient(rgba(0,0,0,.12), rgba(0,0,0,.28)), url("${encodeURI(bg)}")`;
   }
 }
 

@@ -57,6 +57,7 @@ jobs:
 
       - name: Smoke test and screenshots
         shell: pwsh
+        timeout-minutes: 25
         run: |
           $script:failed = @()
           $script:checks = @()
@@ -65,6 +66,7 @@ jobs:
           [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
           [DllImport("user32.dll")] public static extern void mouse_event(int f, int x, int y, int d, int e);
           [DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr h);
+          [DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr h, int cmd);
           '@
           # Windows Server ships with transparency effects off; turn them on so the glass themes can show.
           $personalize = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'
@@ -125,10 +127,45 @@ jobs:
           $ubol = Extensions 'newtab'
           Check 'uBlock Origin Lite installed' ([bool]($ubol -match 'uBlock')) ($ubol -join '; ')
           [void](Smoke 'dusk-page' @('--url', 'https://example.com'))
-          [void](Smoke 'paper' @('--theme', "`"$PWD\out\Lilt\Themes\paper.json`"", '--url', 'https://example.com'))
-          [void](Smoke 'frost-home' @('--theme', "`"$PWD\out\Lilt\Themes\frost.json`""))
-          $frost = if (Test-Path 'smoke-frost-home.json') { (Get-Content 'smoke-frost-home.json' -Raw | ConvertFrom-Json).backdrop } else { '' }
-          Check 'Frost theme gets its glass material' ($frost -like 'AcrylicThin*') "backdrop: $frost"
+          # The themes copied to a scratch file, so Customize-panel saves can't touch the build output.
+          foreach ($t in 'glass', 'light') { Copy-Item "out/Lilt/Themes/$t.json" (Join-Path $env:RUNNER_TEMP "$t.json") }
+          [void](Smoke 'light-page' @('--theme', "`"$env:RUNNER_TEMP\light.json`"", '--url', 'https://example.com'))
+          [void](Smoke 'light-home' @('--theme', "`"$env:RUNNER_TEMP\light.json`""))
+          [void](Smoke 'glass-home' @('--theme', "`"$env:RUNNER_TEMP\glass.json`""))
+          $glass = if (Test-Path 'smoke-glass-home.json') { (Get-Content 'smoke-glass-home.json' -Raw | ConvertFrom-Json).backdrop } else { '' }
+          Check 'Glass theme gets its acrylic material' ($glass -like 'Acrylic*') "backdrop: $glass"
+
+          # Efficiency mode: cover Lilt with a full-screen window (like a game), then minimize it; it should pause
+          # (hide and suspend pages, EcoQoS) and come back to normal each time it's in front again.
+          $dir = Smoke 'power' @('--url', 'https://example.com') {
+            param($p)
+            $p.Refresh()
+            $cover = @'
+          Add-Type -AssemblyName System.Windows.Forms
+          $f = New-Object System.Windows.Forms.Form
+          $f.FormBorderStyle = 'None'; $f.WindowState = 'Maximized'; $f.TopMost = $true; $f.BackColor = 'Black'; $f.ShowInTaskbar = $false
+          $t = New-Object System.Windows.Forms.Timer; $t.Interval = 40000; $t.Add_Tick({ $f.Close() }); $t.Start()
+          [System.Windows.Forms.Application]::Run($f)
+          '@
+            $coverFile = Join-Path $env:RUNNER_TEMP 'cover.ps1'
+            Set-Content $coverFile $cover
+            $c = Start-Process pwsh -ArgumentList '-NoProfile', '-File', "`"$coverFile`"" -PassThru
+            Start-Sleep -Seconds 38
+            try { Shot 'screenshot-power-covered.png' } catch { }
+            $c.WaitForExit(15000) | Out-Null
+            [void][Lilt.Input]::SetForegroundWindow($p.MainWindowHandle)
+            Start-Sleep -Seconds 3
+            [void][Lilt.Input]::ShowWindow($p.MainWindowHandle, 6)
+            Start-Sleep -Seconds 30
+            [void][Lilt.Input]::ShowWindow($p.MainWindowHandle, 9)
+            [void][Lilt.Input]::SetForegroundWindow($p.MainWindowHandle)
+            Start-Sleep -Seconds 3
+          }
+          $dir = @($dir)[-1]
+          $power = if (Test-Path "$dir/startup.json.keys.txt") { @(Get-Content "$dir/startup.json.keys.txt" | Where-Object { $_ -match ' power ' }) } else { @() }
+          if ($power) { $power | Set-Content 'smoke-power.txt' }
+          Check 'Efficiency mode pauses behind a full-screen window and when minimized' (($power -match 'power paused').Count -ge 2) ($power -join ' / ')
+          Check 'Efficiency mode returns to normal in front' ([bool]($power[-1] -match 'power full')) "last: $(if ($power) { $power[-1] } else { 'none' })"
           # A user script (Lilt's per-site JS) scrolls the tester to its score so the screenshot shows it.
           $userDir = Join-Path $env:RUNNER_TEMP 'lilt-adblock-test/user'
           New-Item -ItemType Directory $userDir -Force | Out-Null
@@ -179,9 +216,10 @@ jobs:
       - name: Idle measurements
         shell: pwsh
         continue-on-error: true
+        timeout-minutes: 20
         run: |
           ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Runs 3 -Settle 20 -Sample 30 -Label "CI runner, visible" -Out measure-visible.json
-          ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Runs 3 -Settle 20 -Sample 30 -Minimize -Label "CI runner, minimized" -Out measure-minimized.json
+          ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Runs 3 -Settle 20 -Sample 30 -Minimize -AfterMinimize 40 -Label "CI runner, minimized 40 s" -Out measure-minimized.json
           ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Runs 3 -Settle 20 -Sample 30 -Label "CI runner, visible, no extensions" -Out measure-noext.json -ExtraArgs '--no-extensions'
           ./tools/measure.ps1 -Exe out/Lilt/Lilt.exe -Runs 3 -Settle 20 -Sample 30 -Warm -Label "CI runner, visible, second start" -Out measure-warm.json
           Get-Content measure-visible.md, measure-minimized.md, measure-noext.md, measure-warm.md | Add-Content $env:GITHUB_STEP_SUMMARY
@@ -193,7 +231,7 @@ jobs:
         run: |
           $tag = 'prototype-build'
           gh release delete $tag --yes --cleanup-tag 2>$null
-          $files = @('Lilt-win-x64.zip', 'size.txt') + @(Get-ChildItem screenshot-*.png, measure-*.json, measure-*.md, smoke-*.json, smoke-*.log, smoke-*.md -ErrorAction SilentlyContinue | ForEach-Object Name)
+          $files = @('Lilt-win-x64.zip', 'size.txt') + @(Get-ChildItem screenshot-*.png, measure-*.json, measure-*.md, smoke-*.json, smoke-*.log, smoke-*.md, smoke-*.txt -ErrorAction SilentlyContinue | ForEach-Object Name)
           gh release create $tag --prerelease --target $env:GITHUB_SHA --title "Lilt prototype build $($env:GITHUB_SHA.Substring(0, 7))" --notes "Built by CI from $env:GITHUB_SHA on $env:GITHUB_REF_NAME. Unzip anywhere and run Lilt.exe (Windows 11 x64)." @files
 
       - name: Upload log on failure

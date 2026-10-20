@@ -29,10 +29,8 @@ sealed record LiltPaths(string Root)
         if (overridePath is not null) return Path.GetFullPath(overridePath);
         try
         {
-            if (!File.Exists(Theme)) File.Copy(Path.Combine(Bundled, "dusk.json"), Theme);
-            CopyIfDifferent("theme.schema.json");
-            CopyIfDifferent("paper.json");
-            CopyIfDifferent("frost.json");
+            if (!File.Exists(Theme) || IsOldDefault(Theme)) File.Copy(Path.Combine(Bundled, "minimal.json"), Theme, overwrite: true);
+            foreach (var name in new[] { "theme.schema.json", "minimal.json", "glass.json", "light.json" }) CopyIfDifferent(name);
             return Theme;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -87,6 +85,20 @@ sealed record LiltPaths(string Root)
             LogError(e);
         }
         return UserContent;
+    }
+
+    // theme.json files that are still exactly an earlier version's default (never edited) move to the current default look.
+    static readonly string[] oldDefaults =
+    [
+        "b8104c5137dc624a37bc760a32e7e166b789d0ed1c0489a0b4a4160c37eb5154",
+        "e416fcf2ff5402e00f5000cd2a78d70271e3e1c8d8959dd2bdfd1e4b5505899e",
+    ];
+
+    static bool IsOldDefault(string path)
+    {
+        var text = File.ReadAllText(path).Replace("\r\n", "\n");
+        var hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
+        return oldDefaults.Contains(hash);
     }
 
     void CopyIfDifferent(string name)

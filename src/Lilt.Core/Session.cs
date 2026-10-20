@@ -1,6 +1,6 @@
 namespace Lilt.Core;
 
-public sealed record SessionTab(string Url, string Title);
+public sealed record SessionTab(string Url, string Title, bool Pinned = false);
 
 // Open tabs, saved on every change and restored on the next start.
 public sealed record Session(IReadOnlyList<SessionTab> Tabs, int Active)

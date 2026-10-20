@@ -32,7 +32,11 @@ public sealed partial class MainWindow
         row.Children.Add(action);
         DownloadList.Children.Insert(0, row);
         NoDownloads.Visibility = Visibility.Collapsed;
-        DownloadsButton.Visibility = Visibility.Visible;
+        if (!hasDownloads)
+        {
+            hasDownloads = true;
+            ArrangeToolbar(theme.Toolbar.Items);
+        }
 
         long lastUpdate = 0;
         void Update()
@@ -85,7 +89,7 @@ public sealed partial class MainWindow
                 ShowNotice(new($"{name.Text} didn't finish downloading: {Humanize(op.InterruptReason.ToString())}.", NoticeKind.Warning));
         };
         Update();
-        ShowNotice(new($"Downloading {name.Text} to {Path.GetDirectoryName(op.ResultFilePath)}", NoticeKind.Info, "Show", () => DownloadsFlyout.ShowAt(DownloadsButton)));
+        ShowNotice(new($"Downloading {name.Text} to {Path.GetDirectoryName(op.ResultFilePath)}", NoticeKind.Info, "Show", () => ShowFlyout(DownloadsFlyout, DownloadsButton, FlyoutHost)));
     }
 
     static string DownloadStatus(CoreWebView2DownloadOperation op)

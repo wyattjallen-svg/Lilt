@@ -27,6 +27,7 @@ sealed class PopupWindow : Window
         this.defaultWidth = defaultWidth;
         this.defaultHeight = defaultHeight;
         Title = "Lilt";
+        AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "lilt.ico"));
 
         var strip = new Grid
         {

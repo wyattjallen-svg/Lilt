@@ -15,8 +15,6 @@ namespace Lilt.App;
 public sealed partial class MainWindow
 {
     readonly BookmarkStore bookmarks;
-    DispatcherQueueTimer? homeTimer;
-    string lastHomeData = "";
     Bookmark? menuBookmark;
 
     // Chromium-based browsers keep a Bookmarks JSON file per profile under their "User Data" folder.
@@ -208,61 +206,5 @@ public sealed partial class MainWindow
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
-    }
-
-    // ---- Home tab data ----
-    // The home page is a plain local web page with no bridge to Lilt; it reads this file for colors, layout and tiles.
-
-    bool HomeGlass => theme.Home.Glass && SystemBackdrop is not null;
-
-    void WriteHomeData()
-    {
-        if (homeTimer is null)
-        {
-            homeTimer = DispatcherQueue.CreateTimer();
-            homeTimer.Interval = TimeSpan.FromMilliseconds(300);
-            homeTimer.IsRepeating = false;
-            homeTimer.Tick += (_, _) => FlushHomeData();
-        }
-        homeTimer.Stop();
-        homeTimer.Start();
-    }
-
-    void FlushHomeData()
-    {
-        var c = theme.Colors;
-        var folder = bookmarks.Items.Any(b => b.Folder == "Home") ? "Home" : "";
-        var data = new
-        {
-            home = new { clock = theme.Home.Clock, search = theme.Home.Search, tiles = theme.Home.Tiles, glass = HomeGlass },
-            colors = new Dictionary<string, string>
-            {
-                ["background"] = c.Background.Opaque.ToString(),
-                ["text"] = c.Text.ToString(),
-                ["textMuted"] = c.TextMuted.ToString(),
-                ["surfaceRaised"] = c.SurfaceRaised.ToString(),
-                ["border"] = c.Border.ToString(),
-                ["accent"] = c.Accent.ToString(),
-                ["onAccent"] = c.OnAccent.ToString(),
-                ["hover"] = c.Hover.ToString(),
-            },
-            tiles = bookmarks.Items.Where(b => b.Folder == folder).Take(24).Select(b => new { title = b.Title, url = b.Url }),
-        };
-        var json = JsonSerializer.Serialize(data, Files.Json);
-        if (json == lastHomeData) return;
-        try
-        {
-            Files.WriteAtomic(Path.Combine(paths.NewTab, "lilt-data.json"), json);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            LiltPaths.LogError(e);
-            return;
-        }
-        var first = lastHomeData.Length == 0;
-        lastHomeData = json;
-        if (first) return;
-        foreach (var tab in tabs)
-            if (tab.IsHome && tab.Core is { } core) core.Reload();
     }
 }

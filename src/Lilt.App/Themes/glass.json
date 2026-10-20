@@ -1,0 +1,35 @@
+{
+  // Lilt Glass: translucent chrome over Windows acrylic, scenery on the home tab.
+  "$schema": "./theme.schema.json",
+  "schemaVersion": 1,
+  "name": "Glass",
+  "base": "dark",
+  "backdrop": { "material": "acrylic", "tint": "#171A1E", "tintOpacity": 0.3, "luminosityOpacity": 0.45 },
+
+  "colors": {
+    "background": "#171A1E",
+    "surface": "#171A1E59",
+    "surfaceRaised": "#2A2F3680",
+    "border": "#FFFFFF1A",
+    "text": "#F3F4F1",
+    "textMuted": "#C3CBD2",
+    "accent": "#8DB5A4",
+    "onAccent": "#13201A",
+    "hover": "#FFFFFF14",
+    "pressed": "#FFFFFF22",
+    "page": "#171A1E"
+  },
+
+  "typography": { "family": "Segoe UI Variable Text", "size": 13, "weight": 400 },
+  "shape": { "radius": 12, "controlRadius": 8, "borderWidth": 1 },
+  "density": "standard",
+  "toolbar": {
+    "height": 40,
+    "items": ["back", "forward", "reload", "home", "address", "bookmark", "downloads", "extensions", "customize", "sidebar", "menu"]
+  },
+  "sidebar": { "edge": "left", "width": 220, "height": 44, "autoHide": false, "revealEdge": 6, "hideDelay": 350, "sections": ["tabs", "bookmarks", "layout"] },
+  "motion": { "animations": true, "duration": 160 },
+  "pages": { "colorScheme": "theme" },
+  "home": { "items": ["logo", "search", "tiles", "gear"], "glass": true, "background": "hills" },
+  "power": { "efficiency": true, "suspendMinutes": 5, "hideWhenCovered": true }
+}

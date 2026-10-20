@@ -1,33 +1,72 @@
 :root {
-  color-scheme: light dark;
-  --background: #141318; --text: #ece9f1; --textMuted: #a19cab; --surfaceRaised: #2a2733cc;
-  --border: #ffffff14; --accent: #c4a7ff; --onAccent: #1a1325; --hover: #ffffff0f;
+  color-scheme: dark;
+  --background: #171A1E; --text: #F3F4F1; --textMuted: #9AA3AD; --surfaceRaised: #2A2F36;
+  --border: #FFFFFF12; --accent: #638B7B; --onAccent: #F3F4F1; --hover: #FFFFFF0D;
+  --radius: 10px; --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body {
-  display: grid; place-items: center; background: var(--background); color: var(--text);
-  font: 15px/1.4 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  display: grid; place-items: center; background: var(--background) center / cover no-repeat; color: var(--text);
+  font: 15px/1.45 var(--font); overflow: hidden;
 }
-body.glass { background: transparent; }
-main { width: min(720px, calc(100% - 32px)); margin-top: -8vh; display: grid; gap: 24px; justify-items: center; }
+body.glass { background-color: transparent; }
+#scenery { position: fixed; inset: 0; z-index: -1; }
+#scenery svg { width: 100%; height: 100%; display: block; }
+main { width: min(680px, calc(100% - 32px)); margin-top: -6vh; display: grid; gap: 28px; justify-items: center; }
+[hidden] { display: none !important; }
+
+#logo { display: flex; align-items: center; gap: 12px; margin: 0; font: 300 52px/1 "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; letter-spacing: -0.01em; }
+#logo svg { width: 56px; height: 56px; fill: none; stroke-width: 7; stroke-linecap: round; }
+#logo .w1 { stroke: var(--accent); }
+#logo .w2 { stroke: var(--accent); opacity: .55; }
+
 .time { font: 300 72px/1 "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; letter-spacing: -0.02em; margin: 0; text-align: center; }
 .date { color: var(--textMuted); margin: 6px 0 0; text-align: center; }
-form { width: min(560px, 100%); }
+
+form { width: min(560px, 100%); position: relative; }
 input {
-  width: 100%; font: inherit; color: inherit; background: var(--surfaceRaised);
-  border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; outline: none;
+  width: 100%; font: inherit; color: inherit; background: var(--surfaceRaised); border: 1px solid var(--border);
+  border-radius: 999px; padding: 12px 52px 12px 46px; outline: none;
+  backdrop-filter: blur(18px);
 }
+input::placeholder { color: var(--textMuted); }
 input:focus { border-color: var(--accent); }
-#tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; width: 100%; }
-#tiles a {
-  display: grid; justify-items: center; gap: 8px; padding: 12px 6px; border-radius: 12px;
+form svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.lens { position: absolute; left: 16px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); color: var(--textMuted); pointer-events: none; }
+form button {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border-radius: 50%;
+  border: 0; background: transparent; color: var(--textMuted); cursor: pointer; display: grid; place-items: center;
+}
+form button:hover, form button:focus-visible { background: var(--hover); color: var(--text); outline: none; }
+form button svg { width: 18px; height: 18px; }
+
+#tiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; width: 100%; }
+#tiles .tile { position: relative; }
+#tiles a.open {
+  display: grid; justify-items: center; gap: 8px; width: 84px; padding: 10px 4px; border-radius: var(--radius);
   color: var(--text); text-decoration: none; font-size: 12px; outline: none;
 }
-#tiles a:hover, #tiles a:focus-visible { background: var(--hover); }
+#tiles a.open:hover, #tiles a.open:focus-visible { background: var(--hover); }
 #tiles .badge {
-  width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
-  background: var(--accent); color: var(--onAccent); font-weight: 600; font-size: 18px;
+  width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; overflow: hidden;
+  background: var(--surfaceRaised); border: 1px solid var(--border); color: var(--text); font-weight: 600; font-size: 18px;
 }
+#tiles .badge img { width: 24px; height: 24px; }
+#tiles .add .badge { background: transparent; border-style: dashed; color: var(--textMuted); font-weight: 300; font-size: 24px; }
+#tiles .add { color: var(--textMuted); }
 #tiles .label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#tiles .remove {
+  position: absolute; top: 2px; right: 6px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--surfaceRaised); color: var(--textMuted); text-decoration: none; font-size: 13px; line-height: 1; opacity: 0;
+}
+#tiles .tile:hover .remove, #tiles .remove:focus-visible { opacity: 1; }
 .hint { color: var(--textMuted); font-size: 12px; margin: 0; }
+
+#gear {
+  position: fixed; left: 16px; bottom: 16px; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
+  color: var(--textMuted); background: transparent;
+}
+#gear:hover, #gear:focus-visible { background: var(--hover); color: var(--text); outline: none; }
+#gear svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+@media (prefers-reduced-motion: no-preference) { #tiles a.open, #gear, form button { transition: background .15s; } }

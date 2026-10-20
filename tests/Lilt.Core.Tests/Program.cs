@@ -22,21 +22,21 @@ Test("empty theme uses defaults, warns about missing version", () =>
     Equal("schemaVersion", r.Issues[0].Path);
 });
 
-Test("bundled dusk.json is exactly the built-in default", () =>
+Test("bundled minimal.json is exactly the built-in default", () =>
 {
-    var r = ThemeParser.LoadFile(RepoFile($"{themes}/dusk.json"));
+    var r = ThemeParser.LoadFile(RepoFile($"{themes}/minimal.json"));
     Equal(0, r.Issues.Count);
     Equal(Theme.Default, r.Theme);
 });
 
-Test("bundled paper.json loads cleanly as a light theme", () =>
+Test("bundled light.json loads cleanly as a light theme", () =>
 {
-    var r = ThemeParser.LoadFile(RepoFile($"{themes}/paper.json"));
+    var r = ThemeParser.LoadFile(RepoFile($"{themes}/light.json"));
     Equal(0, r.Issues.Count);
     Equal(ThemeBase.Light, r.Theme.Base);
     Equal(Backdrop.MicaAlt, r.Theme.Backdrop.Material);
-    Equal(DockEdge.Right, r.Theme.Sidebar.Edge);
-    True(r.Theme.Sidebar.AutoHide);
+    Equal("hills", r.Theme.Home.Background);
+    True(!r.Theme.Home.Glass);
 });
 
 Test("comments and trailing commas are allowed", () =>
@@ -75,7 +75,7 @@ Test("bad color falls back for that value only", () =>
     Equal(new Rgba(0, 0, 0), r.Theme.Colors.Text);
     Equal(1, r.Issues.Count);
     Equal("colors.accent", r.Issues[0].Path);
-    True(r.Issues[0].Message.Contains("#C4A7FF"));
+    True(r.Issues[0].Message.Contains("#638B7B"));
 });
 
 Test("out-of-range and wrong-type numbers fall back", () =>
@@ -178,12 +178,12 @@ Test("metrics follow toolbar height and density", () =>
     Equal(15.0, m.IconSize);
     True(!m.TallCaption);
 
-    var tall = ShellMetrics.From(Theme.Default with { Toolbar = new ToolbarSpec(48), Density = Density.Compact });
+    var tall = ShellMetrics.From(Theme.Default with { Toolbar = Theme.Default.Toolbar with { Height = 48 }, Density = Density.Compact });
     True(tall.TallCaption);
     Equal(4.0, tall.Unit);
     Equal(36.0, tall.ControlHeight);
 
-    var small = ShellMetrics.From(Theme.Default with { Toolbar = new ToolbarSpec(32) });
+    var small = ShellMetrics.From(Theme.Default with { Toolbar = Theme.Default.Toolbar with { Height = 32 } });
     Equal(24.0, small.ControlHeight);
 });
 
@@ -460,14 +460,59 @@ Test("user content: generated scripts match hosts in a JS engine", () =>
     Equal("""{"css":["a{x:1}"],"ran":["syntax"]}""", RunInPage(all, "https:", "notexample.com"));
 });
 
-Test("frost.json: backdrop object with tint", () =>
+Test("glass.json: backdrop object with tint", () =>
 {
-    var r = ThemeParser.LoadFile(RepoFile($"{themes}/frost.json"));
+    var r = ThemeParser.LoadFile(RepoFile($"{themes}/glass.json"));
     Equal(0, r.Issues.Count);
-    Equal(Backdrop.AcrylicThin, r.Theme.Backdrop.Material);
-    Equal(Rgba.Parse("#10131A"), r.Theme.Backdrop.Tint);
-    Equal(0.15, r.Theme.Backdrop.TintOpacity);
+    Equal(Backdrop.Acrylic, r.Theme.Backdrop.Material);
+    Equal(Rgba.Parse("#171A1E"), r.Theme.Backdrop.Tint);
+    Equal(0.3, r.Theme.Backdrop.TintOpacity);
     True(r.Theme.Home.Glass);
+});
+
+Test("lists: order kept, unknown and repeated ids dropped, empty allowed", () =>
+{
+    var r = ThemeParser.Parse("""{ "schemaVersion": 1, "toolbar": { "items": ["menu", "address", "back", "rocket", "menu", 3] }, "sidebar": { "sections": [] } }""");
+    Equal(new Ids("menu", "address", "back"), r.Theme.Toolbar.Items);
+    Equal(new Ids(), r.Theme.Sidebar.Sections);
+    Equal(3, r.Issues.Count);
+    var bad = ThemeParser.Parse("""{ "schemaVersion": 1, "home": { "items": "logo" } }""");
+    Equal(Theme.Default.Home.Items, bad.Theme.Home.Items);
+    Equal(1, bad.Issues.Count);
+});
+
+Test("home: v0.2 switches still work; backgrounds can't point outside the folder", () =>
+{
+    var old = ThemeParser.Parse("""{ "schemaVersion": 1, "home": { "clock": false, "search": true, "tiles": true, "glass": false } }""");
+    Equal(0, old.Issues.Count);
+    Equal(new Ids("search", "tiles"), old.Theme.Home.Items);
+    foreach (var ok in new[] { "", "hills", "beach.jpg", "My Photo.PNG", "art.svg" }) True(ThemeParser.IsBackground(ok));
+    foreach (var bad in new[] { "../x.jpg", "C:\\x.jpg", "sub/x.png", "x.exe", ".jpg", "x" }) True(!ThemeParser.IsBackground(bad));
+    Equal("", ThemeParser.Parse("""{ "schemaVersion": 1, "home": { "background": "..\\..\\secret.png" } }""").Theme.Home.Background);
+});
+
+Test("power policy: full while used or audible, reduced when away, paused when unseen", () =>
+{
+    var on = Theme.Default.Power;
+    Equal(PowerLevel.Full, PowerPolicy.Decide(on, focused: true, minimized: false, 999, audible: false, covered: false, energySaver: false));
+    Equal(PowerLevel.Full, PowerPolicy.Decide(on, false, false, 3, false, false, false));
+    Equal(PowerLevel.Reduced, PowerPolicy.Decide(on, false, false, 3, false, false, energySaver: true));
+    Equal(PowerLevel.Reduced, PowerPolicy.Decide(on, false, false, 30, false, false, false));
+    Equal(PowerLevel.Paused, PowerPolicy.Decide(on, false, minimized: true, 30, false, false, false));
+    Equal(PowerLevel.Paused, PowerPolicy.Decide(on, false, false, 30, false, covered: true, false));
+    Equal(PowerLevel.Reduced, PowerPolicy.Decide(on with { HideWhenCovered = false }, false, false, 30, false, true, false));
+    Equal(PowerLevel.Full, PowerPolicy.Decide(on, false, true, 30, audible: true, true, false));
+    Equal(PowerLevel.Full, PowerPolicy.Decide(on with { Efficiency = false }, false, true, 30, false, true, false));
+    True(PowerPolicy.ShouldSuspend(on, 5, false) && !PowerPolicy.ShouldSuspend(on, 4.9, false));
+    True(PowerPolicy.ShouldSuspend(on, 1, energySaver: true));
+    True(!PowerPolicy.ShouldSuspend(on with { SuspendMinutes = 0 }, 999, true));
+});
+
+Test("power settings parse with limits", () =>
+{
+    var r = ThemeParser.Parse("""{ "schemaVersion": 1, "power": { "efficiency": false, "suspendMinutes": 0, "hideWhenCovered": false } }""");
+    Equal(new PowerSpec(false, 0, false), r.Theme.Power);
+    Equal(5, ThemeParser.Parse("""{ "schemaVersion": 1, "power": { "suspendMinutes": 9999 } }""").Theme.Power.SuspendMinutes);
 });
 
 Test("backdrop object: bad values are ignored, material falls back", () =>
@@ -480,14 +525,21 @@ Test("backdrop object: bad values are ignored, material falls back", () =>
 
 Test("theme writer round-trips through the parser", () =>
 {
-    foreach (var name in new[] { "dusk", "paper", "frost" })
+    foreach (var name in new[] { "minimal", "glass", "light" })
     {
         var t = ThemeParser.LoadFile(RepoFile($"{themes}/{name}.json")).Theme;
         var back = ThemeParser.Parse(ThemeWriter.ToJson(t));
         Equal(0, back.Issues.Count);
         Equal(t, back.Theme);
     }
-    var tweaked = Theme.Default with { Backdrop = new BackdropSpec(Backdrop.Acrylic, null, 0.2, null), Home = new HomeSpec(false, true, false, true) };
+    var tweaked = Theme.Default with
+    {
+        Backdrop = new BackdropSpec(Backdrop.Acrylic, null, 0.2, null),
+        Home = new HomeSpec(new Ids("tiles", "clock"), true, "me.jpg"),
+        Toolbar = Theme.Default.Toolbar with { Items = new Ids("menu", "address") },
+        Sidebar = Theme.Default.Sidebar with { Sections = new Ids() },
+        Power = new PowerSpec(false, 30, true),
+    };
     Equal(tweaked, ThemeParser.Parse(ThemeWriter.ToJson(tweaked)).Theme);
 });
 

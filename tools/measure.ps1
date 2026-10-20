@@ -22,6 +22,7 @@ param(
     [int]$Settle = 30,
     [int]$Sample = 60,
     [switch]$Minimize,
+    [int]$AfterMinimize = 10,
     [switch]$Warm,
     [string]$Label = '',
     [string]$Out = 'measure-results.json',
@@ -104,7 +105,7 @@ for ($run = 1; $run -le $Runs; $run++) {
     if ($Minimize) {
         $p.Refresh()
         [void][Lilt.Native]::ShowWindow($p.MainWindowHandle, 6)
-        Start-Sleep -Seconds 10
+        Start-Sleep -Seconds $AfterMinimize
     }
     $before = @(Get-Tree $p.Id)
     $t0 = [Diagnostics.Stopwatch]::StartNew()

@@ -1,0 +1,35 @@
+{
+  // Lilt Light: warm white and pale sage. Same features, new feel.
+  "$schema": "./theme.schema.json",
+  "schemaVersion": 1,
+  "name": "Light",
+  "base": "light",
+  "backdrop": "micaAlt",
+
+  "colors": {
+    "background": "#F3F4F1",
+    "surface": "#E9F0ECE6",
+    "surfaceRaised": "#FFFFFFD9",
+    "border": "#1E23281A",
+    "text": "#1E2328",
+    "textMuted": "#5E6A73",
+    "accent": "#496B5D",
+    "onAccent": "#FFFFFF",
+    "hover": "#1E23280D",
+    "pressed": "#1E232817",
+    "page": "#F7F8F5"
+  },
+
+  "typography": { "family": "Segoe UI Variable Text", "size": 13, "weight": 400 },
+  "shape": { "radius": 10, "controlRadius": 8, "borderWidth": 1 },
+  "density": "standard",
+  "toolbar": {
+    "height": 40,
+    "items": ["back", "forward", "reload", "home", "address", "bookmark", "downloads", "extensions", "customize", "sidebar", "menu"]
+  },
+  "sidebar": { "edge": "left", "width": 220, "height": 44, "autoHide": false, "revealEdge": 6, "hideDelay": 350, "sections": ["tabs", "bookmarks", "layout"] },
+  "motion": { "animations": true, "duration": 160 },
+  "pages": { "colorScheme": "theme" },
+  "home": { "items": ["logo", "search", "tiles", "gear"], "glass": false, "background": "hills" },
+  "power": { "efficiency": true, "suspendMinutes": 5, "hideWhenCovered": true }
+}

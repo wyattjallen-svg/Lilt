@@ -47,6 +47,8 @@
       <SolidColorBrush x:Key="ListViewItemForegroundPointerOver" Color="#ECE9F1" />
       <SolidColorBrush x:Key="ListViewItemForegroundSelected" Color="#ECE9F1" />
       <SolidColorBrush x:Key="ListViewItemSelectionIndicatorBrush" Color="#C4A7FF" />
+      <!-- The active tab is marked with an accent outline (see the tab template) instead of the side pill. -->
+      <x:Boolean x:Key="ListViewItemSelectionIndicatorVisualEnabled">False</x:Boolean>
       <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="#141318" />
       <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#141318" />
 

@@ -55,6 +55,8 @@ sealed class BrowserEngine
             else if ((ctrl && !e.shiftKey && k === 'l') || (e.altKey && !e.ctrlKey && k === 'd') || (k === 'F6' && !e.ctrlKey && !e.altKey)) cmd = 'address';
             else if (ctrl && e.shiftKey && k === 'b') cmd = 'sidebar';
             else if (ctrl && !e.shiftKey && k === 'd') cmd = 'bookmark';
+            else if (e.altKey && !e.ctrlKey && k === 'f') cmd = 'menu';
+            else if (ctrl && e.shiftKey && (k === ',' || k === '<')) cmd = 'customize';
             if (!cmd) return;
             e.preventDefault();
             e.stopImmediatePropagation();

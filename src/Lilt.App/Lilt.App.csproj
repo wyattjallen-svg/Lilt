@@ -7,6 +7,7 @@
     <RootNamespace>Lilt.App</RootNamespace>
     <AssemblyName>Lilt</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\lilt.ico</ApplicationIcon>
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -31,6 +32,7 @@
     <Content Include="Themes\*.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="NewTab\*.*" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Extensions\ubol-key.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\lilt.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- uBlock Origin Lite (GPL-3.0) is bundled from its official release, pinned by version and SHA-256. -->

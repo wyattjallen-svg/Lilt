@@ -31,15 +31,22 @@ public static class ThemeWriter
             ["typography"] = Obj(("family", t.Typography.Family), ("size", t.Typography.Size), ("weight", t.Typography.Weight)),
             ["shape"] = Obj(("radius", t.Shape.Radius), ("controlRadius", t.Shape.ControlRadius), ("borderWidth", t.Shape.BorderWidth)),
             ["density"] = Camel(t.Density),
-            ["toolbar"] = Obj(("height", t.Toolbar.Height)),
-            ["sidebar"] = Obj(
+            ["toolbar"] = With(Obj(("height", t.Toolbar.Height)), "items", t.Toolbar.Items),
+            ["sidebar"] = With(Obj(
                 ("edge", Camel(t.Sidebar.Edge)), ("width", t.Sidebar.Width), ("height", t.Sidebar.Height),
-                ("autoHide", t.Sidebar.AutoHide), ("revealEdge", t.Sidebar.RevealEdge), ("hideDelay", t.Sidebar.HideDelay)),
+                ("autoHide", t.Sidebar.AutoHide), ("revealEdge", t.Sidebar.RevealEdge), ("hideDelay", t.Sidebar.HideDelay)), "sections", t.Sidebar.Sections),
             ["motion"] = Obj(("animations", t.Motion.Animations), ("duration", t.Motion.Duration)),
             ["pages"] = Obj(("colorScheme", Camel(t.Pages.ColorScheme))),
-            ["home"] = Obj(("clock", t.Home.Clock), ("search", t.Home.Search), ("tiles", t.Home.Tiles), ("glass", t.Home.Glass)),
+            ["home"] = With(Obj(("glass", t.Home.Glass), ("background", t.Home.Background)), "items", t.Home.Items),
+            ["power"] = Obj(("efficiency", t.Power.Efficiency), ("suspendMinutes", t.Power.SuspendMinutes), ("hideWhenCovered", t.Power.HideWhenCovered)),
         };
         return Header + root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n";
+    }
+
+    static JsonObject With(JsonObject o, string key, Ids ids)
+    {
+        o[key] = new JsonArray(ids.Items.Select(i => (JsonNode?)JsonValue.Create(i)).ToArray());
+        return o;
     }
 
     static JsonObject Obj(params (string Key, object? Value)[] pairs)

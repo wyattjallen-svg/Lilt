@@ -7,6 +7,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -14,10 +15,10 @@ using Microsoft.Web.WebView2.Core;
 
 namespace Lilt.App;
 
-// Tabs: one WebView2 per tab, created the first time the tab is shown. Background tabs are suspended after a while.
+// Tabs: one WebView2 per tab, created the first time the tab is shown. Tabs you aren't looking at get a low
+// memory target, and are suspended after power.suspendMinutes (see MainWindow.Power.cs).
 public sealed partial class MainWindow
 {
-    const int SuspendAfterMs = 5 * 60 * 1000;
     readonly ObservableCollection<BrowserTab> tabs = [];
     readonly List<SessionTab> closedTabs = [];
     DispatcherQueueTimer saveTimer = null!, suspendTimer = null!;
@@ -36,8 +37,9 @@ public sealed partial class MainWindow
         if (!options.InPrivate && Session.Load(paths.Session) is { } session)
             for (var i = 0; i < session.Tabs.Count; i++)
             {
-                if (!UrlPolicy.IsNavigable(session.Tabs[i].Url)) continue;
-                var tab = new BrowserTab(session.Tabs[i].Url, session.Tabs[i].Title);
+                var saved = session.Tabs[i];
+                if (!UrlPolicy.IsNavigable(saved.Url)) continue;
+                var tab = new BrowserTab(saved.Url, saved.Title, saved.Pinned);
                 tabs.Add(tab);
                 if (i <= session.Active || pick is null) pick = tab;
             }
@@ -47,6 +49,7 @@ public sealed partial class MainWindow
             tabs.Add(pick);
         }
         active = pick;
+        active!.IsActive = true;
         TabList.SelectedItem = active;
         tabs.CollectionChanged += (_, _) => ScheduleSave();
 
@@ -56,7 +59,7 @@ public sealed partial class MainWindow
         saveTimer.Tick += (_, _) => SaveSession();
         suspendTimer = DispatcherQueue.CreateTimer();
         suspendTimer.Interval = TimeSpan.FromMinutes(1);
-        suspendTimer.Tick += (_, _) => SuspendIdleTabs();
+        suspendTimer.Tick += (_, _) => SuspendIdleTabs(force: false);
         suspendTimer.Start();
     }
 
@@ -72,16 +75,20 @@ public sealed partial class MainWindow
         PageHost.Children.Add(view);
         var c = await engine.AttachAsync(view);
         tab.Core = c;
+        if (tab != active) c.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low;
 
         c.NavigationStarting += (_, e) =>
         {
-            tab.IsLoadingPage = true;
+            tab.IsLoading = true;
+            tab.HasError = false;
             SetPageBackground(tab, e.Uri);
             if (tab == active) UpdateNavigation();
         };
         c.NavigationCompleted += (_, e) =>
         {
-            tab.IsLoadingPage = false;
+            tab.IsLoading = false;
+            // Stopped or replaced navigations aren't errors worth a red tab.
+            tab.HasError = !e.IsSuccess && e.WebErrorStatus is not (CoreWebView2WebErrorStatus.OperationCanceled or CoreWebView2WebErrorStatus.ConnectionAborted);
             if (tab == active)
             {
                 UpdateNavigation();
@@ -91,9 +98,10 @@ public sealed partial class MainWindow
             firstNavigation = false;
             report.FirstNavigation(c.Source, e.IsSuccess, e.WebErrorStatus.ToString());
         };
-        c.SourceChanged += (_, _) =>
+        c.SourceChanged += (_, e) =>
         {
             tab.Url = c.Source;
+            if (!e.IsNewDocument && tab.IsHome) HomeCommand(c);
             if (tab == active) UpdateNavigation();
             ScheduleSave();
         };
@@ -108,6 +116,12 @@ public sealed partial class MainWindow
             ScheduleSave();
         };
         c.FaviconChanged += (_, _) => LoadFavicon(tab, c);
+        c.IsDocumentPlayingAudioChanged += (_, _) =>
+        {
+            tab.IsAudible = c.IsDocumentPlayingAudio;
+            UpdatePower();
+        };
+        c.IsMutedChanged += (_, _) => tab.IsMuted = c.IsMuted;
         c.ContainsFullScreenElementChanged += (_, _) =>
         {
             if (tab == active) SetFullScreen(c.ContainsFullScreenElement);
@@ -132,7 +146,8 @@ public sealed partial class MainWindow
         }
     }
 
-    static async void LoadFavicon(BrowserTab tab, CoreWebView2 c)
+    // Favicons show in the tab and are kept for home tiles of bookmarked sites (newtab\icons\<host>.png), so tiles never fetch from the web.
+    async void LoadFavicon(BrowserTab tab, CoreWebView2 c)
     {
         try
         {
@@ -141,10 +156,17 @@ public sealed partial class MainWindow
                 tab.Icon = null;
                 return;
             }
-            using var stream = await c.GetFaviconAsync(CoreWebView2FaviconImageFormat.Png);
+            byte[] png;
+            using (var stream = await c.GetFaviconAsync(CoreWebView2FaviconImageFormat.Png))
+            using (var copy = new MemoryStream())
+            {
+                await stream.AsStreamForRead().CopyToAsync(copy);
+                png = copy.ToArray();
+            }
             var image = new BitmapImage { DecodePixelWidth = 32 };
-            await image.SetSourceAsync(stream);
+            using (var ms = new MemoryStream(png)) await image.SetSourceAsync(ms.AsRandomAccessStream());
             tab.Icon = image;
+            SaveTileIcon(c.Source, png);
         }
         catch (Exception)
         {
@@ -155,12 +177,19 @@ public sealed partial class MainWindow
     void Activate(BrowserTab tab)
     {
         if (!tabs.Contains(tab)) return;
-        if (active != tab && active?.View is { } old) old.Visibility = Visibility.Collapsed;
+        if (active is { } old && old != tab)
+        {
+            old.IsActive = false;
+            if (old.View is { } oldView) oldView.Visibility = Visibility.Collapsed;
+            if (old.Core is { } oldCore) oldCore.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low;
+        }
         active = tab;
+        tab.IsActive = true;
         tab.LastActive = Environment.TickCount64;
         if (TabList.SelectedItem != tab) TabList.SelectedItem = tab;
         if (tab.View is { } view) view.Visibility = Visibility.Visible;
         else if (tab.Loading is null && started) Load(tab);
+        if (tab.Core is { } c) c.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Normal;
         SetFullScreen(tab.Core?.ContainsFullScreenElement == true);
         UpdateNavigation();
         UpdateTitle();
@@ -170,16 +199,18 @@ public sealed partial class MainWindow
     BrowserTab AddTab(string url, bool atEnd = false)
     {
         var tab = new BrowserTab(url);
-        tabs.Insert(atEnd || active is null ? tabs.Count : tabs.IndexOf(active) + 1, tab);
+        tabs.Insert(atEnd || active is null ? tabs.Count : Math.Max(tabs.IndexOf(active) + 1, PinnedCount()), tab);
         Activate(tab);
         return tab;
     }
+
+    int PinnedCount() => tabs.TakeWhile(t => t.IsPinned).Count();
 
     // A page asked for a new window (target=_blank, window.open): the tab's view must exist but not navigate yet.
     async Task<CoreWebView2> OpenTabForPageAsync()
     {
         var tab = new BrowserTab("about:blank");
-        tabs.Insert(active is null ? tabs.Count : tabs.IndexOf(active) + 1, tab);
+        tabs.Insert(active is null ? tabs.Count : Math.Max(tabs.IndexOf(active) + 1, PinnedCount()), tab);
         var load = LoadAsync(tab, navigate: false);
         Activate(tab);
         return await load;
@@ -197,7 +228,7 @@ public sealed partial class MainWindow
         if (i < 0) return;
         if (!tab.IsHome)
         {
-            closedTabs.Add(new SessionTab(tab.Url, tab.Title));
+            closedTabs.Add(new SessionTab(tab.Url, tab.Title, tab.IsPinned));
             if (closedTabs.Count > 25) closedTabs.RemoveAt(0);
         }
         // Closing the last tab leaves a fresh home tab rather than closing the window.
@@ -219,7 +250,9 @@ public sealed partial class MainWindow
         if (closedTabs.Count == 0) return;
         var last = closedTabs[^1];
         closedTabs.RemoveAt(closedTabs.Count - 1);
-        AddTab(last.Url).Title = last.Title;
+        var tab = AddTab(last.Url);
+        tab.Title = last.Title;
+        if (last.Pinned) SetPinned(tab, true);
     }
 
     void CycleTab(int step)
@@ -228,16 +261,33 @@ public sealed partial class MainWindow
         Activate(tabs[(tabs.IndexOf(active) + step + tabs.Count) % tabs.Count]);
     }
 
+    // Pinned tabs show only their icon and stay at the top of the list.
+    void SetPinned(BrowserTab tab, bool pinned)
+    {
+        if (tab.IsPinned == pinned) return;
+        var from = tabs.IndexOf(tab);
+        // Either way the tab lands right after the other pinned tabs.
+        var to = tabs.Count(t => t != tab && t.IsPinned);
+        tab.IsPinned = pinned;
+        if (from != to) tabs.Move(from, to);
+        if (TabList.ContainerFromItem(tab) is ListViewItem item) SizeTab(item, tab);
+        TabList.SelectedItem = active;
+        ScheduleSave();
+    }
+
     // Suspended tabs keep their page and scroll position but use no CPU; they resume when shown.
-    async void SuspendIdleTabs()
+    async void SuspendIdleTabs(bool force)
     {
         var now = Environment.TickCount64;
+        var spec = theme.Power;
         foreach (var tab in tabs.ToArray())
         {
-            if (tab == active || tab.Core is not { IsSuspended: false, IsDocumentPlayingAudio: false } c || now - tab.LastActive < SuspendAfterMs) continue;
+            if (tab.Core is not { IsSuspended: false, IsDocumentPlayingAudio: false } c) continue;
+            var hidden = tab != active || force;
+            if (!hidden || (!force && !PowerPolicy.ShouldSuspend(spec, (now - tab.LastActive) / 60000.0, energySaver))) continue;
             try
             {
-                await c.TrySuspendAsync();
+                if (await c.TrySuspendAsync()) report.Key("power", $"suspended {UrlPolicy.DisplayHost(tab.Url)}");
             }
             catch (Exception) { }
         }
@@ -256,7 +306,7 @@ public sealed partial class MainWindow
         try
         {
             var list = tabs.Where(t => UrlPolicy.IsNavigable(t.Url)).ToList();
-            new Session(list.Select(t => new SessionTab(t.Url, t.Title)).ToList(), Math.Max(0, active is null ? 0 : list.IndexOf(active))).Save(paths.Session);
+            new Session(list.Select(t => new SessionTab(t.Url, t.Title, t.IsPinned)).ToList(), Math.Max(0, active is null ? 0 : list.IndexOf(active))).Save(paths.Session);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -275,16 +325,27 @@ public sealed partial class MainWindow
         ScrollViewer.SetVerticalScrollMode(TabList, vertical ? ScrollMode.Enabled : ScrollMode.Disabled);
         ScrollViewer.SetVerticalScrollBarVisibility(TabList, vertical ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled);
         TabList.VerticalAlignment = vertical ? VerticalAlignment.Stretch : VerticalAlignment.Center;
-        tabItemWidth = vertical ? double.NaN : 200;
+        verticalTabs = vertical;
         TabList.ContainerContentChanging -= SizeTabItem;
         TabList.ContainerContentChanging += SizeTabItem;
         foreach (var tab in tabs)
-            if (TabList.ContainerFromItem(tab) is ListViewItem item) item.Width = tabItemWidth;
+            if (TabList.ContainerFromItem(tab) is ListViewItem item) SizeTab(item, tab);
     }
 
-    double tabItemWidth = double.NaN;
+    bool verticalTabs = true;
 
-    void SizeTabItem(ListViewBase sender, ContainerContentChangingEventArgs e) => e.ItemContainer.Width = tabItemWidth;
+    void SizeTabItem(ListViewBase sender, ContainerContentChangingEventArgs e)
+    {
+        if (e.Item is BrowserTab tab) SizeTab((ListViewItem)e.ItemContainer, tab);
+    }
+
+    // Pinned tabs in a strip are icon-sized; other strip tabs are a fixed width. Row height follows the spacing setting.
+    void SizeTab(ListViewItem item, BrowserTab tab)
+    {
+        item.Width = verticalTabs ? double.NaN : tab.IsPinned ? 48 : 200;
+        item.MinHeight = metrics.ControlHeight + 4;
+        item.Padding = new Thickness(metrics.Unit / 2, 1, metrics.Unit / 2, 1);
+    }
 
     void TabList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -299,6 +360,50 @@ public sealed partial class MainWindow
         if (e.GetCurrentPoint(element).Properties.PointerUpdateKind != PointerUpdateKind.MiddleButtonPressed) return;
         e.Handled = true;
         CloseTab(tab);
+    }
+
+    void Tab_RightTapped(object sender, RightTappedRoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: BrowserTab tab } element) return;
+        e.Handled = true;
+        var menu = new MenuFlyout();
+        void Add(string text, string glyph, Action action)
+        {
+            var item = new MenuFlyoutItem { Text = text, Icon = new FontIcon { Glyph = glyph } };
+            item.Click += (_, _) => action();
+            menu.Items.Add(item);
+        }
+        Add(tab.IsPinned ? "Unpin" : "Pin", tab.IsPinned ? "" : "", () => SetPinned(tab, !tab.IsPinned));
+        if (tab.Core is { } c) Add(c.IsMuted ? "Unmute" : "Mute", c.IsMuted ? "" : "", () => c.IsMuted = !c.IsMuted);
+        Add("Reload", "", () =>
+        {
+            if (tab.Core is { } core) core.Reload();
+            else Activate(tab);
+        });
+        Add("Duplicate", "", () => AddTab(tab.Url));
+        if (bookmarks.Contains(tab.Url)) Add("Remove bookmark", "", () =>
+        {
+            bookmarks.Remove(tab.Url);
+            SaveBookmarks();
+        });
+        else if (Uri.TryCreate(tab.Url, UriKind.Absolute, out var u) && UrlPolicy.IsWeb(u) && !tab.IsHome) Add("Bookmark", "", () =>
+        {
+            bookmarks.Add(tab.Title, tab.Url);
+            SaveBookmarks();
+        });
+        menu.Items.Add(new MenuFlyoutSeparator());
+        Add("Close", "", () => CloseTab(tab));
+        if (tabs.Count > 1) Add("Close other tabs", "", () =>
+        {
+            foreach (var other in tabs.Where(t => t != tab && !t.IsPinned).ToArray()) CloseTab(other);
+            Activate(tab);
+        });
+        menu.ShowAt(element, new FlyoutShowOptions { Position = e.GetPosition(element) });
+    }
+
+    void TabAudio_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: BrowserTab { Core: { } c } }) c.IsMuted = !c.IsMuted;
     }
 
     void CloseTab_Click(object sender, RoutedEventArgs e)

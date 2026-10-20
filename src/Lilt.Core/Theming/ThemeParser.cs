@@ -18,16 +18,18 @@ public static class ThemeParser
 
     public static IReadOnlyDictionary<string, string[]> KnownKeys { get; } = new Dictionary<string, string[]>
     {
-        [""] = ["$schema", "schemaVersion", "name", "base", "backdrop", "colors", "typography", "shape", "density", "toolbar", "sidebar", "motion", "pages", "home"],
+        [""] = ["$schema", "schemaVersion", "name", "base", "backdrop", "colors", "typography", "shape", "density", "toolbar", "sidebar", "motion", "pages", "home", "power"],
         ["backdrop"] = ["material", "tint", "tintOpacity", "luminosityOpacity"],
         ["colors"] = ["background", "surface", "surfaceRaised", "border", "text", "textMuted", "accent", "onAccent", "hover", "pressed", "page"],
         ["typography"] = ["family", "size", "weight"],
         ["shape"] = ["radius", "controlRadius", "borderWidth"],
-        ["toolbar"] = ["height"],
-        ["sidebar"] = ["edge", "width", "height", "autoHide", "revealEdge", "hideDelay"],
+        ["toolbar"] = ["height", "items"],
+        ["sidebar"] = ["edge", "width", "height", "autoHide", "revealEdge", "hideDelay", "sections"],
         ["motion"] = ["animations", "duration"],
         ["pages"] = ["colorScheme"],
-        ["home"] = ["clock", "search", "tiles", "glass"],
+        // clock/search/tiles are the v0.2 switches, still read when "items" is absent.
+        ["home"] = ["items", "glass", "background", "clock", "search", "tiles"],
+        ["power"] = ["efficiency", "suspendMinutes", "hideWhenCovered"],
     };
 
     static readonly JsonDocumentOptions jsonOptions = new()
@@ -117,7 +119,7 @@ public static class ThemeParser
                 r.Num(sh, "borderWidth", 0, 4, d.Shape.BorderWidth));
 
             var tb = r.Section(root, "toolbar");
-            var toolbar = new ToolbarSpec(r.Num(tb, "height", 32, 64, d.Toolbar.Height));
+            var toolbar = new ToolbarSpec(r.Num(tb, "height", 32, 64, d.Toolbar.Height), r.List(tb, "items", ToolbarSpec.All, d.Toolbar.Items));
 
             var sb = r.Section(root, "sidebar");
             var ds = d.Sidebar;
@@ -127,7 +129,8 @@ public static class ThemeParser
                 r.Num(sb, "height", 32, 200, ds.Height),
                 r.Bool(sb, "autoHide", ds.AutoHide),
                 r.Num(sb, "revealEdge", 1, 32, ds.RevealEdge),
-                r.Int(sb, "hideDelay", 0, 5000, ds.HideDelay));
+                r.Int(sb, "hideDelay", 0, 5000, ds.HideDelay),
+                r.List(sb, "sections", SidebarSpec.All, ds.Sections));
 
             var mo = r.Section(root, "motion");
             var motion = new MotionSpec(
@@ -138,11 +141,18 @@ public static class ThemeParser
             var pages = new PagesSpec(r.Enum(pg, "colorScheme", d.Pages.ColorScheme));
 
             var hm = r.Section(root, "home");
-            var home = new HomeSpec(
-                r.Bool(hm, "clock", d.Home.Clock),
-                r.Bool(hm, "search", d.Home.Search),
-                r.Bool(hm, "tiles", d.Home.Tiles),
-                r.Bool(hm, "glass", d.Home.Glass));
+            var homeItems = d.Home.Items;
+            if (hm is { } h && !h.Element.TryGetProperty("items", out _) && new[] { "clock", "search", "tiles" }.Any(k => h.Element.TryGetProperty(k, out _)))
+                homeItems = new Ids(new[] { "clock", "search", "tiles" }.Where(k => r.Bool(hm, k, true)).ToArray());
+            else
+                homeItems = r.List(hm, "items", HomeSpec.All, d.Home.Items);
+            var home = new HomeSpec(homeItems, r.Bool(hm, "glass", d.Home.Glass), r.Background(hm, "background", d.Home.Background));
+
+            var pw = r.Section(root, "power");
+            var power = new PowerSpec(
+                r.Bool(pw, "efficiency", d.Power.Efficiency),
+                r.Int(pw, "suspendMinutes", 0, 240, d.Power.SuspendMinutes),
+                r.Bool(pw, "hideWhenCovered", d.Power.HideWhenCovered));
 
             // "backdrop" is either a material name or an object with tint settings.
             BackdropSpec backdrop;
@@ -173,7 +183,8 @@ public static class ThemeParser
                 sidebar,
                 motion,
                 pages,
-                home);
+                home,
+                power);
 
             return new ThemeLoadResult(theme, issues, false);
         }
@@ -246,6 +257,29 @@ public static class ThemeParser
             return Bad(path, max == int.MaxValue ? $"expected a whole number of at least {min}" : $"expected a whole number from {min} to {max}", fallback);
         }
 
+        // A list of known ids; unknown or repeated ids are dropped with a warning. An empty list is valid (everything hidden).
+        public Ids List(Obj? o, string key, string[] known, Ids fallback)
+        {
+            if (!Get(o, key, out var v, out var path)) return fallback;
+            if (v.ValueKind != JsonValueKind.Array) return Bad(path, $"expected a list drawn from: {string.Join(", ", known)}", fallback);
+            var items = new List<string>();
+            foreach (var e in v.EnumerateArray())
+            {
+                var id = e.ValueKind == JsonValueKind.String ? e.GetString() : null;
+                if (id is not null && Array.IndexOf(known, id) >= 0 && !items.Contains(id)) items.Add(id);
+                else issues.Add(new(path, $"{(id is null ? "a non-text entry" : $"\"{id}\"")} isn't one of: {string.Join(", ", known)}; skipped"));
+            }
+            return new Ids(items.ToArray());
+        }
+
+        // "", "hills", or a plain image file name in the newtab folder (no folders, so a theme can't point at other files).
+        public string Background(Obj? o, string key, string fallback)
+        {
+            if (!Get(o, key, out var v, out var path)) return fallback;
+            if (v.ValueKind == JsonValueKind.String && v.GetString() is { } s && IsBackground(s)) return s;
+            return Bad(path, "expected \"\", \"hills\" or an image file name like \"background.jpg\"", fallback);
+        }
+
         public bool Bool(Obj? o, string key, bool fallback)
         {
             if (!Get(o, key, out var v, out var path)) return fallback;
@@ -293,6 +327,11 @@ public static class ThemeParser
             return fallback;
         }
     }
+
+    public static bool IsBackground(string s) =>
+        s is "" or "hills"
+        || (s.Length <= 100 && s.IndexOfAny(['/', '\\', ':']) < 0 && !s.StartsWith('.')
+            && new[] { ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg" }.Contains(Path.GetExtension(s).ToLowerInvariant()));
 
     static string Join(string path, string key) => path.Length == 0 ? key : $"{path}.{key}";
 

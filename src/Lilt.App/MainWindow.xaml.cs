@@ -42,7 +42,7 @@ public sealed partial class MainWindow : Window
     ShellMetrics metrics;
     string backdropKey = "";
     string backdropNote = "";
-    bool sidebarShown, pointerInBand, fullScreen, firstNavigation = true;
+    bool sidebarShown, pointerInBand, fullScreen, hasDownloads, firstNavigation = true;
     int slideGeneration;
 
     CoreWebView2? core => active?.Core;
@@ -75,11 +75,16 @@ public sealed partial class MainWindow : Window
             SyncSidebar();
         };
         InitTabs();
+        InitPower();
+        var customizeKey = new KeyboardAccelerator { Key = (VirtualKey)188, Modifiers = VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift };
+        customizeKey.Invoked += Accelerator_Invoked;
+        Root.KeyboardAccelerators.Add(customizeKey);
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(Toolbar);
         appName = options.InPrivate ? "Lilt (InPrivate)" : "Lilt";
         AppWindow.Title = appName;
+        AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "lilt.ico"));
         WindowSizing.Place(this, 1280, 820);
 
         ApplyTheme(themes.Current, previous: null);
@@ -105,7 +110,7 @@ public sealed partial class MainWindow : Window
         ContentArea.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(Content_PointerPressed), true);
         ContentArea.AddHandler(UIElement.PointerExitedEvent, new PointerEventHandler(Content_PointerExited), true);
         ContentArea.SizeChanged += (_, e) => ContentArea.Clip = new RectangleGeometry { Rect = new Windows.Foundation.Rect(0, 0, e.NewSize.Width, e.NewSize.Height) };
-        foreach (var element in new FrameworkElement[] { Toolbar, NavPanel, AddressHost, ActionsPanel })
+        foreach (var element in new FrameworkElement[] { Toolbar, LeftPanel, AddressHost, RightPanel })
             element.SizeChanged += (_, _) => UpdateDragRegions();
         Root.Loaded += (_, _) =>
         {
@@ -216,7 +221,7 @@ public sealed partial class MainWindow : Window
         var tab = active;
         BackButton.IsEnabled = tab?.Core?.CanGoBack == true;
         ForwardButton.IsEnabled = tab?.Core?.CanGoForward == true;
-        var loading = tab?.IsLoadingPage == true;
+        var loading = tab?.IsLoading == true;
         ReloadIcon.Glyph = loading ? "" : "";
         ToolTipService.SetToolTip(ReloadButton, loading ? "Stop" : "Reload (F5)");
         AutomationProperties.SetName(ReloadButton, loading ? "Stop" : "Reload");
@@ -284,7 +289,7 @@ public sealed partial class MainWindow : Window
 
     void Reload_Click(object sender, RoutedEventArgs e)
     {
-        if (active?.IsLoadingPage == true) core?.Stop();
+        if (active?.IsLoading == true) core?.Stop();
         else core?.Reload();
     }
 
@@ -300,6 +305,8 @@ public sealed partial class MainWindow : Window
             VirtualKey.D when alt => "address",
             VirtualKey.D => "bookmark",
             VirtualKey.B => "sidebar",
+            VirtualKey.F when alt => "menu",
+            (VirtualKey)188 => "customize",
             VirtualKey.Left => "back",
             VirtualKey.Right => "forward",
             VirtualKey.F5 or VirtualKey.R => "reload",
@@ -333,6 +340,8 @@ public sealed partial class MainWindow : Window
                 AddressBox.SelectAll();
                 break;
             case "sidebar": ToggleSidebar(keyboard); break;
+            case "menu": ShowFlyout(MainMenu, MenuButton, MenuHost); break;
+            case "customize": ShowCustomize(); break;
             case "bookmark": ToggleBookmark(); break;
             case "back": core?.GoBack(); break;
             case "forward": core?.GoForward(); break;
@@ -383,12 +392,44 @@ public sealed partial class MainWindow : Window
 
     void Print_Click(object sender, RoutedEventArgs e) => core?.ShowPrintUI(CoreWebView2PrintDialogKind.Browser);
     void DevTools_Click(object sender, RoutedEventArgs e) => core?.OpenDevToolsWindow();
-    void CustomizeMenu_Click(object sender, RoutedEventArgs e) => CustomizeFlyout.ShowAt(CustomizeButton);
+    void CustomizeMenu_Click(object sender, RoutedEventArgs e) => ShowCustomize();
+    void CustomizeButton_Click(object sender, RoutedEventArgs e) => ShowCustomize();
+    void MenuButton_Click(object sender, RoutedEventArgs e) => ShowFlyout(MainMenu, MenuButton, MenuHost);
 
-    void DownloadsMenu_Click(object sender, RoutedEventArgs e)
+    void ShowCustomize(string? page = null)
     {
-        DownloadsButton.Visibility = Visibility.Visible;
-        DownloadsFlyout.ShowAt(DownloadsButton);
+        if (page is not null) foreach (var item in CustomizeTabs.Items) item.IsSelected = (string)item.Tag == page;
+        ShowFlyout(CustomizeFlyout, CustomizeButton, CustomizeHost);
+    }
+
+    // Toolbar buttons can be moved or removed, so flyouts open at their button when it's showing, otherwise at the toolbar's edge.
+    static void ShowFlyout(FlyoutBase flyout, FrameworkElement button, FrameworkElement fallback) =>
+        flyout.ShowAt(button.Parent is not null && button.Visibility == Visibility.Visible ? button : fallback);
+
+    void DownloadsMenu_Click(object sender, RoutedEventArgs e) => ShowFlyout(DownloadsFlyout, DownloadsButton, FlyoutHost);
+
+    // toolbar.items decides order and visibility: ids before "address" go left of it, the rest right.
+    void ArrangeToolbar(Ids items)
+    {
+        var map = new Dictionary<string, FrameworkElement>
+        {
+            ["back"] = BackButton, ["forward"] = ForwardButton, ["reload"] = ReloadButton, ["home"] = HomeButton,
+            ["bookmark"] = StarButton, ["downloads"] = DownloadsButton, ["extensions"] = ExtensionsButton,
+            ["customize"] = CustomizeButton, ["sidebar"] = SidebarButton, ["menu"] = MenuButton,
+        };
+        LeftPanel.Children.Clear();
+        RightPanel.Children.Clear();
+        var split = items.IndexOf("address");
+        if (split < 0) split = items.Items.Count;
+        for (var i = 0; i < items.Items.Count; i++)
+            if (map.TryGetValue(items.Items[i], out var element)) (i < split ? LeftPanel : RightPanel).Children.Add(element);
+        foreach (var (id, element) in map)
+        {
+            var shown = items.Has(id) && (id != "downloads" || hasDownloads) && (id != "extensions" || engine.ExtensionsEnabled);
+            element.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
+        }
+        AddressHost.Visibility = items.Has("address") ? Visibility.Visible : Visibility.Collapsed;
+        UpdateDragRegions();
     }
 
     void MainMenu_Opening(object sender, object e) => FillImportMenu(ImportMenu.Items);
@@ -413,7 +454,8 @@ public sealed partial class MainWindow : Window
         Toolbar.Height = m.ToolbarHeight;
         Toolbar.Padding = new Thickness(m.Unit, 0, 0, 0);
         Toolbar.BorderThickness = new Thickness(0, 0, 0, t.Shape.BorderWidth);
-        NavPanel.Spacing = ActionsPanel.Spacing = Math.Max(2, m.Unit / 2);
+        LeftPanel.Spacing = RightPanel.Spacing = Math.Max(2, m.Unit / 2);
+        ArrangeToolbar(t.Toolbar.Items);
         AddressHost.Margin = new Thickness(m.Unit, 0, m.Unit, 0);
         foreach (var b in ChromeButtons()) StyleButton(b);
 
@@ -447,6 +489,7 @@ public sealed partial class MainWindow : Window
 
         ThemeName.Text = $"{t.Name} · {(t.Base == ThemeBase.Light ? "light" : "dark")}";
         WriteHomeData();
+        UpdatePower();
         UpdateDragRegions();
     }
 
@@ -459,7 +502,7 @@ public sealed partial class MainWindow : Window
 
     Control[] ChromeButtons() =>
     [
-        BackButton, ForwardButton, ReloadButton, HomeButton, StarButton, DownloadsButton, CustomizeButton, SidebarButton, MenuButton,
+        BackButton, ForwardButton, ReloadButton, HomeButton, StarButton, DownloadsButton, ExtensionsButton, CustomizeButton, SidebarButton, MenuButton,
         NewTabButton, BookmarkImportButton, EdgeLeft, EdgeRight, EdgeTop, EdgeBottom, PinToggle,
         ReloadThemeButton, EditThemeButton, DataFolderButton, UserContentButton, MeasureButton,
     ];
@@ -624,25 +667,36 @@ public sealed partial class MainWindow : Window
             _ => VerticalAlignment.Stretch,
         };
 
-        // Vertical: tabs, bookmarks, then the layout buttons stacked. Horizontal: a tab strip with the layout buttons at the end.
+        // sidebar.sections sets the order and which sections show. Vertical: stacked, the tab list (or else the bookmark
+        // list) takes the spare height. Horizontal: a strip; bookmarks don't fit a strip and stay hidden there.
         var u = metrics.Unit;
         SidebarGrid.RowDefinitions.Clear();
         SidebarGrid.ColumnDefinitions.Clear();
         SidebarGrid.Padding = vertical ? new Thickness(u * 1.5) : new Thickness(u, 0, u, 0);
         SidebarGrid.RowSpacing = SidebarGrid.ColumnSpacing = u;
-        FrameworkElement[] parts = [TabsHeader, TabList, BookmarksPanel, SidebarFooter];
+        var sections = spec.Sections;
+        var showTabs = sections.Has("tabs");
+        var showBookmarks = vertical && sections.Has("bookmarks");
         var star = new GridLength(1, GridUnitType.Star);
-        var sizes = vertical
-            ? new[] { GridLength.Auto, star, GridLength.Auto, GridLength.Auto }
-            : new[] { GridLength.Auto, star, new GridLength(0), GridLength.Auto };
-        for (var i = 0; i < parts.Length; i++)
+        var slots = new List<(FrameworkElement Part, GridLength Size)>();
+        foreach (var id in sections.Items)
         {
-            if (vertical) SidebarGrid.RowDefinitions.Add(new RowDefinition { Height = sizes[i] });
-            else SidebarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = sizes[i] });
-            Grid.SetRow(parts[i], vertical ? i : 0);
-            Grid.SetColumn(parts[i], vertical ? 0 : i);
+            if (id == "tabs") slots.AddRange([(TabsHeader, GridLength.Auto), (TabList, star)]);
+            else if (id == "bookmarks" && showBookmarks) slots.Add((BookmarksPanel, showTabs ? GridLength.Auto : star));
+            else if (id == "layout") slots.Add((SidebarFooter, GridLength.Auto));
         }
-        BookmarksPanel.Visibility = vertical ? Visibility.Visible : Visibility.Collapsed;
+        for (var i = 0; i < slots.Count; i++)
+        {
+            if (vertical) SidebarGrid.RowDefinitions.Add(new RowDefinition { Height = slots[i].Size });
+            else SidebarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = slots[i].Size });
+            Grid.SetRow(slots[i].Part, vertical ? i : 0);
+            Grid.SetColumn(slots[i].Part, vertical ? 0 : i);
+        }
+        TabsHeader.Visibility = TabList.Visibility = showTabs ? Visibility.Visible : Visibility.Collapsed;
+        BookmarksPanel.Visibility = showBookmarks ? Visibility.Visible : Visibility.Collapsed;
+        SidebarFooter.Visibility = sections.Has("layout") ? Visibility.Visible : Visibility.Collapsed;
+        BookmarkList.MaxHeight = showTabs ? 300 : double.PositiveInfinity;
+        BookmarksPanel.RowDefinitions[2].Height = showTabs ? GridLength.Auto : new GridLength(1, GridUnitType.Star);
         TabsTitle.Visibility = vertical ? Visibility.Visible : Visibility.Collapsed;
         TabsHeader.VerticalAlignment = SidebarFooter.VerticalAlignment = vertical ? VerticalAlignment.Stretch : VerticalAlignment.Center;
         SetTabStripOrientation(vertical);
@@ -846,7 +900,7 @@ public sealed partial class MainWindow : Window
         var scale = root.RasterizationScale;
         CaptionColumn.Width = new GridLength(AppWindow.TitleBar.RightInset / scale);
         var rects = new List<RectInt32>();
-        foreach (var element in new FrameworkElement[] { NavPanel, AddressHost, ActionsPanel })
+        foreach (var element in new FrameworkElement[] { LeftPanel, AddressHost, RightPanel })
         {
             if (element.ActualWidth <= 0 || element.Visibility != Visibility.Visible) continue;
             var b = element.TransformToVisual(null).TransformBounds(new Windows.Foundation.Rect(0, 0, element.ActualWidth, element.ActualHeight));
