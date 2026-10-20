@@ -4,7 +4,7 @@ Scope: v0.4 adds the now-playing player, the visualizer, picture in picture with
 
 ## Build and verification
 
-Every push builds a self-contained ReadyToRun x64 package on Windows CI (Windows Server 2025), runs the core tests, and launches the build through a set of scenarios with feature checks and screenshots; tags `v*` publish a release. Package: 89.7 MB zipped, 246.9 MB unpacked.
+Release build: commit tagged `v0.4.0`; the same commit's [prototype run](https://github.com/wyattjallen-svg/Lilt/actions/runs/39496781108) passed all 24 feature checks and produced the measurements below. Every push builds a self-contained ReadyToRun x64 package on Windows CI (Windows Server 2025), runs the core tests, and launches the build through a set of scenarios with feature checks and screenshots; tags `v*` publish a release. Package: 89.7 MB zipped, 246.9 MB unpacked.
 
 New features are driven by `--run` scripts (commands, waits and `state` snapshots of what's on screen) against a local test page that plays a looping tone with media-session metadata next to a silent animated video, so the checks don't depend on outside sites.
 
@@ -32,18 +32,19 @@ Bugs CI caught in this round: selecting the first tab at startup laid out pages 
 
 | Scenario | Private bytes | Working set | CPU, % of one core | Power level |
 |---|---|---|---|---|
-| `about:blank`, first start (installs uBlock Origin Lite) | 173.7 MB | 449.7 MB | 0.2% | Full |
-| `about:blank`, no extensions | 144.9 MB | 414.8 MB | 0.4% | Full |
-| Animated page, in front | 266.0 MB | 570.6 MB | 7–20% (varies by run) | Full |
-| Animated page, behind another app's maximized window | 161.1 MB | 72.3 MB | 0.6–2.9% | Hidden |
-| Animated page, behind a full-screen window | 162.3 MB | 61.9 MB | 0.3–0.6% | Paused |
-| Animated page, behind a full-screen window, efficiency mode off | 259.3 MB | 560.6 MB | 0.7–0.8% | (off) |
+| `about:blank`, first start (installs uBlock Origin Lite) | 173.1 MB | 448.0 MB | 0.3% | Full |
+| `about:blank`, no extensions | 144.4 MB | 412.2 MB | 0.2% | Full |
+| Animated page, in front | 264.5 MB | 562.4 MB | 9.7% (7–20% across runs) | Full |
+| Animated page, behind another app's maximized window | 160.8 MB | 95.9 MB | 0.5% | Hidden |
+| Animated page, minimized | 160.5 MB | 56.7 MB | 0.2% | Paused |
+| Animated page, behind a full-screen window | 161.5 MB | 61.4 MB | 0.2% | Paused |
+| Animated page, behind a full-screen window, efficiency mode off | 282.2 MB | 579.3 MB | 0.8% | (off) |
 
 Reading these:
 
-- Windows and Chromium already stop most drawing for a covered window (0.8% CPU with efficiency mode off). What efficiency mode adds is memory: behind another window Lilt's whole process tree drops from about 560 MB to 95 MB resident (Hidden) or 61 MB (Paused), and about 100 MB of private memory is released, so a game in front gets that RAM back. Everything returns when Lilt comes to the front; Hidden pages aren't suspended, so they repaint at once.
+- Windows and Chromium already stop most drawing for a covered window (0.8% CPU with efficiency mode off). What efficiency mode adds is memory: Lilt's whole process tree drops from about 560–580 MB resident to 96 MB behind another window (Hidden) and about 60 MB minimized or behind a game (Paused), and 100–120 MB of private memory is released, so whatever is in front gets that RAM back. Everything returns when Lilt comes to the front; Hidden pages aren't suspended, so they repaint at once.
 - CPU in front is the animated page itself (software rendering); Lilt's own UI process idles near zero, and its drawing (visualizer, player clock) stops whenever the window can't be seen.
-- Minimized: the measurement exposed that a window minimized with nothing else to activate stays the foreground window and never got deactivated, so Lilt didn't pause; v0.4.0 checks on minimize itself and keeps its timer running whenever it isn't in front. The prototype build's `measure-minimized.md` has the numbers after the fix.
+- Minimized: the first measurement exposed that a window minimized with nothing else to activate stays the foreground window and never got deactivated, so Lilt didn't pause (555 MB working set). v0.4.0 checks on minimize itself and keeps its timer running whenever it isn't in front: 57 MB.
 
 ## Testing this build
 
