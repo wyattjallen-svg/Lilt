@@ -59,6 +59,7 @@ sealed class BrowserEngine
             e.stopImmediatePropagation();
             send(cmd);
           }, true);
+          send('ready');
         })();
         """;
 
@@ -87,6 +88,8 @@ sealed class BrowserEngine
     public event Action<Notice>? Noticed;
     public event Action<CoreWebView2DownloadOperation>? DownloadStarted;
     public event Action<CoreWebView2, string>? KeyCommand;
+    // Diagnostics for the startup report (CI only).
+    public event Action<string>? Trace;
 
     // Set by the main window: open a page-requested window as a tab (returns its not-yet-navigated core), or open a URL in a new tab.
     public Func<Task<CoreWebView2>>? OpenTabForPage { get; set; }
@@ -176,7 +179,7 @@ sealed class BrowserEngine
         }
     }
 
-    static async Task AddKeyShimToDocumentAsync(CoreWebView2 core)
+    async Task AddKeyShimToDocumentAsync(CoreWebView2 core)
     {
         try
         {
@@ -185,16 +188,18 @@ sealed class BrowserEngine
             using var world = JsonDocument.Parse(await core.CallDevToolsProtocolMethodAsync("Page.createIsolatedWorld", JsonSerializer.Serialize(new { frameId, worldName = "lilt" })));
             var context = world.RootElement.GetProperty("executionContextId").GetInt32();
             await core.CallDevToolsProtocolMethodAsync("Runtime.addBinding", JsonSerializer.Serialize(new { name = "__liltKey", executionContextId = context }));
-            await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", JsonSerializer.Serialize(new { expression = KeyScript, contextId = context }));
+            var result = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", JsonSerializer.Serialize(new { expression = KeyScript, contextId = context }));
+            Trace?.Invoke($"shim context {context}: {result}");
         }
         catch (Exception e) when (e.Message.Contains("-3260", StringComparison.Ordinal))
         {
             // Protocol errors (a method or parameter Chromium no longer accepts) are bugs worth logging.
             LiltPaths.LogError(e);
         }
-        catch (Exception)
+        catch (Exception e)
         {
             // The document went away mid-setup (navigation, closed tab); the next one gets its own attempt.
+            Trace?.Invoke($"shim failed: {e.Message}");
         }
     }
 

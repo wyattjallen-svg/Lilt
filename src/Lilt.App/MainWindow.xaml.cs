@@ -96,6 +96,7 @@ public sealed partial class MainWindow : Window
         {
             if (tabs.Any(t => t.Core == sender)) RunCommand(command);
         };
+        engine.Trace += message => report.Key("trace", message);
         engine.OpenTabForPage = OpenTabForPageAsync;
         engine.OpenUrlInTab = url => AddTab(url);
         AdBlockMenuItem.Visibility = ExtensionsMenuItem.Visibility = engine.ExtensionsEnabled ? Visibility.Visible : Visibility.Collapsed;
