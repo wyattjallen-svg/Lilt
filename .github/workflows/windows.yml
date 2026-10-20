@@ -299,7 +299,7 @@ jobs:
           (Get-Content out/Lilt/Themes/minimal.json -Raw) -replace '"search": "duckduckgo"', '"search": "google"' | Set-Content $gt
           # The middle-click is real mouse input on the page's link, placed from the link's position the script reports.
           $script = "wait 3000; import $csv; wait 1500; state; mark import; wait 1000; go example.com; wait 4000; newTab; wait 1500; type exa; wait 1500; state; mark suggest; wait 1000; " +
-            "prevTab; wait 2000; eval (document.querySelector('a').scrollIntoView({block: 'center'}), JSON.stringify(document.querySelector('a').getBoundingClientRect())); wait 500; state; mark click; wait 4000; state; mark behind; wait 500; " +
+            "prevTab; dismiss; wait 2000; eval (document.querySelector('a').scrollIntoView({block: 'center'}), JSON.stringify(document.querySelector('a').getBoundingClientRect())); wait 500; state; mark click; wait 4000; state; mark behind; wait 500; " +
             "go lilt browser; wait 3000; state"
           [void](Smoke 'everyday' @('--theme', "`"$gt`"", '--run', "`"$script`"") {
             param($p)

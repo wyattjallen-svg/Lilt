@@ -230,6 +230,7 @@ public sealed partial class MainWindow : Window
                         break;
                     case "import": Import(arg, Path.GetFileName(arg)); break;
                     case "go": Go(arg); break;
+                    case "dismiss": NoticeBar.IsOpen = false; break;
                     case "mark": break;
                     default: RunCommand(verb, "run"); break;
                 }
