@@ -317,6 +317,13 @@ public sealed partial class MainWindow
     // A tab strip along the top or bottom; a list down the side.
     void SetTabStripOrientation(bool vertical)
     {
+        if (tabStripSet && vertical == verticalTabs)
+        {
+            foreach (var tab in tabs)
+                if (TabList.ContainerFromItem(tab) is ListViewItem existing) SizeTab(existing, tab);
+            return;
+        }
+        tabStripSet = true;
         TabList.ItemsPanel = (ItemsPanelTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(vertical
             ? "<ItemsPanelTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'><ItemsStackPanel Orientation='Vertical'/></ItemsPanelTemplate>"
             : "<ItemsPanelTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'><ItemsStackPanel Orientation='Horizontal'/></ItemsPanelTemplate>");
@@ -332,7 +339,7 @@ public sealed partial class MainWindow
             if (TabList.ContainerFromItem(tab) is ListViewItem item) SizeTab(item, tab);
     }
 
-    bool verticalTabs = true;
+    bool verticalTabs = true, tabStripSet;
 
     void SizeTabItem(ListViewBase sender, ContainerContentChangingEventArgs e)
     {

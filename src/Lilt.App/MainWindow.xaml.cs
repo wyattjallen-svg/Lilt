@@ -412,8 +412,15 @@ public sealed partial class MainWindow : Window
     void DownloadsMenu_Click(object sender, RoutedEventArgs e) => ShowFlyout(DownloadsFlyout, DownloadsButton, FlyoutHost);
 
     // toolbar.items decides order and visibility: ids before "address" go left of it, the rest right.
+    Ids? arrangedItems;
+    bool arrangedDownloads;
+
     void ArrangeToolbar(Ids items)
     {
+        // Theme changes arrive many times a second while a slider moves; only rebuild when the arrangement changed.
+        if (items.Equals(arrangedItems) && arrangedDownloads == hasDownloads) return;
+        arrangedItems = items;
+        arrangedDownloads = hasDownloads;
         var map = new Dictionary<string, FrameworkElement>
         {
             ["back"] = BackButton, ["forward"] = ForwardButton, ["reload"] = ReloadButton, ["home"] = HomeButton,
