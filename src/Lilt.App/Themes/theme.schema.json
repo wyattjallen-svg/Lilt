@@ -193,8 +193,11 @@
               "home",
               "address",
               "bookmark",
+              "media",
+              "split",
               "downloads",
               "extensions",
+              "palette",
               "customize",
               "sidebar",
               "menu"
@@ -285,6 +288,10 @@
             "dark"
           ],
           "description": "The prefers-color-scheme websites see. theme follows base; auto follows Windows."
+        },
+        "peek": {
+          "type": "boolean",
+          "description": "Shift+click a link to preview it in a panel over the page."
         }
       }
     },
@@ -348,6 +355,461 @@
         "hideWhenCovered": {
           "type": "boolean",
           "description": "Pause the visible page while a full-screen app or game covers Lilt's screen."
+        },
+        "hideWhenOccluded": {
+          "type": "boolean",
+          "description": "Hide (throttle, without suspending) the page while another window completely covers Lilt."
+        },
+        "lean": {
+          "type": "boolean",
+          "description": "Use less memory: Chromium's low-end-device mode and one process per site. Takes effect after a restart."
+        }
+      }
+    },
+    "media": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Now-playing panel, visualizer and media keys.",
+      "properties": {
+        "player": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "show": {
+              "enum": [
+                "auto",
+                "always",
+                "never"
+              ],
+              "description": "auto: the player while something plays, the visualizer while a music site plays."
+            },
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Left edge as a fraction of the page area."
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Top edge as a fraction of the page area."
+            },
+            "width": {
+              "type": "number",
+              "minimum": 120,
+              "maximum": 900
+            },
+            "height": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600,
+              "description": "0 fits the content."
+            },
+            "opacity": {
+              "type": "number",
+              "minimum": 0.2,
+              "maximum": 1
+            }
+          }
+        },
+        "visualizer": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "show": {
+              "enum": [
+                "auto",
+                "always",
+                "never"
+              ],
+              "description": "auto: the player while something plays, the visualizer while a music site plays."
+            },
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Left edge as a fraction of the page area."
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Top edge as a fraction of the page area."
+            },
+            "width": {
+              "type": "number",
+              "minimum": 120,
+              "maximum": 900
+            },
+            "height": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600,
+              "description": "0 fits the content."
+            },
+            "opacity": {
+              "type": "number",
+              "minimum": 0.2,
+              "maximum": 1
+            }
+          }
+        },
+        "pip": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "show": {
+              "enum": [
+                "auto",
+                "always",
+                "never"
+              ],
+              "description": "auto: Windows' floating window when available, otherwise inside Lilt. always: always inside Lilt. never: off."
+            },
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Left edge as a fraction of the page area."
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Top edge as a fraction of the page area."
+            },
+            "width": {
+              "type": "number",
+              "minimum": 120,
+              "maximum": 900
+            },
+            "height": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 600,
+              "description": "0 keeps 16:9."
+            },
+            "opacity": {
+              "type": "number",
+              "minimum": 0.2,
+              "maximum": 1
+            }
+          }
+        },
+        "bars": {
+          "type": "integer",
+          "minimum": 4,
+          "maximum": 96
+        },
+        "style": {
+          "enum": [
+            "bars",
+            "mirror",
+            "wave"
+          ]
+        },
+        "source": {
+          "enum": [
+            "auto",
+            "system",
+            "page"
+          ],
+          "description": "system listens to Lilt's own audio (every site); page reads the playing tab (not DRM sites); auto tries system first."
+        },
+        "mediaKeys": {
+          "type": "boolean",
+          "description": "Keyboard media keys and the Windows media flyout control Lilt's tabs. Takes effect after a restart."
+        },
+        "autoPictureInPicture": {
+          "type": "boolean",
+          "description": "Pop a playing video out to picture-in-picture when you switch to another tab."
+        },
+        "musicSites": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Sites where the visualizer shows automatically."
+        }
+      }
+    },
+    "split": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Split view.",
+      "properties": {
+        "orientation": {
+          "enum": [
+            "horizontal",
+            "vertical"
+          ],
+          "description": "horizontal: side by side; vertical: stacked."
+        },
+        "ratio": {
+          "type": "number",
+          "minimum": 0.15,
+          "maximum": 0.85,
+          "description": "The first pane's share."
+        },
+        "gap": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 24
+        }
+      }
+    },
+    "shortcuts": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Keyboard shortcuts: \"Ctrl+Shift+K\", a list of them, or \"\" for none. Letters need Ctrl or Alt.",
+      "properties": {
+        "newTab": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "reopenTab": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "closeTab": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "nextTab": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "prevTab": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "address": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "back": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "forward": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "reload": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "home": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "bookmark": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "sidebar": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "menu": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "customize": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "palette": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "split": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "media": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "visualizer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "pip": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
         }
       }
     }

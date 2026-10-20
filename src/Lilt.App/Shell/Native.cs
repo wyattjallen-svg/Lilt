@@ -29,6 +29,8 @@ static class Native
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] static extern IntPtr GetWindowLongPtr(IntPtr window, int index);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr window, char[] name, int max);
+    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr window);
+    [DllImport("kernel32.dll")] static extern bool SetProcessWorkingSetSizeEx(IntPtr process, IntPtr min, IntPtr max, uint flags);
 
     [StructLayout(LayoutKind.Sequential)]
     struct Rect
@@ -71,6 +73,28 @@ static class Native
         return front != IntPtr.Zero && GetWindowThreadProcessId(front, out var pid) != 0 && pid == Environment.ProcessId;
     }
 
+    static bool IsShell(IntPtr window)
+    {
+        var name = new char[64];
+        return new string(name, 0, GetClassName(window, name, name.Length)) is "Progman" or "WorkerW" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd";
+    }
+
+    // True when the window in front (another app's) completely covers this one.
+    public static bool IsOccluded(IntPtr window)
+    {
+        var front = GetForegroundWindow();
+        if (front == IntPtr.Zero || front == window || IsIconic(front) || IsShell(front)) return false;
+        if (!GetWindowRect(front, out var f) || !GetWindowRect(window, out var w)) return false;
+        return Lilt.Core.PowerPolicy.Covers((f.Left, f.Top, f.Right, f.Bottom), (w.Left, w.Top, w.Right, w.Bottom));
+    }
+
+    // Hands memory Lilt's own process isn't using back to Windows (it pages back in if needed), after a garbage collection.
+    public static void TrimMemory()
+    {
+        GC.Collect(2, GCCollectionMode.Optimized, blocking: false);
+        SetProcessWorkingSetSizeEx(GetCurrentProcess(), -1, -1, 0);
+    }
+
     // True when the session is locked, or a full-screen app (a game, a presentation, a full-screen video player)
     // is in front on the same monitor as this window. Same signals Chromium uses: the shell's notification state, plus
     // a frameless foreground window that exactly covers its monitor (borderless games often only show up this way).
@@ -86,9 +110,7 @@ static class Native
         if (monitor != MonitorFromWindow(window, nearest)) return false;
         if (state is busy or direct3dFullScreen or presentation) return true;
 
-        var name = new char[64];
-        var cls = new string(name, 0, GetClassName(front, name, name.Length));
-        if (cls is "Progman" or "WorkerW" or "Shell_TrayWnd") return false;
+        if (IsShell(front)) return false;
         var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
         if (!GetWindowRect(front, out var r) || !GetMonitorInfo(monitor, ref info)) return false;
         var m = info.Monitor;

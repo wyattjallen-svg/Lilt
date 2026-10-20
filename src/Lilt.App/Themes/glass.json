@@ -25,11 +25,24 @@
   "density": "standard",
   "toolbar": {
     "height": 40,
-    "items": ["back", "forward", "reload", "home", "address", "bookmark", "downloads", "extensions", "customize", "sidebar", "menu"]
+    "items": ["back", "forward", "reload", "home", "address", "bookmark", "media", "downloads", "extensions", "customize", "sidebar", "menu"]
   },
   "sidebar": { "edge": "left", "width": 220, "height": 44, "autoHide": false, "revealEdge": 6, "hideDelay": 350, "sections": ["tabs", "bookmarks", "layout"] },
   "motion": { "animations": true, "duration": 160 },
-  "pages": { "colorScheme": "theme" },
+  "pages": { "colorScheme": "theme", "peek": true },
   "home": { "items": ["logo", "search", "tiles", "gear"], "glass": true, "background": "hills" },
-  "power": { "efficiency": true, "suspendMinutes": 5, "hideWhenCovered": true }
+  "power": { "efficiency": true, "suspendMinutes": 5, "hideWhenCovered": true, "hideWhenOccluded": true, "lean": false },
+  // The "now playing" panel and visualizer float over the page; drag them anywhere (x and y are fractions of the page area).
+  "media": {
+    "player": { "show": "auto", "x": 0.66, "y": 0.74, "width": 300, "height": 0, "opacity": 1 },
+    "visualizer": { "show": "auto", "x": 0.66, "y": 0.6, "width": 300, "height": 72, "opacity": 0.9 },
+    // Videos popped out (Alt+P): "auto" uses Windows' floating window when it can, "always" keeps them inside Lilt.
+    "pip": { "show": "auto", "x": 0.6, "y": 0.55, "width": 400, "height": 0, "opacity": 1 },
+    "bars": 32, "style": "bars", "source": "auto", "mediaKeys": true, "autoPictureInPicture": false,
+    "musicSites": ["music.youtube.com", "open.spotify.com", "soundcloud.com", "music.apple.com", "listen.tidal.com", "www.deezer.com",
+      "bandcamp.com", "www.pandora.com", "music.amazon.com", "www.mixcloud.com", "tunein.com", "radio.garden"]
+  },
+  "split": { "orientation": "horizontal", "ratio": 0.5, "gap": 6 },
+  // Change any shortcut: "command": "Ctrl+Shift+K", a list, or "" for none. Commands left out keep their defaults.
+  "shortcuts": {}
 }

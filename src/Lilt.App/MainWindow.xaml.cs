@@ -53,11 +53,11 @@ public sealed partial class MainWindow : Window
         report = new StartupReport(options.StartupReportPath);
         paths = LiltPaths.Resolve(options.UserDataDir);
         var queue = DispatcherQueue.GetForCurrentThread();
-        engine = new BrowserEngine(new EngineOptions(paths.WebView2, paths.PrepareNewTab(), paths.PrepareUserContent(), paths.Extensions,
-            options.InPrivate, options.UserAgent, options.BrowserArgs, !options.NoExtensions), queue);
-
         themes = new ThemeService(paths.PrepareTheme(options.ThemePath), queue);
         var load = themes.Load();
+        // Media keys and lean mode are browser switches, fixed for the engine's lifetime.
+        engine = new BrowserEngine(new EngineOptions(paths.WebView2, paths.PrepareNewTab(), paths.PrepareUserContent(), paths.Extensions,
+            options.InPrivate, options.UserAgent, options.BrowserArgs, !options.NoExtensions, themes.Current.Media.MediaKeys, themes.Current.Power.Lean), queue);
         var typography = themes.Current.Typography;
         Application.Current.Resources["ContentControlThemeFontFamily"] = new FontFamily(typography.Family);
         Application.Current.Resources["ControlContentThemeFontSize"] = typography.Size;
@@ -76,9 +76,7 @@ public sealed partial class MainWindow : Window
         };
         InitTabs();
         InitPower();
-        var customizeKey = new KeyboardAccelerator { Key = (VirtualKey)188, Modifiers = VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift };
-        customizeKey.Invoked += Accelerator_Invoked;
-        Root.KeyboardAccelerators.Add(customizeKey);
+        InitMedia();
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(Toolbar);
@@ -99,7 +97,13 @@ public sealed partial class MainWindow : Window
         engine.DownloadStarted += OnDownloadStarted;
         engine.KeyCommand += (sender, command) =>
         {
-            if (tabs.Any(t => t.Core == sender)) RunCommand(command);
+            if (sender == peekCore) RunCommand(command is "escape" or "closeTab" ? "closePeek" : command, "peek");
+            else if (tabs.Any(t => t.Core == sender)) RunCommand(command, "page");
+        };
+        engine.PeekRequested += (sender, url) =>
+        {
+            if (sender == peekCore) sender.Navigate(url);
+            else if (tabs.Any(t => t.Core == sender)) ShowPeek(url);
         };
         engine.Trace += message => report.Key("trace", message);
         engine.OpenTabForPage = OpenTabForPageAsync;
@@ -169,7 +173,57 @@ public sealed partial class MainWindow : Window
         if (active is { View: null, Loading: null } other) Load(other);
         if (tab.IsHome && tab == active) AddressBox.Focus(FocusState.Programmatic);
         if (startProblem is not null) ShowNotice(new(startProblem, NoticeKind.Warning));
+        if (options.Run is { } script) await RunScriptAsync(script);
     }
+
+    // --run: commands separated by ";". Besides any command name: wait <ms>, open <address>, peek <url>,
+    // eval <script in Lilt's page world>, probe (what this PC's engine supports) and state (what's on screen), for tests.
+    async Task RunScriptAsync(string script)
+    {
+        foreach (var step in script.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var space = step.IndexOf(' ');
+            var (verb, arg) = space > 0 ? (step[..space], step[(space + 1)..].Trim()) : (step, "");
+            report.Key("run", step);
+            try
+            {
+                switch (verb)
+                {
+                    case "wait": await Task.Delay(Math.Clamp(int.TryParse(arg, out var ms) ? ms : 500, 0, 120000)); break;
+                    case "open": AddTab(AddressResolver.Resolve(arg).Uri?.AbsoluteUri ?? BrowserEngine.NewTabUri.AbsoluteUri); break;
+                    case "peek": ShowPeek(arg); break;
+                    case "eval": report.Key("eval", (core is { } c ? await engine.EvaluateAsync(c, arg, userGesture: true) : null) ?? "null"); break;
+                    case "probe": await ProbeAsync(); break;
+                    case "state": report.Key("state", State()); break;
+                    case "mark": break;
+                    default: RunCommand(verb, "run"); break;
+                }
+            }
+            catch (Exception e)
+            {
+                report.Key("run", $"failed: {e.Message}");
+            }
+        }
+        report.Key("run", "done");
+    }
+
+    string State() => System.Text.Json.JsonSerializer.Serialize(new
+    {
+        tabs = tabs.Count,
+        active = active is null ? -1 : tabs.IndexOf(active),
+        split = active is not null && Partner(active) is { } p ? tabs.IndexOf(p) : -1,
+        floating = floating is null ? -1 : tabs.IndexOf(floating),
+        peek = PeekOpen,
+        palette = PaletteFlyout.IsOpen,
+        player = MediaWidget.Visibility == Visibility.Visible,
+        visualizer = VisualizerWidget.Visibility == Visibility.Visible,
+        visualizerSource = loopback is not null ? "system" : captureCore is not null ? "page" : "none",
+        visualizerFrames = vizFrames,
+        visualizerPeak = Math.Round(vizPeak, 3),
+        media = mediaTab?.Media is { } m ? new { m.Title, m.Artist, m.Playing, m.Video, m.Duration, m.PictureInPicture } : null,
+        power = powerLevel.ToString(),
+        shortcuts = Root.KeyboardAccelerators.Count,
+    });
 
     async Task SetUpAdBlockAsync(CoreWebView2Profile profile)
     {
@@ -293,48 +347,65 @@ public sealed partial class MainWindow : Window
         else core?.Reload();
     }
 
-    // Shortcuts work both from Lilt's chrome (keyboard accelerators) and from inside pages (the engine's key shim).
-    void Accelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
+    // Shortcuts come from the theme's "shortcuts" block. They work both from Lilt's chrome (keyboard accelerators,
+    // rebuilt when the block changes) and from inside pages (page.js, through the engine).
+    ShortcutMap? appliedKeys;
+
+    void ApplyShortcuts(ShortcutMap map)
     {
-        var ctrl = sender.Modifiers.HasFlag(VirtualKeyModifiers.Control);
-        var shift = sender.Modifiers.HasFlag(VirtualKeyModifiers.Shift);
-        var alt = sender.Modifiers.HasFlag(VirtualKeyModifiers.Menu);
-        var command = sender.Key switch
+        if (map.Equals(appliedKeys)) return;
+        appliedKeys = map;
+        engine.SetShortcuts(map);
+        Root.KeyboardAccelerators.Clear();
+        void Add(string command, bool ctrl, bool shift, bool alt, int key)
         {
-            VirtualKey.L or VirtualKey.F6 => "address",
-            VirtualKey.D when alt => "address",
-            VirtualKey.D => "bookmark",
-            VirtualKey.B => "sidebar",
-            VirtualKey.F when alt => "menu",
-            (VirtualKey)188 => "customize",
-            VirtualKey.Left => "back",
-            VirtualKey.Right => "forward",
-            VirtualKey.F5 or VirtualKey.R => "reload",
-            VirtualKey.T when shift => "reopenTab",
-            VirtualKey.T => "newTab",
-            VirtualKey.W => "closeTab",
-            VirtualKey.Tab when shift => "prevTab",
-            VirtualKey.Tab => "nextTab",
-            >= VirtualKey.Number1 and <= VirtualKey.Number9 when ctrl => "tab" + (sender.Key - VirtualKey.Number0),
-            _ => null,
-        };
-        if (command is null) return;
-        e.Handled = true;
-        report.Key("xaml", command);
-        RunCommand(command, keyboard: true);
+            var accelerator = new KeyboardAccelerator
+            {
+                Key = (VirtualKey)key,
+                Modifiers = (ctrl ? VirtualKeyModifiers.Control : 0) | (shift ? VirtualKeyModifiers.Shift : 0) | (alt ? VirtualKeyModifiers.Menu : 0),
+            };
+            accelerator.Invoked += (_, e) =>
+            {
+                e.Handled = true;
+                RunCommand(command, "xaml");
+            };
+            Root.KeyboardAccelerators.Add(accelerator);
+        }
+        foreach (var (command, gestures) in map.Map)
+            foreach (var g in gestures)
+                if (g.VirtualKey > 0) Add(command, g.Ctrl, g.Shift, g.Alt, g.VirtualKey);
+        for (var n = 1; n <= 9; n++) Add("tab" + n, true, false, false, '0' + n);
+
+        foreach (var (button, label, command) in new (FrameworkElement, string, string)[]
+        {
+            (BackButton, "Back", "back"), (ForwardButton, "Forward", "forward"), (HomeButton, "Home", "home"), (StarButton, "Bookmark this page", "bookmark"),
+            (MediaButton, "Now playing", "media"), (SplitButton, "Split view", "split"), (PaletteButton, "Command palette", "palette"),
+            (CustomizeButton, "Customize", "customize"), (SidebarButton, "Sidebar", "sidebar"), (MenuButton, "Menu", "menu"),
+            (MediaPip, "Picture in picture", "pip"), (MediaVisualizer, "Visualizer", "visualizer"), (NewTabButton, "New tab", "newTab"),
+        })
+            ToolTipService.SetToolTip(button, Shortcut(command) is { Length: > 0 } keys ? $"{label} ({keys})" : label);
     }
 
-    void RunCommand(string command)
+    string Shortcut(string command) => (appliedKeys ?? theme.Shortcuts).For(command) is [var first, ..] ? first.ToString() : "";
+
+    void RunCommand(string command, string source)
     {
-        report.Key("page", command);
-        RunCommand(command, keyboard: true);
+        report.Key(source, command);
+        RunCommand(command, keyboard: source != "run");
     }
 
     void RunCommand(string command, bool keyboard)
     {
-        if (fullScreen && command is not ("closeTab" or "back" or "forward" or "reload")) return;
+        if (fullScreen && command is not ("closeTab" or "back" or "forward" or "reload" or "pip" or "closePeek")) return;
         switch (command)
         {
+            case "home": Navigate(BrowserEngine.NewTabUri.AbsoluteUri); break;
+            case "palette": ShowPalette(); break;
+            case "split": ToggleSplit(); break;
+            case "media": ToggleMediaWidget(); break;
+            case "visualizer": ToggleVisualizer(); break;
+            case "pip": _ = PipAsync(); break;
+            case "closePeek": ClosePeek(); break;
             case "address":
                 AddressBox.Focus(FocusState.Keyboard);
                 AddressBox.SelectAll();
@@ -380,6 +451,8 @@ public sealed partial class MainWindow : Window
     void OnClosed(object sender, WindowEventArgs e)
     {
         closing = true;
+        StopVisualizer();
+        ClosePeek();
         powerTimer?.Stop();
         suspendTimer.Stop();
         SaveSession();
@@ -412,20 +485,22 @@ public sealed partial class MainWindow : Window
     void DownloadsMenu_Click(object sender, RoutedEventArgs e) => ShowFlyout(DownloadsFlyout, DownloadsButton, FlyoutHost);
 
     // toolbar.items decides order and visibility: ids before "address" go left of it, the rest right.
+    // The media button shows only while a tab has media, like the downloads button only once something downloaded.
     Ids? arrangedItems;
-    bool arrangedDownloads;
+    bool arrangedDownloads, arrangedMedia;
 
     void ArrangeToolbar(Ids items)
     {
         // Theme changes arrive many times a second while a slider moves; only rebuild when the arrangement changed.
-        if (items.Equals(arrangedItems) && arrangedDownloads == hasDownloads) return;
+        if (items.Equals(arrangedItems) && arrangedDownloads == hasDownloads && arrangedMedia == hasMedia) return;
         arrangedItems = items;
         arrangedDownloads = hasDownloads;
+        arrangedMedia = hasMedia;
         var map = new Dictionary<string, FrameworkElement>
         {
             ["back"] = BackButton, ["forward"] = ForwardButton, ["reload"] = ReloadButton, ["home"] = HomeButton,
-            ["bookmark"] = StarButton, ["downloads"] = DownloadsButton, ["extensions"] = ExtensionsButton,
-            ["customize"] = CustomizeButton, ["sidebar"] = SidebarButton, ["menu"] = MenuButton,
+            ["bookmark"] = StarButton, ["media"] = MediaButton, ["split"] = SplitButton, ["downloads"] = DownloadsButton,
+            ["extensions"] = ExtensionsButton, ["palette"] = PaletteButton, ["customize"] = CustomizeButton, ["sidebar"] = SidebarButton, ["menu"] = MenuButton,
         };
         LeftPanel.Children.Clear();
         RightPanel.Children.Clear();
@@ -435,7 +510,7 @@ public sealed partial class MainWindow : Window
             if (map.TryGetValue(items.Items[i], out var element)) (i < split ? LeftPanel : RightPanel).Children.Add(element);
         foreach (var (id, element) in map)
         {
-            var shown = items.Has(id) && (id != "downloads" || hasDownloads) && (id != "extensions" || engine.ExtensionsEnabled);
+            var shown = items.Has(id) && (id != "downloads" || hasDownloads) && (id != "media" || hasMedia) && (id != "extensions" || engine.ExtensionsEnabled);
             element.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
         }
         AddressHost.Visibility = items.Has("address") ? Visibility.Visible : Visibility.Collapsed;
@@ -458,6 +533,10 @@ public sealed partial class MainWindow : Window
         ApplyCaptionColors(colors);
         foreach (var tab in tabs) SetPageBackground(tab);
         engine.SetPageColorScheme(t.Pages.ColorScheme, t.Base);
+        engine.SetPeek(t.Pages.Peek);
+        ApplyShortcuts(t.Shortcuts);
+        if (previous is not null && (previous.Power.Lean != t.Power.Lean || previous.Media.MediaKeys != t.Media.MediaKeys))
+            ShowNotice(new("Restart Lilt to apply this change.", NoticeKind.Info, "Restart now", Restart));
 
         var m = metrics;
         var radius = new CornerRadius(t.Shape.ControlRadius);
@@ -499,6 +578,8 @@ public sealed partial class MainWindow : Window
 
         ThemeName.Text = $"{t.Name} · {(t.Base == ThemeBase.Light ? "light" : "dark")}";
         WriteHomeData();
+        LayoutPages();
+        UpdateVisualizer();
         UpdatePower();
         UpdateDragRegions();
     }
@@ -512,7 +593,8 @@ public sealed partial class MainWindow : Window
 
     Control[] ChromeButtons() =>
     [
-        BackButton, ForwardButton, ReloadButton, HomeButton, StarButton, DownloadsButton, ExtensionsButton, CustomizeButton, SidebarButton, MenuButton,
+        BackButton, ForwardButton, ReloadButton, HomeButton, StarButton, MediaButton, SplitButton, PaletteButton, DownloadsButton, ExtensionsButton,
+        CustomizeButton, SidebarButton, MenuButton,
         NewTabButton, BookmarkImportButton, EdgeLeft, EdgeRight, EdgeTop, EdgeBottom, PinToggle,
         ReloadThemeButton, EditThemeButton, DataFolderButton, UserContentButton, MeasureButton,
     ];

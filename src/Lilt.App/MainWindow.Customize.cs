@@ -1,10 +1,13 @@
 using Lilt.App.Browser;
 using Lilt.App.Shell;
+using Lilt.Core;
 using Lilt.Core.Layout;
 using Lilt.Core.Theming;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 
@@ -21,7 +24,8 @@ public sealed partial class MainWindow
     {
         ["back"] = "Back", ["forward"] = "Forward", ["reload"] = "Reload", ["home"] = "Home button", ["address"] = "Address bar",
         ["bookmark"] = "Bookmark star", ["downloads"] = "Downloads", ["extensions"] = "Extensions", ["customize"] = "Customize",
-        ["sidebar"] = "Sidebar button", ["menu"] = "Menu", ["tabs"] = "Tabs", ["bookmarks"] = "Bookmarks", ["layout"] = "Dock and pin buttons",
+        ["sidebar"] = "Sidebar button", ["menu"] = "Menu", ["media"] = "Now playing (while something plays)", ["split"] = "Split view",
+        ["palette"] = "Command palette", ["tabs"] = "Tabs", ["bookmarks"] = "Bookmarks", ["layout"] = "Dock and pin buttons",
         ["logo"] = "Logo", ["clock"] = "Clock and date", ["search"] = "Search box", ["tiles"] = "Bookmark tiles", ["hint"] = "Shortcut hint", ["gear"] = "Customize button",
     };
     DispatcherQueueTimer? applyTimer, themeSaveTimer;
@@ -39,7 +43,10 @@ public sealed partial class MainWindow
         LookPage.Visibility = page == "look" ? Visibility.Visible : Visibility.Collapsed;
         LayoutPage.Visibility = page == "layout" ? Visibility.Visible : Visibility.Collapsed;
         HomePage.Visibility = page == "home" ? Visibility.Visible : Visibility.Collapsed;
+        MediaPage.Visibility = page == "media" ? Visibility.Visible : Visibility.Collapsed;
+        KeysPage.Visibility = page == "keys" ? Visibility.Visible : Visibility.Collapsed;
         PowerPage.Visibility = page == "power" ? Visibility.Visible : Visibility.Collapsed;
+        if (page == "keys") BuildKeys();
     }
 
     void SyncCustomize()
@@ -67,7 +74,30 @@ public sealed partial class MainWindow
         HomeGlassCheck.IsChecked = t.Home.Glass;
         EfficiencySwitch.IsOn = t.Power.Efficiency;
         CoveredSwitch.IsOn = t.Power.HideWhenCovered;
+        OccludedSwitch.IsOn = t.Power.HideWhenOccluded;
+        LeanSwitch.IsOn = t.Power.Lean;
         SuspendSlider.Value = t.Power.SuspendMinutes;
+        Select(SplitOrientationCombo, Camel(t.Split.Orientation.ToString()));
+        SplitRatioSlider.Value = Math.Round(t.Split.Ratio * 100);
+        SplitGapSlider.Value = t.Split.Gap;
+        PeekCheck.IsChecked = t.Pages.Peek;
+        Select(ColorSchemeCombo, Camel(t.Pages.ColorScheme.ToString()));
+        var m = t.Media;
+        Select(PlayerShowCombo, Camel(m.Player.Show.ToString()));
+        PlayerWidthSlider.Value = m.Player.Width;
+        PlayerOpacitySlider.Value = Math.Round(m.Player.Opacity * 100);
+        Select(VisualizerShowCombo, Camel(m.Visualizer.Show.ToString()));
+        Select(VisualizerStyleCombo, Camel(m.Style.ToString()));
+        BarsSlider.Value = m.Bars;
+        VisualizerWidthSlider.Value = m.Visualizer.Width;
+        VisualizerHeightSlider.Value = m.Visualizer.Height;
+        VisualizerOpacitySlider.Value = Math.Round(m.Visualizer.Opacity * 100);
+        Select(VisualizerSourceCombo, Camel(m.Source.ToString()));
+        Select(PipShowCombo, Camel(m.Pip.Show.ToString()));
+        if (MusicSitesBox.FocusState == FocusState.Unfocused) MusicSitesBox.Text = string.Join("\r", m.MusicSites.Items);
+        AutoPipCheck.IsChecked = m.AutoPictureInPicture;
+        MediaKeysCheck.IsChecked = m.MediaKeys;
+        if (KeysPage.Visibility == Visibility.Visible) BuildKeys();
         BuildArrange(ToolbarArrange, ToolbarSpec.All, t.Toolbar.Items, ids => Current with { Toolbar = Current.Toolbar with { Items = ids } });
         BuildArrange(SidebarArrange, SidebarSpec.All, t.Sidebar.Sections, ids => Current with { Sidebar = Current.Sidebar with { Sections = ids } });
         BuildArrange(HomeArrange, HomeSpec.All, t.Home.Items, ids => Current with { Home = Current.Home with { Items = ids } });
@@ -145,8 +175,116 @@ public sealed partial class MainWindow
             Sidebar = t.Sidebar with { Width = SidebarWidthSlider.Value },
             Density = DensityCombo.SelectedItem is ComboBoxItem { Tag: string d } && Enum.TryParse<Density>(d, true, out var density) ? density : t.Density,
             Home = t.Home with { Glass = HomeGlassCheck.IsChecked == true },
-            Power = new PowerSpec(EfficiencySwitch.IsOn, (int)SuspendSlider.Value, CoveredSwitch.IsOn),
+            Pages = new PagesSpec(Pick(ColorSchemeCombo, t.Pages.ColorScheme), PeekCheck.IsChecked == true),
+            Power = new PowerSpec(EfficiencySwitch.IsOn, (int)SuspendSlider.Value, CoveredSwitch.IsOn, OccludedSwitch.IsOn, LeanSwitch.IsOn),
+            Split = new SplitSpec(Pick(SplitOrientationCombo, t.Split.Orientation), SplitRatioSlider.Value / 100, SplitGapSlider.Value),
+            Media = t.Media with
+            {
+                Player = t.Media.Player with { Show = Pick(PlayerShowCombo, t.Media.Player.Show), Width = PlayerWidthSlider.Value, Opacity = PlayerOpacitySlider.Value / 100 },
+                Visualizer = t.Media.Visualizer with
+                {
+                    Show = Pick(VisualizerShowCombo, t.Media.Visualizer.Show), Width = VisualizerWidthSlider.Value,
+                    Height = VisualizerHeightSlider.Value, Opacity = VisualizerOpacitySlider.Value / 100,
+                },
+                Pip = t.Media.Pip with { Show = Pick(PipShowCombo, t.Media.Pip.Show) },
+                Bars = (int)BarsSlider.Value,
+                Style = Pick(VisualizerStyleCombo, t.Media.Style),
+                Source = Pick(VisualizerSourceCombo, t.Media.Source),
+                MediaKeys = MediaKeysCheck.IsChecked == true,
+                AutoPictureInPicture = AutoPipCheck.IsChecked == true,
+            },
         });
+        // Changing when the player or visualizer shows starts over from that setting.
+        if (ReferenceEquals(sender, PlayerShowCombo)) playerToggle = null;
+        if (ReferenceEquals(sender, VisualizerShowCombo)) visualizerToggle = null;
+    }
+
+    static T Pick<T>(ComboBox box, T fallback) where T : struct, Enum =>
+        box.SelectedItem is ComboBoxItem { Tag: string tag } && Enum.TryParse<T>(tag, true, out var v) ? v : fallback;
+
+    // One site per line; anything that isn't a host name ("open.spotify.com") is left out.
+    void MusicSites_LostFocus(object sender, RoutedEventArgs e)
+    {
+        var hosts = MusicSitesBox.Text.Split(['\r', '\n', ',', ' '], StringSplitOptions.RemoveEmptyEntries)
+            .Select(h => (Uri.TryCreate(h.Contains("://") ? h : "https://" + h, UriKind.Absolute, out var u) ? u.Host : "").ToLowerInvariant())
+            .Where(h => Uri.CheckHostName(h) == UriHostNameType.Dns).Distinct().Take(200).ToArray();
+        if (hosts.SequenceEqual(Current.Media.MusicSites.Items)) return;
+        Queue(Current with { Media = Current.Media with { MusicSites = new Ids(hosts) } });
+    }
+
+    // Keys: one row per command with its shortcut. Click the box and press keys to change it; Backspace clears it.
+    void BuildKeys()
+    {
+        KeysList.Children.Clear();
+        var map = Current.Shortcuts;
+        foreach (var (id, label) in Commands.Labels)
+        {
+            var row = new Grid { ColumnSpacing = 8 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+            row.Children.Add(new TextBlock { Text = label + (Commands.Reserved.Contains(id) ? " *" : ""), VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap });
+            var box = new TextBox { Text = string.Join(", ", map.For(id).Select(g => g.ToString())), IsReadOnly = true, PlaceholderText = "None", Tag = id };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(box, $"Shortcut for {label}");
+            box.PreviewKeyDown += Shortcut_PreviewKeyDown;
+            Grid.SetColumn(box, 1);
+            row.Children.Add(box);
+            KeysList.Children.Add(row);
+        }
+    }
+
+    void Shortcut_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (sender is not TextBox { Tag: string id } box) return;
+        static bool Down(Windows.System.VirtualKey k) => InputKeyboardSource.GetKeyStateForCurrentThread(k).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+        bool ctrl = Down(Windows.System.VirtualKey.Control), shift = Down(Windows.System.VirtualKey.Shift), alt = Down(Windows.System.VirtualKey.Menu);
+        var key = (int)e.Key;
+        // Plain Tab and Escape keep moving focus and closing the panel.
+        if (e.Key is Windows.System.VirtualKey.Control or Windows.System.VirtualKey.Shift or Windows.System.VirtualKey.Menu
+            or Windows.System.VirtualKey.LeftWindows or Windows.System.VirtualKey.RightWindows) { e.Handled = true; return; }
+        if (!ctrl && !alt && e.Key is Windows.System.VirtualKey.Tab or Windows.System.VirtualKey.Escape) return;
+        e.Handled = true;
+        var map = Current.Shortcuts.Map.ToDictionary(p => p.Key, p => p.Value);
+        if (!ctrl && !alt && !shift && e.Key is Windows.System.VirtualKey.Back or Windows.System.VirtualKey.Delete) map[id] = [];
+        else
+        {
+            var name = key switch
+            {
+                >= 65 and <= 90 or >= 48 and <= 57 => ((char)key).ToString(),
+                >= 112 and <= 135 => "F" + (key - 111),
+                186 => ";", 187 => "=", 188 => ",", 189 => "-", 190 => ".", 191 => "/", 192 => "`", 219 => "[", 220 => "\\", 221 => "]", 222 => "'",
+                _ => e.Key switch
+                {
+                    Windows.System.VirtualKey.Tab => "Tab", Windows.System.VirtualKey.Space => "Space", Windows.System.VirtualKey.Enter => "Enter",
+                    Windows.System.VirtualKey.Left => "Left", Windows.System.VirtualKey.Right => "Right", Windows.System.VirtualKey.Up => "Up",
+                    Windows.System.VirtualKey.Down => "Down", Windows.System.VirtualKey.Home => "Home", Windows.System.VirtualKey.End => "End",
+                    Windows.System.VirtualKey.PageUp => "PageUp", Windows.System.VirtualKey.PageDown => "PageDown", Windows.System.VirtualKey.Delete => "Delete",
+                    Windows.System.VirtualKey.Insert => "Insert", Windows.System.VirtualKey.Back => "Backspace", Windows.System.VirtualKey.Escape => "Escape",
+                    _ => null,
+                },
+            };
+            var text = string.Concat(ctrl ? "Ctrl+" : "", shift ? "Shift+" : "", alt ? "Alt+" : "", name);
+            if (name is null || !Gesture.TryParse(text, out var g))
+            {
+                box.Text = name is null ? "That key can't be used" : $"{text} needs Ctrl or Alt";
+                return;
+            }
+            // A combination belongs to one command: taking it here removes it elsewhere.
+            foreach (var other in map.Keys.ToArray()) map[other] = map[other].Where(x => x != g).ToArray();
+            map[id] = [g];
+        }
+        Queue(Current with { Shortcuts = new ShortcutMap(map) });
+        BuildKeys();
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            foreach (var row in KeysList.Children.OfType<Grid>())
+                if (row.Children.OfType<TextBox>().FirstOrDefault(b => (string)b.Tag == id) is { } again) again.Focus(FocusState.Programmatic);
+        });
+    }
+
+    void ResetKeys_Click(object sender, RoutedEventArgs e)
+    {
+        Queue(Current with { Shortcuts = ShortcutMap.Default });
+        BuildKeys();
     }
 
     void FontCombo_TextSubmitted(ComboBox sender, ComboBoxTextSubmittedEventArgs args)
@@ -273,7 +411,11 @@ public sealed partial class MainWindow
     // A theme preset changes the look; where things are (sidebar, toolbar order, home layout, power) stays yours.
     void Preset_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement { Tag: string name }) return;
+        if (sender is FrameworkElement { Tag: string name }) ApplyPreset(name);
+    }
+
+    void ApplyPreset(string name)
+    {
         var result = ThemeParser.LoadFile(System.IO.Path.Combine(LiltPaths.Bundled, name + ".json"));
         if (result.Failed) return;
         themeLoadFailed = false;
@@ -286,6 +428,10 @@ public sealed partial class MainWindow
             Toolbar = cur.Toolbar with { Height = p.Toolbar.Height },
             Home = cur.Home with { Glass = p.Home.Glass, Background = cur.Home.Background is "" or "hills" ? p.Home.Background : cur.Home.Background },
             Power = cur.Power,
+            Pages = cur.Pages,
+            Media = cur.Media,
+            Split = cur.Split,
+            Shortcuts = cur.Shortcuts,
         }, theme);
         SyncCustomize();
         SaveTheme();
@@ -294,7 +440,11 @@ public sealed partial class MainWindow
     // Layout presets from the design: where the sidebar sits, how wide, and which sections it shows.
     void LayoutPreset_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement { Tag: string name }) return;
+        if (sender is FrameworkElement { Tag: string name }) ApplyLayout(name);
+    }
+
+    void ApplyLayout(string name)
+    {
         var cur = Current;
         pendingTheme = null;
         var s = cur.Sidebar;

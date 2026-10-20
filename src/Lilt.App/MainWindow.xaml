@@ -7,32 +7,7 @@
     Title="Lilt">
 
   <Grid x:Name="Root" KeyboardAcceleratorPlacementMode="Hidden">
-    <Grid.KeyboardAccelerators>
-      <KeyboardAccelerator Key="L" Modifiers="Control" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="D" Modifiers="Menu" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="F6" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="B" Modifiers="Control,Shift" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="Left" Modifiers="Menu" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="Right" Modifiers="Menu" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="F5" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="R" Modifiers="Control" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="T" Modifiers="Control" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="T" Modifiers="Control,Shift" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="W" Modifiers="Control" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="Tab" Modifiers="Control" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="Tab" Modifiers="Control,Shift" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="D" Modifiers="Control" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="F" Modifiers="Menu" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="Number1" Modifiers="Control" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="Number2" Modifiers="Control" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="Number3" Modifiers="Control" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="Number4" Modifiers="Control" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="Number5" Modifiers="Control" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="Number6" Modifiers="Control" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="Number7" Modifiers="Control" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="Number8" Modifiers="Control" Invoked="Accelerator_Invoked" />
-      <KeyboardAccelerator Key="Number9" Modifiers="Control" Invoked="Accelerator_Invoked" />
-    </Grid.KeyboardAccelerators>
+    <!-- Keyboard shortcuts are added in code from the theme's "shortcuts" block. -->
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
@@ -83,6 +58,18 @@
             </Flyout>
           </Button.Flyout>
         </Button>
+        <Button x:Name="MediaButton" Style="{StaticResource ChromeButton}" Click="MediaButton_Click"
+                ToolTipService.ToolTip="Now playing (Ctrl+Shift+M)" AutomationProperties.Name="Now playing">
+          <FontIcon x:Name="MediaButtonIcon" Glyph="&#xE8D6;" />
+        </Button>
+        <Button x:Name="SplitButton" Style="{StaticResource ChromeButton}" Click="SplitButton_Click"
+                ToolTipService.ToolTip="Split view (Ctrl+Shift+S)" AutomationProperties.Name="Split view">
+          <FontIcon Glyph="&#xE8A9;" />
+        </Button>
+        <Button x:Name="PaletteButton" Style="{StaticResource ChromeButton}" Click="PaletteButton_Click"
+                ToolTipService.ToolTip="Command palette (Ctrl+K)" AutomationProperties.Name="Command palette">
+          <FontIcon Glyph="&#xE945;" />
+        </Button>
         <Button x:Name="ExtensionsButton" Style="{StaticResource ChromeButton}" Click="Extensions_Click"
                 ToolTipService.ToolTip="Extensions and ad blocker" AutomationProperties.Name="Extensions">
           <FontIcon Glyph="&#xEA86;" />
@@ -121,7 +108,7 @@
       <Grid x:Name="CustomizeHost" Grid.Column="2" Width="0" HorizontalAlignment="Right">
         <FlyoutBase.AttachedFlyout>
           <Flyout x:Name="CustomizeFlyout" Placement="BottomEdgeAlignedRight" Opening="CustomizeFlyout_Opening">
-            <Grid Width="340" RowSpacing="8">
+            <Grid Width="360" RowSpacing="8">
               <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -130,6 +117,8 @@
                 <SelectorBarItem Text="Look" Tag="look" IsSelected="True" />
                 <SelectorBarItem Text="Layout" Tag="layout" />
                 <SelectorBarItem Text="Home" Tag="home" />
+                <SelectorBarItem Text="Media" Tag="media" />
+                <SelectorBarItem Text="Keys" Tag="keys" />
                 <SelectorBarItem Text="Power" Tag="power" />
               </SelectorBar>
               <ScrollViewer Grid.Row="1" MaxHeight="560" Padding="0,0,12,0">
@@ -202,6 +191,21 @@
                     <StackPanel x:Name="ToolbarArrange" Spacing="2" />
                     <TextBlock Text="Sidebar sections" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
                     <StackPanel x:Name="SidebarArrange" Spacing="2" />
+                    <TextBlock Text="Split view" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
+                    <ComboBox x:Name="SplitOrientationCombo" Header="Panes" HorizontalAlignment="Stretch" SelectionChanged="Customize_Changed">
+                      <ComboBoxItem Content="Side by side" Tag="horizontal" />
+                      <ComboBoxItem Content="Stacked" Tag="vertical" />
+                    </ComboBox>
+                    <Slider x:Name="SplitRatioSlider" Header="First pane (%)" Minimum="15" Maximum="85" StepFrequency="1" ValueChanged="Customize_Changed" />
+                    <Slider x:Name="SplitGapSlider" Header="Gap between panes" Minimum="0" Maximum="24" StepFrequency="1" ValueChanged="Customize_Changed" />
+                    <TextBlock Text="Pages" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
+                    <CheckBox x:Name="PeekCheck" Content="Shift+click a link to peek at it" Click="Customize_Changed" />
+                    <ComboBox x:Name="ColorSchemeCombo" Header="Websites see" HorizontalAlignment="Stretch" SelectionChanged="Customize_Changed">
+                      <ComboBoxItem Content="The theme's light or dark" Tag="theme" />
+                      <ComboBoxItem Content="Windows' light or dark" Tag="auto" />
+                      <ComboBoxItem Content="Always light" Tag="light" />
+                      <ComboBoxItem Content="Always dark" Tag="dark" />
+                    </ComboBox>
                   </StackPanel>
 
                   <StackPanel x:Name="HomePage" Spacing="6" Visibility="Collapsed">
@@ -215,12 +219,64 @@
                     <CheckBox x:Name="HomeGlassCheck" Content="See-through (window material shows through)" Click="Customize_Changed" />
                   </StackPanel>
 
+                  <StackPanel x:Name="MediaPage" Spacing="6" Visibility="Collapsed">
+                    <TextBlock Text="Now playing" Style="{StaticResource SectionHeader}" />
+                    <ComboBox x:Name="PlayerShowCombo" Header="Show the player" HorizontalAlignment="Stretch" SelectionChanged="Customize_Changed">
+                      <ComboBoxItem Content="While something plays" Tag="auto" />
+                      <ComboBoxItem Content="Always" Tag="always" />
+                      <ComboBoxItem Content="Never" Tag="never" />
+                    </ComboBox>
+                    <Slider x:Name="PlayerWidthSlider" Header="Width" Minimum="220" Maximum="520" StepFrequency="4" ValueChanged="Customize_Changed" />
+                    <Slider x:Name="PlayerOpacitySlider" Header="Opacity (%)" Minimum="20" Maximum="100" StepFrequency="1" ValueChanged="Customize_Changed" />
+                    <TextBlock Text="Visualizer" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
+                    <ComboBox x:Name="VisualizerShowCombo" Header="Show the visualizer" HorizontalAlignment="Stretch" SelectionChanged="Customize_Changed">
+                      <ComboBoxItem Content="On music sites" Tag="auto" />
+                      <ComboBoxItem Content="Whenever sound plays" Tag="always" />
+                      <ComboBoxItem Content="Never" Tag="never" />
+                    </ComboBox>
+                    <ComboBox x:Name="VisualizerStyleCombo" Header="Style" HorizontalAlignment="Stretch" SelectionChanged="Customize_Changed">
+                      <ComboBoxItem Content="Bars" Tag="bars" />
+                      <ComboBoxItem Content="Mirrored bars" Tag="mirror" />
+                      <ComboBoxItem Content="Wave" Tag="wave" />
+                    </ComboBox>
+                    <Slider x:Name="BarsSlider" Header="Bars" Minimum="8" Maximum="64" StepFrequency="1" ValueChanged="Customize_Changed" />
+                    <Slider x:Name="VisualizerWidthSlider" Header="Width" Minimum="160" Maximum="640" StepFrequency="4" ValueChanged="Customize_Changed" />
+                    <Slider x:Name="VisualizerHeightSlider" Header="Height" Minimum="32" Maximum="240" StepFrequency="2" ValueChanged="Customize_Changed" />
+                    <Slider x:Name="VisualizerOpacitySlider" Header="Opacity (%)" Minimum="20" Maximum="100" StepFrequency="1" ValueChanged="Customize_Changed" />
+                    <ComboBox x:Name="VisualizerSourceCombo" Header="Sound comes from" HorizontalAlignment="Stretch" SelectionChanged="Customize_Changed">
+                      <ComboBoxItem Content="Automatic" Tag="auto" />
+                      <ComboBoxItem Content="Lilt's sound output (every site)" Tag="system" />
+                      <ComboBoxItem Content="The playing tab (no DRM sites)" Tag="page" />
+                    </ComboBox>
+                    <TextBox x:Name="MusicSitesBox" Header="Music sites (one per line)" AcceptsReturn="True" TextWrapping="NoWrap" Height="120"
+                             IsSpellCheckEnabled="False" LostFocus="MusicSites_LostFocus" />
+                    <TextBlock Text="More" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
+                    <ComboBox x:Name="PipShowCombo" Header="Pop-out videos (picture in picture)" HorizontalAlignment="Stretch" SelectionChanged="Customize_Changed">
+                      <ComboBoxItem Content="Windows' floating window when possible" Tag="auto" />
+                      <ComboBoxItem Content="Inside Lilt" Tag="always" />
+                      <ComboBoxItem Content="Off" Tag="never" />
+                    </ComboBox>
+                    <CheckBox x:Name="AutoPipCheck" Content="Pop playing videos out when I switch tabs" Click="Customize_Changed" />
+                    <CheckBox x:Name="MediaKeysCheck" Content="Media keys and Windows media controls (after restart)" Click="Customize_Changed" />
+                    <Button Content="Put the player and visualizer back" Click="ResetWidgets_Click" />
+                  </StackPanel>
+
+                  <StackPanel x:Name="KeysPage" Spacing="4" Visibility="Collapsed">
+                    <TextBlock Text="Keyboard shortcuts" Style="{StaticResource SectionHeader}" />
+                    <TextBlock Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}" TextWrapping="Wrap" FontSize="12"
+                               Text="Click a box and press the keys you want. Backspace clears it. Letters need Ctrl or Alt. Shortcuts marked * also work inside pages; the rest let a page use the key first." />
+                    <StackPanel x:Name="KeysList" Spacing="4" />
+                    <Button Content="Restore all shortcuts" Click="ResetKeys_Click" />
+                  </StackPanel>
+
                   <StackPanel x:Name="PowerPage" Spacing="6" Visibility="Collapsed">
                     <TextBlock Text="While you're in another app" Style="{StaticResource SectionHeader}" />
                     <ToggleSwitch x:Name="EfficiencySwitch" Header="Efficiency mode" Toggled="Customize_Changed" />
                     <TextBlock Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}" TextWrapping="Wrap" FontSize="12"
                                Text="After 10 seconds away, Lilt lowers its priority, asks Windows for efficiency mode and frees page memory. Tabs playing sound keep running." />
                     <ToggleSwitch x:Name="CoveredSwitch" Header="Pause pages behind full-screen games" Toggled="Customize_Changed" />
+                    <ToggleSwitch x:Name="OccludedSwitch" Header="Hide pages fully behind other windows" Toggled="Customize_Changed" />
+                    <ToggleSwitch x:Name="LeanSwitch" Header="Lean mode: less memory, after restart" Toggled="Customize_Changed" />
                     <Slider x:Name="SuspendSlider" Header="Suspend unused tabs after (minutes, 0 = never)" Minimum="0" Maximum="60" StepFrequency="1" ValueChanged="Customize_Changed" />
                     <TextBlock x:Name="PowerStatus" Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}" TextWrapping="Wrap" />
                     <TextBlock Text="Memory" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
@@ -239,6 +295,23 @@
                   </StackPanel>
                 </Grid>
               </ScrollViewer>
+            </Grid>
+          </Flyout>
+        </FlyoutBase.AttachedFlyout>
+      </Grid>
+
+      <Grid x:Name="PaletteHost" Grid.Column="1" Width="0" HorizontalAlignment="Center">
+        <FlyoutBase.AttachedFlyout>
+          <Flyout x:Name="PaletteFlyout" Placement="Bottom" Opened="PaletteFlyout_Opened" Closed="PaletteFlyout_Closed">
+            <Grid Width="520" RowSpacing="6">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <TextBox x:Name="PaletteBox" PlaceholderText="Type a command, tab, bookmark, theme or setting" IsSpellCheckEnabled="False"
+                       TextChanged="PaletteBox_TextChanged" KeyDown="PaletteBox_KeyDown" AutomationProperties.Name="Command palette" />
+              <ListView x:Name="PaletteList" Grid.Row="1" MaxHeight="420" SelectionMode="Single" IsItemClickEnabled="True"
+                        ItemClick="PaletteList_ItemClick" AutomationProperties.Name="Results" />
             </Grid>
           </Flyout>
         </FlyoutBase.AttachedFlyout>
@@ -318,7 +391,162 @@
         <ColumnDefinition Width="Auto" />
       </Grid.ColumnDefinitions>
 
-      <Grid x:Name="PageHost" Grid.Row="1" Grid.Column="1" />
+      <!-- Pages. In split view the two visible pages get a column (or row) each, with SplitHandle between them. -->
+      <Grid x:Name="PageHost" Grid.Row="1" Grid.Column="1">
+        <Border x:Name="SplitHandle" Visibility="Collapsed" Canvas.ZIndex="1" Background="Transparent"
+                PointerPressed="SplitHandle_PointerPressed" PointerMoved="SplitHandle_PointerMoved" PointerReleased="SplitHandle_PointerReleased"
+                PointerCaptureLost="SplitHandle_PointerCaptureLost" DoubleTapped="SplitHandle_DoubleTapped"
+                ToolTipService.ToolTip="Drag to resize; double-click to make the panes equal" AutomationProperties.Name="Split view divider">
+          <Border x:Name="SplitGrip" Background="{StaticResource LiltBorderBrush}" CornerRadius="2" />
+        </Border>
+        <Border x:Name="SplitFocus" Visibility="Collapsed" Canvas.ZIndex="2" IsHitTestVisible="False" BorderThickness="2" CornerRadius="6"
+                BorderBrush="{StaticResource LiltAccentBrush}" Opacity="0.7" />
+      </Grid>
+
+      <!-- Floating widgets: drag them anywhere over the page. Positions are saved as fractions of this area. -->
+      <Canvas x:Name="WidgetLayer" Grid.Row="1" Grid.Column="1" Canvas.ZIndex="1" SizeChanged="WidgetLayer_SizeChanged">
+        <Border x:Name="MediaWidget" Tag="player" Visibility="Collapsed" Width="300" Padding="10" CornerRadius="12" BorderThickness="1"
+                Background="{StaticResource LiltOverlayBrush}" BorderBrush="{StaticResource LiltBorderBrush}"
+                PointerPressed="Widget_PointerPressed" PointerMoved="Widget_PointerMoved" PointerReleased="Widget_PointerReleased"
+                PointerCaptureLost="Widget_PointerCaptureLost" AutomationProperties.Name="Now playing">
+          <Grid ColumnSpacing="10" RowSpacing="6">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Border Grid.RowSpan="2" Width="52" Height="52" CornerRadius="8" Background="{StaticResource LiltSurfaceRaisedBrush}" VerticalAlignment="Top">
+              <Grid>
+                <FontIcon Glyph="&#xE8D6;" FontSize="20" Foreground="{StaticResource LiltTextMutedBrush}" />
+                <Image x:Name="MediaArt" Stretch="UniformToFill" />
+              </Grid>
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock x:Name="MediaTitle" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{StaticResource LiltTextBrush}" />
+              <TextBlock x:Name="MediaArtist" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{StaticResource LiltTextMutedBrush}" />
+            </StackPanel>
+            <Button Grid.Column="2" Style="{StaticResource ChromeButton}" Width="24" Height="24" VerticalAlignment="Top" Click="MediaClose_Click"
+                    ToolTipService.ToolTip="Hide until something else plays" AutomationProperties.Name="Hide the player">
+              <FontIcon Glyph="&#xE711;" FontSize="10" />
+            </Button>
+            <StackPanel x:Name="MediaControls" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="2">
+              <Button x:Name="MediaPrev" Style="{StaticResource ChromeButton}" Width="30" Height="30" Click="MediaPrev_Click"
+                      ToolTipService.ToolTip="Previous" AutomationProperties.Name="Previous">
+                <FontIcon Glyph="&#xE892;" FontSize="13" />
+              </Button>
+              <Button x:Name="MediaPlay" Style="{StaticResource ChromeButton}" Width="30" Height="30" Click="MediaPlay_Click"
+                      ToolTipService.ToolTip="Play or pause" AutomationProperties.Name="Play or pause">
+                <FontIcon x:Name="MediaPlayIcon" Glyph="&#xE768;" FontSize="13" />
+              </Button>
+              <Button x:Name="MediaNext" Style="{StaticResource ChromeButton}" Width="30" Height="30" Click="MediaNext_Click"
+                      ToolTipService.ToolTip="Next" AutomationProperties.Name="Next">
+                <FontIcon Glyph="&#xE893;" FontSize="13" />
+              </Button>
+              <Button x:Name="MediaMute" Style="{StaticResource ChromeButton}" Width="30" Height="30" Click="MediaMute_Click"
+                      ToolTipService.ToolTip="Mute the tab" AutomationProperties.Name="Mute or unmute">
+                <FontIcon x:Name="MediaMuteIcon" Glyph="&#xE767;" FontSize="13" />
+              </Button>
+              <Button x:Name="MediaPip" Style="{StaticResource ChromeButton}" Width="30" Height="30" Click="MediaPip_Click"
+                      ToolTipService.ToolTip="Picture in picture (Alt+P)" AutomationProperties.Name="Picture in picture">
+                <FontIcon Glyph="&#xE8A7;" FontSize="13" />
+              </Button>
+              <Button x:Name="MediaVisualizer" Style="{StaticResource ChromeButton}" Width="30" Height="30" Click="MediaVisualizer_Click"
+                      ToolTipService.ToolTip="Visualizer (Ctrl+Shift+U)" AutomationProperties.Name="Show or hide the visualizer">
+                <FontIcon Glyph="&#xE9D9;" FontSize="13" />
+              </Button>
+              <Button x:Name="MediaGoTo" Style="{StaticResource ChromeButton}" Width="30" Height="30" Click="MediaGoTo_Click"
+                      ToolTipService.ToolTip="Go to the tab" AutomationProperties.Name="Go to the playing tab">
+                <FontIcon Glyph="&#xE72A;" FontSize="13" />
+              </Button>
+            </StackPanel>
+            <Grid Grid.Row="2" Grid.ColumnSpan="3" ColumnSpacing="8">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <ProgressBar x:Name="MediaProgress" Minimum="0" Maximum="1" VerticalAlignment="Center" Background="{StaticResource LiltBorderBrush}"
+                           Foreground="{StaticResource LiltAccentBrush}" PointerPressed="MediaProgress_PointerPressed" />
+              <TextBlock x:Name="MediaTime" Grid.Column="1" FontSize="11" Foreground="{StaticResource LiltTextMutedBrush}" />
+            </Grid>
+          </Grid>
+        </Border>
+
+        <Border x:Name="VisualizerWidget" Tag="visualizer" Visibility="Collapsed" Width="300" Height="72" Padding="8" CornerRadius="12" BorderThickness="1"
+                Background="{StaticResource LiltOverlayBrush}" BorderBrush="{StaticResource LiltBorderBrush}"
+                PointerPressed="Widget_PointerPressed" PointerMoved="Widget_PointerMoved" PointerReleased="Widget_PointerReleased"
+                PointerCaptureLost="Widget_PointerCaptureLost" DoubleTapped="Visualizer_DoubleTapped"
+                ToolTipService.ToolTip="Drag to move; double-click to change style" AutomationProperties.Name="Visualizer">
+          <Canvas x:Name="VisualizerCanvas" />
+        </Border>
+
+        <!-- A video popped out inside Lilt: this frame's bar and resize grip sit over the playing tab's page, which is
+             shown in the frame's empty area underneath (see MainWindow.Media.cs). -->
+        <Grid x:Name="PipFrame" Visibility="Collapsed">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="30" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
+          <Border Tag="pip" Padding="8,0,2,0" CornerRadius="8,8,0,0" Background="{StaticResource LiltOverlayBrush}"
+                  PointerPressed="Widget_PointerPressed" PointerMoved="Widget_PointerMoved" PointerReleased="Widget_PointerReleased"
+                  PointerCaptureLost="Widget_PointerCaptureLost" DoubleTapped="PipBar_DoubleTapped"
+                  ToolTipService.ToolTip="Drag to move; double-click to go back to the tab" AutomationProperties.Name="Popped-out video">
+            <Grid ColumnSpacing="2">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBlock x:Name="PipTitle" VerticalAlignment="Center" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{StaticResource LiltTextBrush}" />
+              <Button Grid.Column="1" Style="{StaticResource ChromeButton}" Width="26" Height="26" Click="PipDock_Click"
+                      ToolTipService.ToolTip="Back to the tab" AutomationProperties.Name="Back to the tab">
+                <FontIcon Glyph="&#xE8A7;" FontSize="12" />
+              </Button>
+              <Button Grid.Column="2" Style="{StaticResource ChromeButton}" Width="26" Height="26" Click="PipClose_Click"
+                      ToolTipService.ToolTip="Pause and put back" AutomationProperties.Name="Close the popped-out video">
+                <FontIcon Glyph="&#xE711;" FontSize="10" />
+              </Button>
+            </Grid>
+          </Border>
+          <Polygon Grid.Row="1" Tag="pipsize" Points="18,0 18,18 0,18" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                   Fill="{StaticResource LiltOverlayBrush}" Stroke="{StaticResource LiltBorderBrush}"
+                   PointerPressed="Widget_PointerPressed" PointerMoved="Widget_PointerMoved" PointerReleased="Widget_PointerReleased"
+                   PointerCaptureLost="Widget_PointerCaptureLost" ToolTipService.ToolTip="Drag to resize" />
+        </Grid>
+      </Canvas>
+
+      <!-- Peek: a link previewed over the page (Shift+click). -->
+      <Grid x:Name="PeekOverlay" Grid.Row="1" Grid.Column="1" Canvas.ZIndex="3" Visibility="Collapsed" Background="#66000000"
+            Tapped="PeekOverlay_Tapped" KeyDown="PeekOverlay_KeyDown">
+        <Border x:Name="PeekPanel" Margin="48,32" CornerRadius="12" BorderThickness="1" Background="{StaticResource LiltBackgroundBrush}"
+                BorderBrush="{StaticResource LiltBorderBrush}" Tapped="PeekPanel_Tapped">
+          <Grid>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Grid Padding="10,6" ColumnSpacing="6">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBlock x:Name="PeekAddress" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{StaticResource LiltTextMutedBrush}" />
+              <Button Grid.Column="1" Content="Open as tab" Click="PeekOpen_Click" />
+              <Button Grid.Column="2" Content="Open in split view" Click="PeekSplit_Click" />
+              <Button Grid.Column="3" Style="{StaticResource ChromeButton}" Click="PeekClose_Click" ToolTipService.ToolTip="Close (Esc)" AutomationProperties.Name="Close peek">
+                <FontIcon Glyph="&#xE711;" FontSize="12" />
+              </Button>
+            </Grid>
+            <Grid x:Name="PeekHost" Grid.Row="1" />
+          </Grid>
+        </Border>
+      </Grid>
 
       <Border x:Name="Sidebar" Canvas.ZIndex="1" BorderBrush="{StaticResource LiltBorderBrush}" KeyDown="Sidebar_KeyDown"
               GotFocus="Sidebar_GotFocus" LostFocus="Sidebar_LostFocus" AutomationProperties.Name="Sidebar">
@@ -442,7 +670,7 @@
         </Grid>
       </Border>
 
-      <InfoBar x:Name="NoticeBar" Grid.Row="1" Grid.Column="1" Canvas.ZIndex="2" IsOpen="False" IsClosable="True"
+      <InfoBar x:Name="NoticeBar" Grid.Row="1" Grid.Column="1" Canvas.ZIndex="4" IsOpen="False" IsClosable="True"
                VerticalAlignment="Bottom" HorizontalAlignment="Center" MaxWidth="680" Margin="16" />
     </Grid>
 

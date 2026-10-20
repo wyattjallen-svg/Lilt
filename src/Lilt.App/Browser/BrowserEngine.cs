@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Lilt.Core;
 using Lilt.Core.Extensions;
 using Lilt.Core.Navigation;
 using Lilt.Core.Theming;
@@ -18,7 +19,9 @@ sealed record EngineOptions(
     bool InPrivate,
     string? UserAgent,
     string? BrowserArgs,
-    bool Extensions);
+    bool Extensions,
+    bool MediaKeys,
+    bool Lean);
 
 enum NoticeKind { Info, Success, Warning, Error }
 
@@ -36,43 +39,19 @@ sealed class BrowserEngine
     // uBlock Origin Lite ships inside Lilt; a fixed manifest key keeps its ID (and its settings) stable across updates.
     public const string UbolId = "pnpnpkpkbopgcebjepaopplahkdnmbfc";
 
-    // Runs in an isolated world (pages can't see or call it) and reports browser shortcuts pressed inside a page.
-    const string KeyScript = """
-        (() => {
-          const send = globalThis.__liltKey;
-          if (typeof send !== 'function') return 'no binding';
-          if (globalThis.__liltKeyOn) return 'already on';
-          globalThis.__liltKeyOn = true;
-          addEventListener('keydown', e => {
-            const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-            const ctrl = e.ctrlKey && !e.altKey && !e.metaKey;
-            let cmd = null;
-            if (ctrl && !e.shiftKey && k === 't') cmd = 'newTab';
-            else if (ctrl && e.shiftKey && k === 't') cmd = 'reopenTab';
-            else if (ctrl && !e.shiftKey && k === 'w') cmd = 'closeTab';
-            else if (ctrl && k === 'Tab') cmd = e.shiftKey ? 'prevTab' : 'nextTab';
-            else if (ctrl && !e.shiftKey && k >= '1' && k <= '9') cmd = 'tab' + k;
-            else if ((ctrl && !e.shiftKey && k === 'l') || (e.altKey && !e.ctrlKey && k === 'd') || (k === 'F6' && !e.ctrlKey && !e.altKey)) cmd = 'address';
-            else if (ctrl && e.shiftKey && k === 'b') cmd = 'sidebar';
-            else if (ctrl && !e.shiftKey && k === 'd') cmd = 'bookmark';
-            else if (e.altKey && !e.ctrlKey && k === 'f') cmd = 'menu';
-            else if (ctrl && e.shiftKey && (k === ',' || k === '<')) cmd = 'customize';
-            if (!cmd) return;
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            send(cmd);
-          }, true);
-          send('ready');
-          return 'on';
-        })();
-        """;
+    // Lilt's page helper (Browser/page.js, embedded): runs in an isolated world the page can't see.
+    static readonly string pageScript = new StreamReader(typeof(BrowserEngine).Assembly.GetManifestResourceStream("Lilt.App.Browser.page.js")!).ReadToEnd();
 
     readonly EngineOptions options;
     readonly Task<CoreWebView2Environment> environment;
     readonly List<CoreWebView2> cores = [];
     readonly List<PopupWindow> popups = [];
     readonly UserContent userContent;
+    // The isolated world's execution context in each view's current document, for Evaluate.
+    readonly Dictionary<CoreWebView2, int> contexts = [];
     CoreWebView2PreferredColorScheme colorScheme = CoreWebView2PreferredColorScheme.Auto;
+    string keysJson = "[]";
+    bool peekEnabled = true;
 
     public BrowserEngine(EngineOptions options, DispatcherQueue queue)
     {
@@ -92,6 +71,9 @@ sealed class BrowserEngine
     public event Action<Notice>? Noticed;
     public event Action<CoreWebView2DownloadOperation>? DownloadStarted;
     public event Action<CoreWebView2, string>? KeyCommand;
+    public event Action<CoreWebView2, MediaInfo?>? MediaChanged;
+    public event Action<CoreWebView2, string>? PeekRequested;
+    public event Action<CoreWebView2, byte[]>? VisualizerData;
     // Diagnostics for the startup report (CI only).
     public event Action<string>? Trace;
 
@@ -103,7 +85,7 @@ sealed class BrowserEngine
     {
         var o = new CoreWebView2EnvironmentOptions
         {
-            AdditionalBrowserArguments = options.BrowserArgs ?? "",
+            AdditionalBrowserArguments = BrowserArguments(options),
             IsCustomCrashReportingEnabled = true,
             AreBrowserExtensionsEnabled = options.Extensions,
             EnableTrackingPrevention = true,
@@ -113,6 +95,22 @@ sealed class BrowserEngine
     }
 
     public Task WhenEnvironmentReady => environment;
+
+    // Lilt's own Chromium switches, merged with any --browser-args (features into one --enable-features switch).
+    static string BrowserArguments(EngineOptions o)
+    {
+        var features = new List<string>();
+        var args = new List<string>();
+        if (o.MediaKeys) features.Add("HardwareMediaKeyHandling");
+        if (o.Lean) args.AddRange(["--enable-low-end-device-mode", "--process-per-site"]);
+        foreach (var part in (o.BrowserArgs ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part.StartsWith("--enable-features=", StringComparison.Ordinal)) features.AddRange(part["--enable-features=".Length..].Split(',', StringSplitOptions.RemoveEmptyEntries));
+            else args.Add(part);
+        }
+        if (features.Count > 0) args.Add("--enable-features=" + string.Join(',', features.Distinct()));
+        return string.Join(' ', args);
+    }
 
     public async Task<CoreWebView2> AttachAsync(WebView2 view)
     {
@@ -131,6 +129,7 @@ sealed class BrowserEngine
     {
         if (core is null) return;
         cores.Remove(core);
+        contexts.Remove(core);
         userContent.Forget(core);
     }
 
@@ -150,7 +149,7 @@ sealed class BrowserEngine
         core.Profile.PreferredTrackingPreventionLevel = CoreWebView2TrackingPreventionLevel.Balanced;
         core.SetVirtualHostNameToFolderMapping(NewTabHost, options.NewTabFolder, CoreWebView2HostResourceAccessKind.DenyCors);
         _ = userContent.ApplyAsync(core);
-        _ = InstallKeyShimAsync(core);
+        InstallPageHelper(core);
 
         core.PermissionRequested += OnPermissionRequested;
         core.LaunchingExternalUriScheme += OnExternalScheme;
@@ -159,33 +158,60 @@ sealed class BrowserEngine
         core.ServerCertificateErrorDetected += OnCertificateError;
     }
 
-    // DevTools Protocol: a binding that exists only in Lilt's isolated world, plus the listener script for that world.
-    // Runtime.enable is deliberately never called (sites can detect it), which means a binding registered by world name
-    // may not reach new documents; so each document also gets the world, binding and script directly at DOMContentLoaded.
-    async Task InstallKeyShimAsync(CoreWebView2 core)
+    // DevTools Protocol, per document: an isolated world, a binding that exists only there, and page.js in it.
+    // Runtime.enable is deliberately never called (sites can detect it), so name-based bindings wouldn't reach new
+    // documents; the world and binding are created directly for each document at DOMContentLoaded.
+    void InstallPageHelper(CoreWebView2 core)
     {
-        try
+        // The captured core, not the event's sender: the sender can be a different projection of the same view.
+        core.GetDevToolsProtocolEventReceiver("Runtime.bindingCalled").DevToolsProtocolEventReceived += (_, e) =>
         {
-            // The captured core, not the event's sender: the sender can be a different projection of the same view.
-            core.GetDevToolsProtocolEventReceiver("Runtime.bindingCalled").DevToolsProtocolEventReceived += (_, e) =>
+            try
             {
                 using var doc = JsonDocument.Parse(e.ParameterObjectAsJson);
                 var root = doc.RootElement;
-                if (root.GetProperty("name").GetString() != "__liltKey" || root.GetProperty("payload").GetString() is not { Length: <= 16 } command) return;
-                if (command == "ready") Trace?.Invoke("shim ready");
-                else KeyCommand?.Invoke(core, command);
-            };
-            core.DOMContentLoaded += (sender, e) => _ = AddKeyShimToDocumentAsync(sender);
-            await core.CallDevToolsProtocolMethodAsync("Runtime.addBinding", """{"name":"__liltKey","executionContextName":"lilt"}""");
-            await core.CallDevToolsProtocolMethodAsync("Page.addScriptToEvaluateOnNewDocument", JsonSerializer.Serialize(new { source = KeyScript, worldName = "lilt" }));
-        }
-        catch (Exception e)
+                if (root.GetProperty("name").GetString() != "__liltKey" || root.GetProperty("payload").GetString() is not { Length: > 0 and <= 16384 } payload) return;
+                OnPageMessage(core, payload);
+            }
+            catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException) { }
+        };
+        core.DOMContentLoaded += (sender, e) => _ = AddPageHelperAsync(core);
+    }
+
+    void OnPageMessage(CoreWebView2 core, string payload)
+    {
+        if (payload == "ready")
         {
-            LiltPaths.LogError(e);
+            Trace?.Invoke("shim ready");
+            return;
+        }
+        if (payload[0] == 'v')
+        {
+            // Visualizer levels: "v12,200,..." (0-255 per bar).
+            var parts = payload[1..].Split(',');
+            if (parts.Length > 96) return;
+            var levels = new byte[parts.Length];
+            for (var i = 0; i < parts.Length; i++) levels[i] = byte.TryParse(parts[i], out var b) ? b : (byte)0;
+            VisualizerData?.Invoke(core, levels);
+            return;
+        }
+        using var doc = JsonDocument.Parse(payload);
+        var m = doc.RootElement;
+        switch (m.TryGetProperty("t", out var t) ? t.GetString() : null)
+        {
+            case "key" when m.TryGetProperty("c", out var c) && c.GetString() is { Length: <= 32 } command:
+                KeyCommand?.Invoke(core, command);
+                break;
+            case "media":
+                MediaChanged?.Invoke(core, MediaInfo.Parse(m));
+                break;
+            case "peek" when m.TryGetProperty("url", out var u) && UrlPolicy.IsNavigable(u.GetString()):
+                PeekRequested?.Invoke(core, u.GetString()!);
+                break;
         }
     }
 
-    async Task AddKeyShimToDocumentAsync(CoreWebView2 core)
+    async Task AddPageHelperAsync(CoreWebView2 core)
     {
         try
         {
@@ -194,7 +220,10 @@ sealed class BrowserEngine
             using var world = JsonDocument.Parse(await core.CallDevToolsProtocolMethodAsync("Page.createIsolatedWorld", JsonSerializer.Serialize(new { frameId, worldName = "lilt" })));
             var context = world.RootElement.GetProperty("executionContextId").GetInt32();
             await core.CallDevToolsProtocolMethodAsync("Runtime.addBinding", JsonSerializer.Serialize(new { name = "__liltKey", executionContextId = context }));
-            var result = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", JsonSerializer.Serialize(new { expression = KeyScript, contextId = context }));
+            var script = pageScript.Replace("__KEYS__", keysJson);
+            var result = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", JsonSerializer.Serialize(new { expression = script, contextId = context }));
+            contexts[core] = context;
+            if (!peekEnabled) await EvaluateAsync(core, "__lilt.setPeek(false)");
             Trace?.Invoke($"shim context {context}: {result}");
         }
         catch (Exception e) when (e.Message.Contains("-3260", StringComparison.Ordinal))
@@ -207,6 +236,49 @@ sealed class BrowserEngine
             // The document went away mid-setup (navigation, closed tab); the next one gets its own attempt.
             Trace?.Invoke($"shim failed: {e.Message}");
         }
+    }
+
+    // Runs an expression in the page helper's world and returns its value as text (null if the document has no helper yet).
+    // userGesture lets it do what pages may only do on a click, like picture in picture.
+    public async Task<string?> EvaluateAsync(CoreWebView2 core, string expression, bool userGesture = false)
+    {
+        if (!contexts.TryGetValue(core, out var context)) return null;
+        try
+        {
+            var json = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",
+                JsonSerializer.Serialize(new { expression, contextId = context, userGesture, awaitPromise = true, returnByValue = true }));
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("exceptionDetails", out var ex))
+                return "error: " + (ex.TryGetProperty("exception", out var x) && x.TryGetProperty("description", out var d) ? d.GetString() : "exception");
+            return !root.GetProperty("result").TryGetProperty("value", out var v) ? null : v.ValueKind == JsonValueKind.String ? v.GetString() : v.GetRawText();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    // Shortcut definitions for page.js; sent to every open page when they change.
+    public void SetShortcuts(ShortcutMap map)
+    {
+        var list = new List<object>();
+        foreach (var (command, gestures) in map.Map)
+            foreach (var g in gestures)
+                list.Add(new { c = command, ctrl = g.Ctrl, shift = g.Shift, alt = g.Alt, code = g.Code, key = g.Key.Length == 1 && char.IsAsciiLetter(g.Key[0]) ? g.Key : "", r = Commands.Reserved.Contains(command) });
+        for (var n = 1; n <= 9; n++)
+            list.Add(new { c = "tab" + n, ctrl = true, shift = false, alt = false, code = "Digit" + n, key = "", r = true });
+        var json = JsonSerializer.Serialize(list);
+        if (json == keysJson) return;
+        keysJson = json;
+        foreach (var core in contexts.Keys.ToArray()) _ = EvaluateAsync(core, $"__lilt.setKeys({json})");
+    }
+
+    public void SetPeek(bool on)
+    {
+        if (peekEnabled == on) return;
+        peekEnabled = on;
+        foreach (var core in contexts.Keys.ToArray()) _ = EvaluateAsync(core, $"__lilt.setPeek({(on ? "true" : "false")})");
     }
 
     public void SetPageColorScheme(PageColorScheme scheme, ThemeBase themeBase)

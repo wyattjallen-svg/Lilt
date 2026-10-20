@@ -150,7 +150,13 @@ Test("schema file and validator know the same settings", () =>
     var props = doc.RootElement.GetProperty("properties");
     foreach (var (section, keys) in ThemeParser.KnownKeys)
     {
-        var sectionNode = section.Length == 0 ? default : props.GetProperty(section);
+        var sectionNode = default(JsonElement);
+        if (section.Length > 0)
+        {
+            var names = section.Split('.');
+            sectionNode = props.GetProperty(names[0]);
+            foreach (var n in names.Skip(1)) sectionNode = sectionNode.GetProperty("properties").GetProperty(n);
+        }
         if (section.Length > 0 && sectionNode.TryGetProperty("anyOf", out var anyOf))
             sectionNode = anyOf.EnumerateArray().First(a => a.TryGetProperty("properties", out _));
         var node = section.Length == 0 ? props : sectionNode.GetProperty("properties");
@@ -508,10 +514,105 @@ Test("power policy: full while used or audible, reduced when away, paused when u
     True(!PowerPolicy.ShouldSuspend(on with { SuspendMinutes = 0 }, 999, true));
 });
 
+Test("power policy: hidden behind another window, unless turned off", () =>
+{
+    var on = Theme.Default.Power;
+    Equal(PowerLevel.Hidden, PowerPolicy.Decide(on, false, false, 30, false, covered: false, energySaver: false, occluded: true));
+    Equal(PowerLevel.Reduced, PowerPolicy.Decide(on with { HideWhenOccluded = false }, false, false, 30, false, false, false, occluded: true));
+    Equal(PowerLevel.Paused, PowerPolicy.Decide(on, false, false, 30, false, covered: true, false, occluded: true));
+    True(PowerPolicy.Covers((0, 0, 1920, 1080), (100, 100, 900, 700)));
+    True(PowerPolicy.Covers((-8, -8, 1928, 1048), (0, 0, 1920, 1040)));
+    True(!PowerPolicy.Covers((0, 0, 1000, 1080), (100, 100, 1500, 700)));
+    True(!PowerPolicy.Covers((0, 0, 1920, 1080), (0, 0, 0, 0)));
+});
+
+Test("shortcuts: parse, display, codes and conflicts with typing", () =>
+{
+    True(Gesture.TryParse("ctrl+shift+t", out var g) && g == new Gesture(true, true, false, "T"));
+    Equal("Ctrl+Shift+T", g.ToString());
+    Equal("KeyT", g.Code);
+    Equal((int)'T', g.VirtualKey);
+    True(Gesture.TryParse("Ctrl+Shift+,", out var comma) && comma.Code == "Comma" && comma.VirtualKey == 188);
+    True(Gesture.TryParse("F6", out var f6) && f6.VirtualKey == 117);
+    True(Gesture.TryParse("Alt+Left", out var left) && left.Code == "ArrowLeft" && left.VirtualKey == 37);
+    foreach (var bad in new[] { "T", "Shift+K", "Ctrl+", "Hyper+K", "Ctrl+F25", "Ctrl+Pause", "", "Space" }) True(!Gesture.TryParse(bad, out _));
+    Equal("newTab", ShortcutMap.Default.Find(true, false, false, 'T'));
+    Equal("address", ShortcutMap.Default.Find(false, false, true, 'D'));
+    Equal(null, ShortcutMap.Default.Find(false, false, false, 'T'));
+    foreach (var (command, keys) in Commands.Defaults) True(keys.All(k => Gesture.TryParse(k, out _)) && Commands.Labels.ContainsKey(command));
+});
+
+Test("shortcuts in the theme: override, disable, bad entries skipped", () =>
+{
+    var r = ThemeParser.Parse("""{ "schemaVersion": 1, "shortcuts": { "palette": "Alt+Space", "split": "", "newTab": ["Ctrl+T", "Ctrl+N", "Z"], "rocket": "Ctrl+R" } }""");
+    Equal(new Gesture(false, false, true, "Space"), r.Theme.Shortcuts.For("palette").Single());
+    Equal(0, r.Theme.Shortcuts.For("split").Length);
+    Equal(2, r.Theme.Shortcuts.For("newTab").Length);
+    Equal(ShortcutMap.Default.For("reload").Length, r.Theme.Shortcuts.For("reload").Length);
+    Equal(2, r.Issues.Count);
+});
+
+Test("media and split settings parse with limits", () =>
+{
+    var r = ThemeParser.Parse("""{ "schemaVersion": 1, "media": { "bars": 500, "style": "wave", "player": { "show": "always", "x": 2, "width": 280 }, "musicSites": ["Example.COM", "not a host", 5] }, "split": { "orientation": "vertical", "ratio": 0.99 } }""");
+    Equal(Theme.Default.Media.Bars, r.Theme.Media.Bars);
+    Equal(VisualizerStyle.Wave, r.Theme.Media.Style);
+    Equal(WidgetShow.Always, r.Theme.Media.Player.Show);
+    Equal(Theme.Default.Media.Player.X, r.Theme.Media.Player.X);
+    Equal(280.0, r.Theme.Media.Player.Width);
+    Equal(new Ids("example.com"), r.Theme.Media.MusicSites);
+    Equal(SplitOrientation.Vertical, r.Theme.Split.Orientation);
+    Equal(Theme.Default.Split.Ratio, r.Theme.Split.Ratio);
+    Equal(5, r.Issues.Count);
+});
+
+Test("spectrum: a 1 kHz tone lights the band around 1 kHz, silence stays dark", () =>
+{
+    const int rate = 48000;
+    var s = new Spectrum(32, rate);
+    var tone = new float[4096];
+    for (var i = 0; i < tone.Length; i++) tone[i] = 0.5f * MathF.Sin(2 * MathF.PI * 1000 * i / rate);
+    s.Add(tone);
+    True(s.Update());
+    var loudest = Enumerable.Range(0, 32).MaxBy(b => s.Bars[b]);
+    // Band b covers 40 * 400^(b/32) .. 40 * 400^((b+1)/32) Hz; 1 kHz falls in band 17.
+    True(Math.Abs(loudest - 17) <= 1);
+    True(s.Bars[2] < s.Bars[loudest] * 0.5);
+    s.Clear();
+    s.Add(new float[2048]);
+    True(!s.Update());
+    var pcm = new byte[4096 * 4];
+    for (var i = 0; i < 4096; i++)
+    {
+        var v = (short)(16000 * MathF.Sin(2 * MathF.PI * 1000 * i / rate));
+        pcm[4 * i] = pcm[4 * i + 2] = (byte)v;
+        pcm[4 * i + 1] = pcm[4 * i + 3] = (byte)(v >> 8);
+    }
+    s.AddPcm16(pcm, 2);
+    True(s.Update());
+    True(Math.Abs(Enumerable.Range(0, 32).MaxBy(b => s.Bars[b]) - 17) <= 1);
+});
+
+Test("media info: page reports are checked and clipped", () =>
+{
+    MediaInfo? Parse(string json) { using var d = JsonDocument.Parse(json); return MediaInfo.Parse(d.RootElement); }
+    var m = Parse("""{"t":"media","playing":true,"title":"Song\u0007 A","artist":"Band","art":"https://i.example/a.jpg","video":false,"pos":61.5,"dur":200,"rate":1,"muted":false}""")!;
+    True(m.Playing);
+    Equal("Song A", m.Title);
+    Equal("https://i.example/a.jpg", m.Artwork);
+    Equal(61.5, m.Position);
+    Equal(null, Parse("""{"t":"media","none":true}"""));
+    var bad = Parse("""{"t":"media","playing":"yes","title":5,"art":"javascript:alert(1)","pos":-3,"dur":"x","rate":0}""")!;
+    True(!bad.Playing && bad.Title == "" && bad.Artwork == null && bad.Position == 0 && bad.Duration == 0 && bad.Rate == 1);
+    Equal(300, Parse("{\"title\":\"" + new string('x', 1000) + "\"}")!.Title.Length);
+    Equal("1:01", MediaInfo.Clock(61.4));
+    Equal("1:00:00", MediaInfo.Clock(3600));
+});
+
 Test("power settings parse with limits", () =>
 {
     var r = ThemeParser.Parse("""{ "schemaVersion": 1, "power": { "efficiency": false, "suspendMinutes": 0, "hideWhenCovered": false } }""");
-    Equal(new PowerSpec(false, 0, false), r.Theme.Power);
+    Equal(new PowerSpec(false, 0, false, true, false), r.Theme.Power);
     Equal(5, ThemeParser.Parse("""{ "schemaVersion": 1, "power": { "suspendMinutes": 9999 } }""").Theme.Power.SuspendMinutes);
 });
 
@@ -538,7 +639,10 @@ Test("theme writer round-trips through the parser", () =>
         Home = new HomeSpec(new Ids("tiles", "clock"), true, "me.jpg"),
         Toolbar = Theme.Default.Toolbar with { Items = new Ids("menu", "address") },
         Sidebar = Theme.Default.Sidebar with { Sections = new Ids() },
-        Power = new PowerSpec(false, 30, true),
+        Power = new PowerSpec(false, 30, true, false, true),
+        Media = Theme.Default.Media with { Bars = 48, Style = VisualizerStyle.Mirror, Player = Theme.Default.Media.Player with { X = 0.1, Show = WidgetShow.Always }, MusicSites = new Ids("example.com") },
+        Split = new SplitSpec(SplitOrientation.Vertical, 0.3, 0),
+        Shortcuts = new ShortcutMap(new Dictionary<string, Gesture[]>(ShortcutMap.Default.Map) { ["palette"] = [], ["split"] = [new(true, false, true, "S"), new(false, false, false, "F9")] }),
     };
     Equal(tweaked, ThemeParser.Parse(ThemeWriter.ToJson(tweaked)).Theme);
 });
@@ -646,6 +750,12 @@ Test("session: save, load, clamp, empty", () =>
         Equal(2, s.Tabs.Count);
         Equal(1, s.Active);
         Equal("B", s.Tabs[1].Title);
+        new Session([new("https://a.example/", "A"), new("https://b.example/", "B", true)], 0, 1).Save(path);
+        s = Session.Load(path)!;
+        Equal(1, s.Split);
+        True(s.Tabs[1].Pinned);
+        new Session([new("https://a.example/", "A")], 0, 0).Save(path);
+        Equal(-1, Session.Load(path)!.Split);
         new Session([], 0).Save(path);
         Equal(null, Session.Load(path));
         File.WriteAllText(path, "{ not json");
@@ -719,6 +829,7 @@ Test("addresses: extension pages open from the address bar, not other schemes", 
     var o = LaunchOptions.Parse(["--install-extension", "ghmbeldphafepmbegfdlkpapadhbakde", "--no-extensions"]);
     Equal("ghmbeldphafepmbegfdlkpapadhbakde", o.InstallExtension);
     True(o.NoExtensions);
+    Equal("split; wait 200", LaunchOptions.Parse(["--run", "split; wait 200", "x.com"]).Run);
 });
 
 return Summary();

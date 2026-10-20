@@ -33,7 +33,7 @@ public sealed partial class MainWindow
         var start = AddressResolver.Resolve(options.Url);
         startProblem = start.Kind == AddressKind.Rejected ? start.Reason : null;
 
-        BrowserTab? pick = null;
+        BrowserTab? pick = null, partner = null;
         if (!options.InPrivate && Session.Load(paths.Session) is { } session)
             for (var i = 0; i < session.Tabs.Count; i++)
             {
@@ -42,12 +42,15 @@ public sealed partial class MainWindow
                 var tab = new BrowserTab(saved.Url, saved.Title, saved.Pinned);
                 tabs.Add(tab);
                 if (i <= session.Active || pick is null) pick = tab;
+                if (i == session.Split) partner = tab;
             }
         if (start.Kind is AddressKind.Navigate or AddressKind.Search || tabs.Count == 0)
         {
             pick = new BrowserTab(start.Uri?.AbsoluteUri ?? BrowserEngine.NewTabUri.AbsoluteUri);
             tabs.Add(pick);
+            partner = null;
         }
+        if (partner is not null && partner != pick) split = (pick!, partner);
         active = pick;
         active!.IsActive = true;
         TabList.SelectedItem = active;
@@ -67,15 +70,21 @@ public sealed partial class MainWindow
 
     async Task<CoreWebView2> CreateViewAsync(BrowserTab tab, bool navigate)
     {
-        var view = new WebView2 { Visibility = tab == active ? Visibility.Visible : Visibility.Collapsed };
+        var view = new WebView2 { Visibility = Visibility.Collapsed };
         // Lets a transparent page (the glass home tab) show the window material instead of the control's own theme background.
         view.Resources["BrushForThemeBackgroundColor"] = new SolidColorBrush(Colors.Transparent);
         tab.View = view;
         SetPageBackground(tab);
-        PageHost.Children.Add(view);
+        PageHost.Children.Insert(0, view);
+        LayoutPages();
+        // In split view, clicking into the other pane makes its tab the one the toolbar acts on.
+        view.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, _) =>
+        {
+            if (tab != active && OnScreen(tab) && tab != floating) Activate(tab);
+        }), true);
         var c = await engine.AttachAsync(view);
         tab.Core = c;
-        if (tab != active) c.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low;
+        if (!OnScreen(tab)) c.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low;
 
         c.NavigationStarting += (_, e) =>
         {
@@ -120,11 +129,18 @@ public sealed partial class MainWindow
         {
             tab.IsAudible = c.IsDocumentPlayingAudio;
             UpdatePower();
+            UpdateVisualizer();
         };
-        c.IsMutedChanged += (_, _) => tab.IsMuted = c.IsMuted;
+        c.IsMutedChanged += (_, _) =>
+        {
+            tab.IsMuted = c.IsMuted;
+            if (tab == mediaTab) UpdateMedia();
+            UpdateVisualizer();
+        };
+        // A popped-out video fills its own small page, not the window.
         c.ContainsFullScreenElementChanged += (_, _) =>
         {
-            if (tab == active) SetFullScreen(c.ContainsFullScreenElement);
+            if (tab == active && tab != floating) SetFullScreen(c.ContainsFullScreenElement);
         };
         c.WindowCloseRequested += (_, _) => CloseTab(tab);
         c.ProcessFailed += (_, e) => OnProcessFailed(tab, e);
@@ -177,19 +193,25 @@ public sealed partial class MainWindow
     void Activate(BrowserTab tab)
     {
         if (!tabs.Contains(tab)) return;
-        if (active is { } old && old != tab)
+        if (tab == floating)
         {
-            old.IsActive = false;
-            if (old.View is { } oldView) oldView.Visibility = Visibility.Collapsed;
-            if (old.Core is { } oldCore) oldCore.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low;
+            floating = null;
+            if (tab.Core is { } fc) _ = engine.EvaluateAsync(fc, "__lilt.float(false)");
         }
+        var old = active;
+        if (old is not null && old != tab) old.IsActive = false;
         active = tab;
         tab.IsActive = true;
         tab.LastActive = Environment.TickCount64;
+        if (Partner(tab) is { } partner) partner.LastActive = tab.LastActive;
         if (TabList.SelectedItem != tab) TabList.SelectedItem = tab;
-        if (tab.View is { } view) view.Visibility = Visibility.Visible;
-        else if (tab.Loading is null && started) Load(tab);
-        if (tab.Core is { } c) c.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Normal;
+        if (tab.View is null && tab.Loading is null && started) Load(tab);
+        if (Partner(tab) is { View: null, Loading: null } p && started) Load(p);
+        LayoutPages();
+        foreach (var t in tabs)
+            if (t.Core is { } tc) tc.MemoryUsageTargetLevel = OnScreen(t) ? CoreWebView2MemoryUsageTargetLevel.Normal : CoreWebView2MemoryUsageTargetLevel.Low;
+        // media.autoPictureInPicture: a video playing in the tab you leave pops out.
+        if (old is { Media: { Playing: true, Video: true } } && old != tab && !OnScreen(old) && theme.Media.AutoPictureInPicture) _ = PipAsync(old);
         SetFullScreen(tab.Core?.ContainsFullScreenElement == true);
         UpdateNavigation();
         UpdateTitle();
@@ -233,8 +255,12 @@ public sealed partial class MainWindow
         }
         // Closing the last tab leaves a fresh home tab rather than closing the window.
         if (tabs.Count == 1) AddTab(BrowserEngine.NewTabUri.AbsoluteUri);
-        else if (tab == active) Activate(tabs[i + 1 < tabs.Count ? i + 1 : i - 1]);
+        else if (tab == active) Activate(Partner(tab) ?? tabs[i + 1 < tabs.Count ? i + 1 : i - 1]);
+        if (InSplit(tab)) split = null;
+        if (floating == tab) floating = null;
+        if (mediaTab == tab) mediaTab = tabs.FirstOrDefault(t => t != tab && t.Media is { Playing: true });
         tabs.Remove(tab);
+        LayoutPages();
         engine.Detach(tab.Core);
         if (tab.View is { } view)
         {
@@ -283,7 +309,7 @@ public sealed partial class MainWindow
         foreach (var tab in tabs.ToArray())
         {
             if (closing || tab.Core is not { } c || tab.IsAudible) continue;
-            var hidden = tab != active || force;
+            var hidden = !OnScreen(tab) || force;
             if (!hidden || (!force && !PowerPolicy.ShouldSuspend(spec, (now - tab.LastActive) / 60000.0, energySaver))) continue;
             try
             {
@@ -306,7 +332,9 @@ public sealed partial class MainWindow
         try
         {
             var list = tabs.Where(t => UrlPolicy.IsNavigable(t.Url)).ToList();
-            new Session(list.Select(t => new SessionTab(t.Url, t.Title, t.IsPinned)).ToList(), Math.Max(0, active is null ? 0 : list.IndexOf(active))).Save(paths.Session);
+            var partner = active is null ? null : Partner(active);
+            new Session(list.Select(t => new SessionTab(t.Url, t.Title, t.IsPinned)).ToList(), Math.Max(0, active is null ? 0 : list.IndexOf(active)),
+                partner is null ? -1 : list.IndexOf(partner)).Save(paths.Session);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -388,6 +416,18 @@ public sealed partial class MainWindow
             else Activate(tab);
         });
         Add("Duplicate", "", () => AddTab(tab.Url));
+        if (InSplit(tab))
+        {
+            Add("Swap split panes", "\uE8AB", SwapSplit);
+            Add("Close split view", "\uE8A9", () =>
+            {
+                split = null;
+                LayoutPages();
+                ScheduleSave();
+            });
+        }
+        else if (tab != active) Add("Open in split view", "\uE8A9", () => SplitWith(tab));
+        if (tab.Media is { Video: true }) Add(tab == floating ? "Put the video back" : "Pop out the video", "\uE8A7", () => _ = PipAsync(tab));
         if (bookmarks.Contains(tab.Url)) Add("Remove bookmark", "", () =>
         {
             bookmarks.Remove(tab.Url);

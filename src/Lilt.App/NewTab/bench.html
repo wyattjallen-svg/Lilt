@@ -1,0 +1,20 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Lilt animation bench</title>
+<!-- A page that never stops drawing, for measuring what Lilt costs in front, behind other windows and minimized. -->
+<style>html,body{margin:0;height:100%;background:#171a1e;overflow:hidden}canvas{display:block;width:100%;height:100%}</style>
+<canvas></canvas>
+<script>
+const c = document.querySelector('canvas'), g = c.getContext('2d');
+const dots = Array.from({ length: 400 }, (_, i) => ({ x: Math.random(), y: Math.random(), vx: (Math.random() - .5) / 300, vy: (Math.random() - .5) / 300, h: i % 360 }));
+function frame() {
+  const w = c.width = innerWidth, h = c.height = innerHeight;
+  for (const d of dots) {
+    d.x = (d.x + d.vx + 1) % 1; d.y = (d.y + d.vy + 1) % 1;
+    g.fillStyle = `hsl(${d.h} 50% 60%)`;
+    g.beginPath(); g.arc(d.x * w, d.y * h, 6, 0, 7); g.fill();
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>

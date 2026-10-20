@@ -1,3 +1,4 @@
+using Lilt.Core;
 using Lilt.Core.Layout;
 
 namespace Lilt.Core.Theming;
@@ -45,7 +46,8 @@ public sealed record Ids(IReadOnlyList<string> Items)
 // Every toolbar element; "address" stretches, the rest sit to its left or right in list order.
 public sealed record ToolbarSpec(double Height, Ids Items)
 {
-    public static readonly string[] All = ["back", "forward", "reload", "home", "address", "bookmark", "downloads", "extensions", "customize", "sidebar", "menu"];
+    public static readonly string[] All = ["back", "forward", "reload", "home", "address", "bookmark", "media", "split", "downloads", "extensions", "palette", "customize", "sidebar", "menu"];
+    public static readonly string[] Defaults = ["back", "forward", "reload", "home", "address", "bookmark", "media", "downloads", "extensions", "customize", "sidebar", "menu"];
 }
 
 public sealed record SidebarSpec(DockEdge Edge, double Width, double Height, bool AutoHide, double RevealEdge, int HideDelay, Ids Sections)
@@ -55,7 +57,8 @@ public sealed record SidebarSpec(DockEdge Edge, double Width, double Height, boo
 
 public sealed record MotionSpec(bool Animations, int Duration);
 
-public sealed record PagesSpec(PageColorScheme ColorScheme);
+// Peek: Shift+click a link to preview it in a panel over the page.
+public sealed record PagesSpec(PageColorScheme ColorScheme, bool Peek);
 
 // The home tab. Glass makes its background transparent so the window material shows through.
 // Background: "" for none, "hills" for the built-in scenery, or an image file name in the newtab folder.
@@ -64,8 +67,40 @@ public sealed record HomeSpec(Ids Items, bool Glass, string Background)
     public static readonly string[] All = ["logo", "clock", "search", "tiles", "hint", "gear"];
 }
 
-// How hard Lilt saves power while you're in another app. SuspendMinutes 0 never suspends background tabs.
-public sealed record PowerSpec(bool Efficiency, int SuspendMinutes, bool HideWhenCovered);
+// How hard Lilt saves power. SuspendMinutes 0 never suspends background tabs. HideWhenCovered pauses pages behind
+// full-screen apps; HideWhenOccluded hides (throttles, without suspending) pages fully behind another window.
+// Lean trades a little speed for less memory (Chromium's low-end-device mode and one process per site); it needs a restart.
+public sealed record PowerSpec(bool Efficiency, int SuspendMinutes, bool HideWhenCovered, bool HideWhenOccluded, bool Lean);
+
+public enum WidgetShow { Auto, Always, Never }
+
+// A floating panel over the page, dragged anywhere. X and Y place its top-left corner as a fraction of the page area,
+// so it keeps its place when the window resizes. Height 0 sizes to content.
+public sealed record WidgetSpec(WidgetShow Show, double X, double Y, double Width, double Height, double Opacity);
+
+public enum VisualizerStyle { Bars, Mirror, Wave }
+
+// Where the visualizer's audio comes from: System listens to Lilt's own audio output (works with every site, needs
+// Windows 11); Page reads the playing tab's media element (no DRM sites); Auto tries System first.
+public enum VisualizerSource { Auto, System, Page }
+
+// Media: the "now playing" panel, the visualizer and picture in picture. Auto shows the panel while a tab you can't see
+// plays, and the visualizer while a music site in MusicSites plays. Pip places videos popped out inside Lilt; its Show
+// picks Windows' own floating window when available (auto), always inside Lilt (always), or off (never). Height 0 is 16:9.
+public sealed record MediaSpec(WidgetSpec Player, WidgetSpec Visualizer, WidgetSpec Pip, int Bars, VisualizerStyle Style, VisualizerSource Source,
+    bool MediaKeys, bool AutoPictureInPicture, Ids MusicSites)
+{
+    public static readonly string[] DefaultMusicSites =
+    [
+        "music.youtube.com", "open.spotify.com", "soundcloud.com", "music.apple.com", "listen.tidal.com", "www.deezer.com",
+        "bandcamp.com", "www.pandora.com", "music.amazon.com", "www.mixcloud.com", "tunein.com", "radio.garden",
+    ];
+}
+
+public enum SplitOrientation { Horizontal, Vertical }
+
+// Split view: two tabs side by side (horizontal) or stacked (vertical). Ratio is the first pane's share.
+public sealed record SplitSpec(SplitOrientation Orientation, double Ratio, double Gap);
 
 public sealed record Theme(
     int SchemaVersion,
@@ -81,7 +116,10 @@ public sealed record Theme(
     MotionSpec Motion,
     PagesSpec Pages,
     HomeSpec Home,
-    PowerSpec Power)
+    PowerSpec Power,
+    MediaSpec Media,
+    SplitSpec Split,
+    ShortcutMap Shortcuts)
 {
     // "Lilt Minimal": deep charcoal, slate surfaces, warm white text, sage accent.
     public static Theme Default { get; } = new(
@@ -104,10 +142,17 @@ public sealed record Theme(
         new Typography("Segoe UI Variable Text", 13, 400),
         new Shape(Radius: 10, ControlRadius: 8, BorderWidth: 1),
         Density.Standard,
-        new ToolbarSpec(40, new Ids(ToolbarSpec.All)),
+        new ToolbarSpec(40, new Ids(ToolbarSpec.Defaults)),
         new SidebarSpec(DockEdge.Left, Width: 220, Height: 44, AutoHide: false, RevealEdge: 6, HideDelay: 350, new Ids(SidebarSpec.All)),
         new MotionSpec(Animations: true, Duration: 160),
-        new PagesSpec(PageColorScheme.Theme),
+        new PagesSpec(PageColorScheme.Theme, Peek: true),
         new HomeSpec(new Ids("logo", "search", "tiles", "gear"), Glass: true, Background: ""),
-        new PowerSpec(Efficiency: true, SuspendMinutes: 5, HideWhenCovered: true));
+        new PowerSpec(Efficiency: true, SuspendMinutes: 5, HideWhenCovered: true, HideWhenOccluded: true, Lean: false),
+        new MediaSpec(
+            Player: new WidgetSpec(WidgetShow.Auto, X: 0.66, Y: 0.74, Width: 300, Height: 0, Opacity: 1),
+            Visualizer: new WidgetSpec(WidgetShow.Auto, X: 0.66, Y: 0.6, Width: 300, Height: 72, Opacity: 0.9),
+            Pip: new WidgetSpec(WidgetShow.Auto, X: 0.6, Y: 0.55, Width: 400, Height: 0, Opacity: 1),
+            Bars: 32, VisualizerStyle.Bars, VisualizerSource.Auto, MediaKeys: true, AutoPictureInPicture: false, new Ids(MediaSpec.DefaultMusicSites)),
+        new SplitSpec(SplitOrientation.Horizontal, Ratio: 0.5, Gap: 6),
+        ShortcutMap.Default);
 }

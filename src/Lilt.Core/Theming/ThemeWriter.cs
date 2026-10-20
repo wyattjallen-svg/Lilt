@@ -36,11 +36,40 @@ public static class ThemeWriter
                 ("edge", Camel(t.Sidebar.Edge)), ("width", t.Sidebar.Width), ("height", t.Sidebar.Height),
                 ("autoHide", t.Sidebar.AutoHide), ("revealEdge", t.Sidebar.RevealEdge), ("hideDelay", t.Sidebar.HideDelay)), "sections", t.Sidebar.Sections),
             ["motion"] = Obj(("animations", t.Motion.Animations), ("duration", t.Motion.Duration)),
-            ["pages"] = Obj(("colorScheme", Camel(t.Pages.ColorScheme))),
+            ["pages"] = Obj(("colorScheme", Camel(t.Pages.ColorScheme)), ("peek", t.Pages.Peek)),
             ["home"] = With(Obj(("glass", t.Home.Glass), ("background", t.Home.Background)), "items", t.Home.Items),
-            ["power"] = Obj(("efficiency", t.Power.Efficiency), ("suspendMinutes", t.Power.SuspendMinutes), ("hideWhenCovered", t.Power.HideWhenCovered)),
+            ["power"] = Obj(("efficiency", t.Power.Efficiency), ("suspendMinutes", t.Power.SuspendMinutes), ("hideWhenCovered", t.Power.HideWhenCovered),
+                ("hideWhenOccluded", t.Power.HideWhenOccluded), ("lean", t.Power.Lean)),
+            ["media"] = Media(t.Media),
+            ["split"] = Obj(("orientation", Camel(t.Split.Orientation)), ("ratio", t.Split.Ratio), ("gap", t.Split.Gap)),
+            ["shortcuts"] = Shortcuts(t.Shortcuts),
         };
         return Header + root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n";
+    }
+
+    static JsonObject Media(MediaSpec m)
+    {
+        static JsonObject Widget(WidgetSpec w) =>
+            Obj(("show", Camel(w.Show)), ("x", w.X), ("y", w.Y), ("width", w.Width), ("height", w.Height), ("opacity", w.Opacity));
+        var o = Obj(("bars", m.Bars), ("style", Camel(m.Style)), ("source", Camel(m.Source)), ("mediaKeys", m.MediaKeys), ("autoPictureInPicture", m.AutoPictureInPicture));
+        o["player"] = Widget(m.Player);
+        o["visualizer"] = Widget(m.Visualizer);
+        o["pip"] = Widget(m.Pip);
+        return With(o, "musicSites", m.MusicSites);
+    }
+
+    // Only commands whose keys differ from the defaults are written, so the file stays short.
+    static JsonObject Shortcuts(ShortcutMap map)
+    {
+        var o = new JsonObject();
+        foreach (var (command, gestures) in map.Map)
+        {
+            if (gestures.SequenceEqual(ShortcutMap.Default.For(command))) continue;
+            o[command] = gestures.Length == 1
+                ? JsonValue.Create(gestures[0].ToString())
+                : new JsonArray(gestures.Select(g => (JsonNode?)JsonValue.Create(g.ToString())).ToArray());
+        }
+        return o;
     }
 
     static JsonObject With(JsonObject o, string key, Ids ids)

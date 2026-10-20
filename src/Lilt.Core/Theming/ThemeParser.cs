@@ -18,7 +18,7 @@ public static class ThemeParser
 
     public static IReadOnlyDictionary<string, string[]> KnownKeys { get; } = new Dictionary<string, string[]>
     {
-        [""] = ["$schema", "schemaVersion", "name", "base", "backdrop", "colors", "typography", "shape", "density", "toolbar", "sidebar", "motion", "pages", "home", "power"],
+        [""] = ["$schema", "schemaVersion", "name", "base", "backdrop", "colors", "typography", "shape", "density", "toolbar", "sidebar", "motion", "pages", "home", "power", "media", "split", "shortcuts"],
         ["backdrop"] = ["material", "tint", "tintOpacity", "luminosityOpacity"],
         ["colors"] = ["background", "surface", "surfaceRaised", "border", "text", "textMuted", "accent", "onAccent", "hover", "pressed", "page"],
         ["typography"] = ["family", "size", "weight"],
@@ -26,10 +26,16 @@ public static class ThemeParser
         ["toolbar"] = ["height", "items"],
         ["sidebar"] = ["edge", "width", "height", "autoHide", "revealEdge", "hideDelay", "sections"],
         ["motion"] = ["animations", "duration"],
-        ["pages"] = ["colorScheme"],
+        ["pages"] = ["colorScheme", "peek"],
         // clock/search/tiles are the v0.2 switches, still read when "items" is absent.
         ["home"] = ["items", "glass", "background", "clock", "search", "tiles"],
-        ["power"] = ["efficiency", "suspendMinutes", "hideWhenCovered"],
+        ["power"] = ["efficiency", "suspendMinutes", "hideWhenCovered", "hideWhenOccluded", "lean"],
+        ["media"] = ["player", "visualizer", "pip", "bars", "style", "source", "mediaKeys", "autoPictureInPicture", "musicSites"],
+        ["media.player"] = ["show", "x", "y", "width", "height", "opacity"],
+        ["media.visualizer"] = ["show", "x", "y", "width", "height", "opacity"],
+        ["media.pip"] = ["show", "x", "y", "width", "height", "opacity"],
+        ["split"] = ["orientation", "ratio", "gap"],
+        ["shortcuts"] = Commands.Defaults.Keys.ToArray(),
     };
 
     static readonly JsonDocumentOptions jsonOptions = new()
@@ -138,7 +144,7 @@ public static class ThemeParser
                 r.Int(mo, "duration", 0, 1000, d.Motion.Duration));
 
             var pg = r.Section(root, "pages");
-            var pages = new PagesSpec(r.Enum(pg, "colorScheme", d.Pages.ColorScheme));
+            var pages = new PagesSpec(r.Enum(pg, "colorScheme", d.Pages.ColorScheme), r.Bool(pg, "peek", d.Pages.Peek));
 
             var hm = r.Section(root, "home");
             var homeItems = d.Home.Items;
@@ -152,7 +158,31 @@ public static class ThemeParser
             var power = new PowerSpec(
                 r.Bool(pw, "efficiency", d.Power.Efficiency),
                 r.Int(pw, "suspendMinutes", 0, 240, d.Power.SuspendMinutes),
-                r.Bool(pw, "hideWhenCovered", d.Power.HideWhenCovered));
+                r.Bool(pw, "hideWhenCovered", d.Power.HideWhenCovered),
+                r.Bool(pw, "hideWhenOccluded", d.Power.HideWhenOccluded),
+                r.Bool(pw, "lean", d.Power.Lean));
+
+            var md = r.Section(root, "media");
+            var dm = d.Media;
+            var media = new MediaSpec(
+                r.Widget(r.Sub(md, "player"), dm.Player),
+                r.Widget(r.Sub(md, "visualizer"), dm.Visualizer),
+                r.Widget(r.Sub(md, "pip"), dm.Pip),
+                r.Int(md, "bars", 4, 96, dm.Bars),
+                r.Enum(md, "style", dm.Style),
+                r.Enum(md, "source", dm.Source),
+                r.Bool(md, "mediaKeys", dm.MediaKeys),
+                r.Bool(md, "autoPictureInPicture", dm.AutoPictureInPicture),
+                r.Hosts(md, "musicSites", dm.MusicSites));
+
+            var sp = r.Section(root, "split");
+            var split = new SplitSpec(
+                r.Enum(sp, "orientation", d.Split.Orientation),
+                r.Num(sp, "ratio", 0.15, 0.85, d.Split.Ratio),
+                r.Num(sp, "gap", 0, 24, d.Split.Gap));
+
+            var sc = r.Section(root, "shortcuts");
+            var shortcuts = new ShortcutMap(Commands.Defaults.Keys.ToDictionary(k => k, k => r.Gestures(sc, k, d.Shortcuts.For(k))));
 
             // "backdrop" is either a material name or an object with tint settings.
             BackdropSpec backdrop;
@@ -184,7 +214,10 @@ public static class ThemeParser
                 motion,
                 pages,
                 home,
-                power);
+                power,
+                media,
+                split,
+                shortcuts);
 
             return new ThemeLoadResult(theme, issues, false);
         }
@@ -206,6 +239,58 @@ public static class ThemeParser
             foreach (var p in obj.EnumerateObject())
                 if (Array.IndexOf(known, p.Name) < 0)
                     issues.Add(new(Join(path, p.Name), "unknown setting, ignored"));
+        }
+
+        public Obj? Sub(Obj? parent, string name)
+        {
+            if (parent is not { } p || !p.Element.TryGetProperty(name, out var v)) return null;
+            var path = Join(p.Path, name);
+            if (v.ValueKind != JsonValueKind.Object)
+            {
+                issues.Add(new(path, "expected an object; using defaults"));
+                return null;
+            }
+            Unknown(v, path);
+            return new Obj(v, path);
+        }
+
+        public WidgetSpec Widget(Obj? o, WidgetSpec d) => new(
+            Enum(o, "show", d.Show), Num(o, "x", 0, 1, d.X), Num(o, "y", 0, 1, d.Y),
+            Num(o, "width", 120, 900, d.Width), Num(o, "height", 0, 600, d.Height), Num(o, "opacity", 0.2, 1, d.Opacity));
+
+        // Host names only ("open.spotify.com"); anything else is dropped with a warning.
+        public Ids Hosts(Obj? o, string key, Ids fallback)
+        {
+            if (!Get(o, key, out var v, out var path)) return fallback;
+            if (v.ValueKind != JsonValueKind.Array) return Bad(path, "expected a list of site names like \"open.spotify.com\"", fallback);
+            var hosts = new List<string>();
+            foreach (var e in v.EnumerateArray())
+            {
+                var h = e.ValueKind == JsonValueKind.String ? e.GetString()?.Trim().ToLowerInvariant() : null;
+                if (h is { Length: > 0 and <= 253 } && Uri.CheckHostName(h) == UriHostNameType.Dns && !hosts.Contains(h)) hosts.Add(h);
+                else issues.Add(new(path, $"{(h is null ? "a non-text entry" : $"\"{h}\"")} isn't a site name; skipped"));
+            }
+            return new Ids(hosts.ToArray());
+        }
+
+        // A shortcut: "Ctrl+Shift+T", a list of them, or "" / [] for none.
+        public Gesture[] Gestures(Obj? o, string key, Gesture[] fallback)
+        {
+            if (!Get(o, key, out var v, out var path)) return fallback;
+            var texts = v.ValueKind switch
+            {
+                JsonValueKind.String => [v.GetString()!],
+                JsonValueKind.Array => v.EnumerateArray().Select(e => e.ValueKind == JsonValueKind.String ? e.GetString()! : "?").ToArray(),
+                _ => (string[]?)null,
+            };
+            if (texts is null) return Bad(path, "expected a shortcut like \"Ctrl+Shift+T\", a list of them, or \"\"", fallback);
+            var list = new List<Gesture>();
+            foreach (var t in texts.Where(t => t.Length > 0))
+            {
+                if (Gesture.TryParse(t, out var g)) list.Add(g);
+                else issues.Add(new(path, $"\"{t}\" isn't a shortcut Lilt understands (Ctrl/Shift/Alt plus a key; letters need Ctrl or Alt); skipped"));
+            }
+            return list.ToArray();
         }
 
         public Obj? Section(JsonElement root, string name)
@@ -320,6 +405,7 @@ public static class ThemeParser
                 bool b => b ? "true" : "false",
                 System.Enum e => Camel(e.ToString()),
                 string s => $"\"{s}\"",
+            Gesture[] g => g.Length == 0 ? "none" : string.Join(" or ", g.Select(x => x.ToString())),
                 IFormattable f => f.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
                 _ => fallback?.ToString(),
             };

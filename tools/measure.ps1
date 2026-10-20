@@ -8,6 +8,7 @@
   Results are written as JSON plus a markdown summary (median, min, max).
   -Warm launches once first and closes, so first-run work (extension install, profile creation) isn't measured.
   -Cover puts a full-screen window (standing in for a game) in front for -AfterCover seconds before and during the sample.
+  -Occlude does the same with an ordinary maximized window (another app on top of the browser).
 
 .EXAMPLE
   ./tools/measure.ps1 -Exe .\out\Lilt\Lilt.exe
@@ -26,6 +27,7 @@ param(
     [int]$AfterMinimize = 10,
     [switch]$Warm,
     [switch]$Cover,
+    [switch]$Occlude,
     [int]$AfterCover = 20,
     [string]$Label = '',
     [string]$Out = 'measure-results.json',
@@ -110,14 +112,15 @@ for ($run = 1; $run -le $Runs; $run++) {
     [void][Lilt.Native]::SetForegroundWindow($p.MainWindowHandle)
     Start-Sleep -Seconds ([math]::Max(0, $Settle - 3))
     $coverProc = $null
-    if ($Cover) {
+    if ($Cover -or $Occlude) {
         $coverFile = Join-Path $dir 'cover.ps1'
-        Set-Content $coverFile @'
+        $style = if ($Occlude) { "'Sizable'; `$f.TopMost = `$false" } else { "'None'; `$f.TopMost = `$true" }
+        Set-Content $coverFile @"
 Add-Type -AssemblyName System.Windows.Forms
-$f = New-Object System.Windows.Forms.Form
-$f.FormBorderStyle = 'None'; $f.WindowState = 'Maximized'; $f.TopMost = $true; $f.BackColor = 'Black'; $f.Text = 'Game'
-[System.Windows.Forms.Application]::Run($f)
-'@
+`$f = New-Object System.Windows.Forms.Form
+`$f.FormBorderStyle = $style; `$f.WindowState = 'Maximized'; `$f.BackColor = 'Black'; `$f.Text = 'Other app'
+[System.Windows.Forms.Application]::Run(`$f)
+"@
         $coverProc = Start-Process pwsh -ArgumentList '-NoProfile', '-File', "`"$coverFile`"" -PassThru
         Start-Sleep -Seconds $AfterCover
     }
@@ -163,7 +166,7 @@ $summary = @(
     "### $Browser $Label".Trim()
     ''
     "$($conditions.os) · $($conditions.cpu) · $($conditions.logicalCores) logical cores · $($conditions.ramGB) GB · power plan $($conditions.powerPlan)"
-    "WebView2 runtime $wv2 · $Runs runs · settle $Settle s · CPU sampled over $Sample s · minimized: $([bool]$Minimize) · warm start: $([bool]$Warm) · covered: $([bool]$Cover) · $Url"
+    "WebView2 runtime $wv2 · $Runs runs · settle $Settle s · CPU sampled over $Sample s · minimized: $([bool]$Minimize) · warm start: $([bool]$Warm) · covered: $([bool]$Cover) · behind a window: $([bool]$Occlude) · $Url"
     ''
     '| Metric | Median | Min | Max |'
     '|---|---|---|---|'

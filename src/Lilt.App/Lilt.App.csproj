@@ -17,6 +17,8 @@
     <WindowsPackageType>None</WindowsPackageType>
     <EnableMsixTooling>true</EnableMsixTooling>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <!-- One GC thread instead of a background one: the UI heap is small, so pauses stay short and memory stays lower. -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
   </PropertyGroup>
 
   <ItemGroup>
@@ -33,6 +35,7 @@
     <Content Include="NewTab\*.*" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Extensions\ubol-key.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\lilt.ico" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="Browser\page.js" LogicalName="Lilt.App.Browser.page.js" />
   </ItemGroup>
 
   <!-- uBlock Origin Lite (GPL-3.0) is bundled from its official release, pinned by version and SHA-256. -->

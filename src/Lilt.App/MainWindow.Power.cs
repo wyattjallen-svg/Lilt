@@ -9,14 +9,15 @@ using Windows.System.Power;
 namespace Lilt.App;
 
 // Efficiency mode (rules in Lilt.Core.PowerPolicy). Windows already gives minimized and covered windows a low QoS;
-// on top of that Lilt lowers its own priority and asks for EcoQoS, sets every page's memory target to Low, and when
-// it can't be seen at all hides and suspends its pages. Everything returns to normal the moment Lilt is in front again.
-// No polling while you use Lilt: the only timer runs while you're in another app.
+// on top of that Lilt lowers its own priority and asks for EcoQoS, sets every page's memory target to Low, hides its
+// pages when they can't be seen (behind another window: Hidden; minimized or behind a full-screen app: Paused, which
+// also suspends them) and hands its own unused memory back to Windows. Everything returns to normal the moment Lilt is
+// in front again. No polling while you use Lilt: the only timer runs while you're in another app.
 public sealed partial class MainWindow
 {
     DispatcherQueueTimer? powerTimer;
     long awaySince = -1;
-    bool energySaver, pageHiddenForPower, closing;
+    bool energySaver, closing, windowHidden;
     PowerLevel powerLevel = PowerLevel.Full;
     IntPtr hwnd;
 
@@ -58,8 +59,16 @@ public sealed partial class MainWindow
         var minimized = AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized };
         var away = awaySince < 0 ? 0 : (Environment.TickCount64 - awaySince) / 1000.0;
         var audible = tabs.Any(t => t.IsAudible);
-        var covered = !focused && !minimized && theme.Power.HideWhenCovered && Native.IsCovered(hwnd);
-        var level = PowerPolicy.Decide(theme.Power, focused, minimized, away, audible, covered, energySaver);
+        var covered = !focused && !minimized && Native.IsCovered(hwnd);
+        var occluded = !focused && !minimized && !covered && Native.IsOccluded(hwnd);
+        // Whatever the level, nothing Lilt draws for itself (the visualizer, the player's clock) runs while it can't be seen.
+        var hidden = minimized || covered || occluded;
+        if (hidden != windowHidden)
+        {
+            windowHidden = hidden;
+            UpdateVisualizer();
+        }
+        var level = PowerPolicy.Decide(theme.Power, focused, minimized, away, audible, covered && theme.Power.HideWhenCovered, energySaver, occluded);
         if (level == powerLevel)
         {
             // Suspending can fail while a just-hidden view still counts as visible; each paused tick tries again.
@@ -81,33 +90,38 @@ public sealed partial class MainWindow
             if (tab.Core is not { } c) continue;
             try
             {
-                c.MemoryUsageTargetLevel = efficient || tab != active ? CoreWebView2MemoryUsageTargetLevel.Low : CoreWebView2MemoryUsageTargetLevel.Normal;
+                c.MemoryUsageTargetLevel = efficient || !OnScreen(tab) ? CoreWebView2MemoryUsageTargetLevel.Low : CoreWebView2MemoryUsageTargetLevel.Normal;
             }
             catch (Exception) { } // a view that's closing
         }
 
-        if (level == PowerLevel.Paused && active?.View is { Visibility: Visibility.Visible } view)
+        // Hidden pages stop rendering and get Chromium's background throttling; paused ones are then suspended too.
+        var hide = level is PowerLevel.Hidden or PowerLevel.Paused;
+        if (hide != pagesHidden)
         {
-            // Hidden pages stop rendering and get Chromium's background throttling; then they can be suspended.
-            view.Visibility = Visibility.Collapsed;
-            pageHiddenForPower = true;
-            SuspendIdleTabs(force: true);
-            // The view reports itself hidden a moment later; suspend again then.
-            _ = Task.Delay(2000).ContinueWith(_ => DispatcherQueue.TryEnqueue(() =>
-            {
-                if (powerLevel == PowerLevel.Paused) SuspendIdleTabs(force: true);
-            }));
+            pagesHidden = hide;
+            LayoutPages();
+            UpdateVisualizer();
         }
-        else if (level != PowerLevel.Paused && pageHiddenForPower)
+        if (hide)
         {
-            pageHiddenForPower = false;
-            if (active?.View is { } shown) shown.Visibility = Visibility.Visible;
+            Native.TrimMemory();
+            if (level == PowerLevel.Paused)
+            {
+                SuspendIdleTabs(force: true);
+                // The view reports itself hidden a moment later; suspend again then.
+                _ = Task.Delay(2000).ContinueWith(_ => DispatcherQueue.TryEnqueue(() =>
+                {
+                    if (powerLevel == PowerLevel.Paused) SuspendIdleTabs(force: true);
+                }));
+            }
         }
         powerTimer.Interval = TimeSpan.FromSeconds(level == PowerLevel.Paused ? 30 : 10);
         PowerStatus.Text = level switch
         {
             PowerLevel.Full => "Running normally.",
             PowerLevel.Reduced => $"Efficiency mode on {changed} of {pids.Count} processes.",
+            PowerLevel.Hidden => $"Behind another window: pages hidden; efficiency mode on {changed} of {pids.Count} processes.",
             _ => $"Paused: pages hidden and suspended; efficiency mode on {changed} of {pids.Count} processes.",
         };
     }
