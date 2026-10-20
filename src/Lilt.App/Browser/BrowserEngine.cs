@@ -40,7 +40,8 @@ sealed class BrowserEngine
     const string KeyScript = """
         (() => {
           const send = globalThis.__liltKey;
-          if (typeof send !== 'function' || globalThis.__liltKeyOn) return;
+          if (typeof send !== 'function') return 'no binding';
+          if (globalThis.__liltKeyOn) return 'already on';
           globalThis.__liltKeyOn = true;
           addEventListener('keydown', e => {
             const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
@@ -60,6 +61,7 @@ sealed class BrowserEngine
             send(cmd);
           }, true);
           send('ready');
+          return 'on';
         })();
         """;
 
@@ -162,12 +164,14 @@ sealed class BrowserEngine
     {
         try
         {
-            core.GetDevToolsProtocolEventReceiver("Runtime.bindingCalled").DevToolsProtocolEventReceived += (sender, e) =>
+            // The captured core, not the event's sender: the sender can be a different projection of the same view.
+            core.GetDevToolsProtocolEventReceiver("Runtime.bindingCalled").DevToolsProtocolEventReceived += (_, e) =>
             {
                 using var doc = JsonDocument.Parse(e.ParameterObjectAsJson);
                 var root = doc.RootElement;
-                if (root.GetProperty("name").GetString() == "__liltKey" && root.GetProperty("payload").GetString() is { Length: <= 16 } command)
-                    KeyCommand?.Invoke(sender, command);
+                if (root.GetProperty("name").GetString() != "__liltKey" || root.GetProperty("payload").GetString() is not { Length: <= 16 } command) return;
+                if (command == "ready") Trace?.Invoke("shim ready");
+                else KeyCommand?.Invoke(core, command);
             };
             core.DOMContentLoaded += (sender, e) => _ = AddKeyShimToDocumentAsync(sender);
             await core.CallDevToolsProtocolMethodAsync("Runtime.addBinding", """{"name":"__liltKey","executionContextName":"lilt"}""");
