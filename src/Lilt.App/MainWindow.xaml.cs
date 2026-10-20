@@ -293,10 +293,15 @@ public sealed partial class MainWindow : Window
         };
         if (command is null) return;
         e.Handled = true;
+        report.Key("xaml", command);
         RunCommand(command, keyboard: true);
     }
 
-    void RunCommand(string command) => RunCommand(command, keyboard: true);
+    void RunCommand(string command)
+    {
+        report.Key("page", command);
+        RunCommand(command, keyboard: true);
+    }
 
     void RunCommand(string command, bool keyboard)
     {
@@ -449,7 +454,7 @@ public sealed partial class MainWindow : Window
             backdropKey = key;
         }
         Root.Background = supported ? new SolidColorBrush(Colors.Transparent) : ThemeResources.Get("LiltBackgroundBrush");
-        report.Backdrop = supported ? spec.Material.ToString() : $"solid ({spec.Material} unsupported)";
+        report.Backdrop = (supported ? spec.Material.ToString() : $"solid ({spec.Material} unsupported)") + (uiSettings.AdvancedEffectsEnabled ? "" : ", transparency effects off in Windows");
         backdropNote = supported || spec.Material == Backdrop.None ? "" : $" · {spec.Material} unavailable, using a solid background";
     }
 

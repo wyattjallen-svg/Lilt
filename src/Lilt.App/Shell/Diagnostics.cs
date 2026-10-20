@@ -17,6 +17,17 @@ sealed class StartupReport(string? path)
     public void EngineReady() => engineReady ??= Since();
     public void Extensions(IEnumerable<string> list) => extensions = list.ToArray();
 
+    // Which path delivered each shortcut ("xaml" accelerator or "page" key shim), for the CI keyboard test.
+    public void Key(string source, string command)
+    {
+        if (path is null) return;
+        try
+        {
+            File.AppendAllText(path + ".keys.txt", $"{Math.Round(Since())} {source} {command}\n");
+        }
+        catch (IOException) { }
+    }
+
     public void FirstNavigation(string url, bool succeeded, string status)
     {
         if (path is null) return;

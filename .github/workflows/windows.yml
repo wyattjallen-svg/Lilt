@@ -121,28 +121,44 @@ jobs:
           [void](Smoke 'paper' @('--theme', "`"$PWD\out\Lilt\Themes\paper.json`"", '--url', 'https://example.com'))
           [void](Smoke 'frost-home' @('--theme', "`"$PWD\out\Lilt\Themes\frost.json`""))
           $frost = if (Test-Path 'smoke-frost-home.json') { (Get-Content 'smoke-frost-home.json' -Raw | ConvertFrom-Json).backdrop } else { '' }
-          Check 'Frost theme gets its glass material' ($frost -eq 'AcrylicThin') "backdrop: $frost"
-          [void](Smoke 'adblock-test' @('--url', 'https://adblock-tester.com/') -settle 20)
+          Check 'Frost theme gets its glass material' ($frost -like 'AcrylicThin*') "backdrop: $frost"
+          # A user script (Lilt's per-site JS) scrolls the tester to its score so the screenshot shows it.
+          $userDir = Join-Path $env:RUNNER_TEMP 'lilt-adblock-test/user'
+          New-Item -ItemType Directory $userDir -Force | Out-Null
+          Set-Content (Join-Path $userDir 'adblock-tester.com.js') @'
+          addEventListener('load', () => setTimeout(() => {
+            document.documentElement.style.zoom = '0.6';
+            const el = [...document.querySelectorAll('h1,h2,h3,h4,p,div,span')].find(e => /your score|points/i.test(e.textContent) && e.children.length < 3);
+            (el || document.body).scrollIntoView({ block: 'start' });
+          }, 12000));
+          '@
+          [void](Smoke 'adblock-test' @('--url', 'https://adblock-tester.com/') -settle 22)
 
-          # Click into the page and press Ctrl+T (handled by the in-page key shim), then Ctrl+T again from the
-          # home tab's address box (a XAML accelerator), then close: the saved session should hold three tabs.
-          $dir = Smoke 'keys-session' @('--url', 'https://example.com') {
+          # From the home tab (address box focused): Ctrl+T as a XAML accelerator, then type a site into the new tab,
+          # click into that page and press Ctrl+T again (the in-page key shim). Closing should save three tabs.
+          $dir = Smoke 'keys-session' @() {
             param($p)
             $p.Refresh()
             [void][Lilt.Input]::SetForegroundWindow($p.MainWindowHandle)
             Start-Sleep -Seconds 1
+            [System.Windows.Forms.SendKeys]::SendWait('^t')
+            Start-Sleep -Seconds 3
+            [System.Windows.Forms.SendKeys]::SendWait('example.com{ENTER}')
+            Start-Sleep -Seconds 5
             [void][Lilt.Input]::SetCursorPos(640, 420)
             [Lilt.Input]::mouse_event(2, 0, 0, 0, 0); [Lilt.Input]::mouse_event(4, 0, 0, 0, 0)
             Start-Sleep -Seconds 1
             [System.Windows.Forms.SendKeys]::SendWait('^t')
             Start-Sleep -Seconds 3
-            [System.Windows.Forms.SendKeys]::SendWait('^t')
-            Start-Sleep -Seconds 3
           }
           $dir = @($dir)[-1]
+          $keys = if (Test-Path "$dir/startup.json.keys.txt") { Get-Content "$dir/startup.json.keys.txt" } else { @() }
           $session = if (Test-Path "$dir/session.json") { Get-Content "$dir/session.json" -Raw | ConvertFrom-Json } else { $null }
           if ($session) { Copy-Item "$dir/session.json" 'smoke-keys-session.session.json' }
-          Check 'Ctrl+T in a page and in the address box; session saved on close' ($session -and $session.tabs.Count -eq 3) "tabs: $(if ($session) { ($session.tabs | ForEach-Object url) -join ', ' } else { 'no session.json' })"
+          $urls = if ($session) { ($session.tabs | ForEach-Object url) -join ', ' } else { 'no session.json' }
+          Check 'Ctrl+T from the address box (XAML)' ([bool]($keys -match 'xaml newTab')) "keys: $($keys -join ' / ')"
+          Check 'Ctrl+T from inside a page (key shim)' ([bool]($keys -match 'page newTab')) "keys: $($keys -join ' / ')"
+          Check 'Session saved on close' ($session -and $session.tabs.Count -eq 3) "tabs: $urls"
 
           [void](Smoke 'proton-pass' @('--install-extension', 'ghmbeldphafepmbegfdlkpapadhbakde') -settle 4)
           $pp = Extensions 'proton-pass'

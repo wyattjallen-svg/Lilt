@@ -40,7 +40,8 @@ sealed class BrowserEngine
     const string KeyScript = """
         (() => {
           const send = globalThis.__liltKey;
-          if (typeof send !== 'function') return;
+          if (typeof send !== 'function' || globalThis.__liltKeyOn) return;
+          globalThis.__liltKeyOn = true;
           addEventListener('keydown', e => {
             const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
             const ctrl = e.ctrlKey && !e.altKey && !e.metaKey;
@@ -152,6 +153,8 @@ sealed class BrowserEngine
     }
 
     // DevTools Protocol: a binding that exists only in Lilt's isolated world, plus the listener script for that world.
+    // Runtime.enable is deliberately never called (sites can detect it), which means a binding registered by world name
+    // may not reach new documents; so each document also gets the world, binding and script directly at DOMContentLoaded.
     async Task InstallKeyShimAsync(CoreWebView2 core)
     {
         try
@@ -163,12 +166,35 @@ sealed class BrowserEngine
                 if (root.GetProperty("name").GetString() == "__liltKey" && root.GetProperty("payload").GetString() is { Length: <= 16 } command)
                     KeyCommand?.Invoke(sender, command);
             };
+            core.DOMContentLoaded += (sender, _) => _ = AddKeyShimToDocumentAsync(sender);
             await core.CallDevToolsProtocolMethodAsync("Runtime.addBinding", """{"name":"__liltKey","executionContextName":"lilt"}""");
             await core.CallDevToolsProtocolMethodAsync("Page.addScriptToEvaluateOnNewDocument", JsonSerializer.Serialize(new { source = KeyScript, worldName = "lilt" }));
         }
         catch (Exception e)
         {
             LiltPaths.LogError(e);
+        }
+    }
+
+    static async Task AddKeyShimToDocumentAsync(CoreWebView2 core)
+    {
+        try
+        {
+            using var tree = JsonDocument.Parse(await core.CallDevToolsProtocolMethodAsync("Page.getFrameTree", "{}"));
+            var frameId = tree.RootElement.GetProperty("frameTree").GetProperty("frame").GetProperty("id").GetString();
+            using var world = JsonDocument.Parse(await core.CallDevToolsProtocolMethodAsync("Page.createIsolatedWorld", JsonSerializer.Serialize(new { frameId, worldName = "lilt" })));
+            var context = world.RootElement.GetProperty("executionContextId").GetInt32();
+            await core.CallDevToolsProtocolMethodAsync("Runtime.addBinding", JsonSerializer.Serialize(new { name = "__liltKey", executionContextId = context }));
+            await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", JsonSerializer.Serialize(new { expression = KeyScript, contextId = context }));
+        }
+        catch (Exception e) when (e.Message.Contains("-3260", StringComparison.Ordinal))
+        {
+            // Protocol errors (a method or parameter Chromium no longer accepts) are bugs worth logging.
+            LiltPaths.LogError(e);
+        }
+        catch (Exception)
+        {
+            // The document went away mid-setup (navigation, closed tab); the next one gets its own attempt.
         }
     }
 
@@ -359,8 +385,10 @@ sealed class BrowserEngine
     public async Task<IReadOnlyList<ExtensionInfo>> ListExtensionsAsync(CoreWebView2Profile profile)
     {
         var list = new List<ExtensionInfo>();
+        // Only what Lilt installed; WebView2's own component extensions (PDF viewer, clipboard) stay out of the list.
         foreach (var x in await profile.GetBrowserExtensionsAsync())
         {
+            if (!Directory.Exists(Path.Combine(options.ExtensionsFolder, x.Id))) continue;
             var (popup, optionsPage) = Pages(x.Id);
             list.Add(new(x.Id, x.Name, x.IsEnabled, popup, optionsPage, x.Id == UbolId));
         }
