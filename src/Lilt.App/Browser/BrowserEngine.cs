@@ -24,7 +24,8 @@ sealed record EngineOptions(
     bool Lean,
     bool ForceDark = false,
     bool ClassicScrollbars = false,
-    int CacheLimitMb = 0);
+    int CacheLimitMb = 0,
+    bool SmoothScrolling = true);
 
 enum NoticeKind { Info, Success, Warning, Error }
 
@@ -122,6 +123,7 @@ sealed class BrowserEngine
         if (o.ForceDark) features.Add("WebContentsForceDark");
         // storage.cacheLimit: Chromium's cap on its cache of downloaded files.
         if (o.CacheLimitMb > 0) args.Add($"--disk-cache-size={o.CacheLimitMb * 1048576L}");
+        if (!o.SmoothScrolling) args.Add("--disable-smooth-scrolling");
         foreach (var part in (o.BrowserArgs ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries))
         {
             if (part.StartsWith("--enable-features=", StringComparison.Ordinal)) features.AddRange(part["--enable-features=".Length..].Split(',', StringSplitOptions.RemoveEmptyEntries));

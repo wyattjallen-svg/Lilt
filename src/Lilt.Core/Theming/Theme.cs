@@ -74,14 +74,15 @@ public enum Scrollbars { Overlay, Classic }
 // page's own color stays; GlassOff lists sites left alone). ForceDark darkens sites that have no dark look of their own;
 // Scrollbars and ForceDark apply after a restart. Gestures: hold the right button and draw (← back, → forward,
 // ↑↓ reload, ↓→ close tab, ↓ new tab). Restore: start with the tabs from last time (off: a fresh home tab each start).
+// SmoothScrolling: animated scrolling in pages (off: instant, a little lighter; after a restart).
 public sealed record PagesSpec(PageColorScheme ColorScheme, bool Peek, string Search = "duckduckgo", bool History = true,
     bool Glass = false, double GlassOpacity = 0.72, Ids? GlassOff = null, bool ForceDark = false, TrackingLevel Tracking = TrackingLevel.Balanced,
-    bool Gestures = true, Scrollbars Scrollbars = Scrollbars.Overlay, bool Restore = true)
+    bool Gestures = true, Scrollbars Scrollbars = Scrollbars.Overlay, bool Restore = true, bool SmoothScrolling = true)
 {
     public Ids GlassOffSites => GlassOff ?? new Ids();
     public bool Equals(PagesSpec? o) => o is not null && ColorScheme == o.ColorScheme && Peek == o.Peek && Search == o.Search && History == o.History
         && Glass == o.Glass && GlassOpacity == o.GlassOpacity && GlassOffSites.Equals(o.GlassOffSites) && ForceDark == o.ForceDark
-        && Tracking == o.Tracking && Gestures == o.Gestures && Scrollbars == o.Scrollbars && Restore == o.Restore;
+        && Tracking == o.Tracking && Gestures == o.Gestures && Scrollbars == o.Scrollbars && Restore == o.Restore && SmoothScrolling == o.SmoothScrolling;
     public override int GetHashCode() => HashCode.Combine(ColorScheme, Search, Glass, GlassOpacity);
 }
 
@@ -101,8 +102,10 @@ public sealed record HomeSpec(Ids Items, bool Glass, string Background, double D
 // SleepMinutes: tabs you haven't looked at for that long are put to sleep, their page closed so it uses no memory at all
 // (the tab stays and reloads when you open it; 0 = never; pinned tabs and tabs playing sound never sleep).
 // SleepWhenLowMemory: when Windows runs short of memory, tabs unused for a few minutes sleep early.
+// SolidWhenAway: while efficiency mode has Lilt in the background, the window material turns solid (Acrylic otherwise
+// keeps blurring whatever moves behind the window).
 public sealed record PowerSpec(bool Efficiency, int SuspendMinutes, bool HideWhenCovered, bool HideWhenOccluded, bool Lean,
-    int SleepMinutes = 60, bool SleepWhenLowMemory = true);
+    int SleepMinutes = 60, bool SleepWhenLowMemory = true, bool SolidWhenAway = false);
 
 public enum WidgetShow { Auto, Always, Never }
 

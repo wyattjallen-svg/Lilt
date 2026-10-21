@@ -113,6 +113,8 @@ public sealed partial class MainWindow
         LowMemoryCheck.IsChecked = t.Power.SleepWhenLowMemory;
         FpsSlider.Value = t.Media.Fps;
         RestoreCheck.IsChecked = t.Pages.Restore;
+        SmoothScrollingCheck.IsChecked = t.Pages.SmoothScrolling;
+        SolidAwaySwitch.IsOn = t.Power.SolidWhenAway;
         ToolbarSiteColorSlider.Value = Math.Round(t.Toolbar.SiteColor * 100);
         SidebarSiteColorSlider.Value = Math.Round(t.Sidebar.SiteColor * 100);
         Select(PanelEdgeCombo, Camel(t.Panel.Edge.ToString()));
@@ -241,12 +243,13 @@ public sealed partial class MainWindow
                 Glass = GlassPagesSwitch.IsOn, GlassOpacity = GlassOpacitySlider.Value / 100, Gestures = GesturesCheck.IsChecked == true,
                 ForceDark = ForceDarkCheck.IsChecked == true, Scrollbars = ClassicScrollbarsCheck.IsChecked == true ? Scrollbars.Classic : Scrollbars.Overlay,
                 Tracking = Pick(TrackingCombo, t.Pages.Tracking),
-                Restore = RestoreCheck.IsChecked == true,
+                Restore = RestoreCheck.IsChecked == true, SmoothScrolling = SmoothScrollingCheck.IsChecked == true,
             },
             Power = t.Power with
             {
                 Efficiency = EfficiencySwitch.IsOn, SuspendMinutes = (int)SuspendSlider.Value, HideWhenCovered = CoveredSwitch.IsOn,
                 HideWhenOccluded = OccludedSwitch.IsOn, Lean = LeanSwitch.IsOn, SleepMinutes = (int)SleepSlider.Value, SleepWhenLowMemory = LowMemoryCheck.IsChecked == true,
+                SolidWhenAway = SolidAwaySwitch.IsOn,
             },
             Split = new SplitSpec(Pick(SplitOrientationCombo, t.Split.Orientation), SplitRatioSlider.Value / 100, SplitGapSlider.Value),
             Media = t.Media with

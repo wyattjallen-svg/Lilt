@@ -4,6 +4,8 @@ on:
   push:
     branches: [main, prototype]
     tags: ['v*']
+    # Notes and docs alone don't need a Windows build (Windows minutes are the expensive ones).
+    paths-ignore: ['docs/**', '**/*.md']
   workflow_dispatch:
 
 permissions:
@@ -477,7 +479,8 @@ jobs:
           exit 1
 
       - name: Idle measurements
-        if: github.ref == 'refs/heads/prototype'
+        # About 15 minutes of runner time, so only when asked: a manual run, or "[measure]" in the commit message.
+        if: github.ref == 'refs/heads/prototype' && (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[measure]'))
         shell: pwsh
         continue-on-error: true
         timeout-minutes: 30
@@ -507,7 +510,7 @@ jobs:
           Get-Content measure-*.md -ErrorAction SilentlyContinue | Add-Content $env:GITHUB_STEP_SUMMARY
 
       - name: Add measurements to the release
-        if: always() && github.ref == 'refs/heads/prototype'
+        if: always() && github.ref == 'refs/heads/prototype' && (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[measure]'))
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}

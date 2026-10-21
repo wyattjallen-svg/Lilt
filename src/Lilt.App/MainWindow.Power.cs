@@ -79,6 +79,7 @@ public sealed partial class MainWindow
         }
         powerLevel = level;
         report.Key("power", level.ToString().ToLowerInvariant());
+        (SystemBackdrop as GlassBackdrop)?.SetActive(!(theme.Power.SolidWhenAway && level != PowerLevel.Full));
         var efficient = level != PowerLevel.Full;
 
         var pids = new List<int> { Environment.ProcessId };

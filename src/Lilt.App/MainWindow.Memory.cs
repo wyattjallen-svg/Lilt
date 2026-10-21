@@ -68,7 +68,7 @@ public sealed partial class MainWindow
         {
             return;
         }
-        var rows = new List<(string Name, long Bytes, BrowserTab[] Tabs)> { ("Lilt itself", PrivateBytes(Environment.ProcessId), []) };
+        var rows = new List<(string Name, long Bytes, BrowserTab[] Tabs)> { ("Lilt itself", PrivateBytes(Environment.ProcessId), Array.Empty<BrowserTab>()) };
         foreach (var info in infos)
         {
             var p = info.ProcessInfo;

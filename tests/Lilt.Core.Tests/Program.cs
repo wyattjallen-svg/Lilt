@@ -1132,6 +1132,10 @@ Test("v0.8: sleep rules and new settings", () =>
     Equal(15, t.Theme.Power.SleepMinutes);
     True(!t.Theme.Power.SleepWhenLowMemory && !t.Theme.Pages.Restore);
     Equal(20, t.Theme.Media.Fps);
+    var u = ThemeParser.Parse("{\"schemaVersion\":1,\"pages\":{\"smoothScrolling\":false},\"power\":{\"solidWhenAway\":true}}");
+    Equal(0, u.Issues.Count);
+    True(!u.Theme.Pages.SmoothScrolling && u.Theme.Power.SolidWhenAway);
+    Equal(u.Theme, ThemeParser.Parse(ThemeWriter.ToJson(u.Theme)).Theme);
     Equal(t.Theme, ThemeParser.Parse(ThemeWriter.ToJson(t.Theme)).Theme);
 });
 

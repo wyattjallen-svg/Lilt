@@ -384,6 +384,10 @@
         "restore": {
           "type": "boolean",
           "description": "Start with the tabs from last time. Off: a fresh home tab each start (the panel keeps its sites)."
+        },
+        "smoothScrolling": {
+          "type": "boolean",
+          "description": "Animated scrolling in pages. Off is instant and a little lighter. After a restart."
         }
       }
     },
@@ -471,6 +475,10 @@
         "sleepWhenLowMemory": {
           "type": "boolean",
           "description": "When Windows runs short of memory, tabs unused for 5 minutes sleep early."
+        },
+        "solidWhenAway": {
+          "type": "boolean",
+          "description": "While efficiency mode has Lilt in the background, the window material turns solid (saves the GPU work of Acrylic blurring what's behind)."
         }
       }
     },

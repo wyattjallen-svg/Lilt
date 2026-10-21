@@ -7,10 +7,18 @@ using Microsoft.UI.Xaml.Media;
 namespace Lilt.App.Shell;
 
 // Mica or Acrylic with the theme's tint settings. Stays "active" when the window loses focus,
-// so the glass doesn't turn solid every time you click another app.
+// so the glass doesn't turn solid every time you click another app (power.solidWhenAway can ask for that while away).
 sealed class GlassBackdrop(BackdropSpec spec, ThemeBase themeBase, Rgba fallback) : SystemBackdrop
 {
     ISystemBackdropControllerWithTargets? controller;
+    SystemBackdropConfiguration? config;
+    bool active = true;
+
+    public void SetActive(bool on)
+    {
+        active = on;
+        if (config is not null) config.IsInputActive = on;
+    }
 
     public static bool IsSupported(Backdrop material) => material switch
     {
@@ -22,9 +30,9 @@ sealed class GlassBackdrop(BackdropSpec spec, ThemeBase themeBase, Rgba fallback
     protected override void OnTargetConnected(ICompositionSupportsSystemBackdrop connectedTarget, XamlRoot xamlRoot)
     {
         base.OnTargetConnected(connectedTarget, xamlRoot);
-        var config = new SystemBackdropConfiguration
+        config = new SystemBackdropConfiguration
         {
-            IsInputActive = true,
+            IsInputActive = active,
             Theme = themeBase == ThemeBase.Light ? SystemBackdropTheme.Light : SystemBackdropTheme.Dark,
         };
         var fallbackColor = ThemeResources.ToColor(fallback.Opaque);

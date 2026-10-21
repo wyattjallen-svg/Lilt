@@ -243,6 +243,7 @@
                               ToolTipService.ToolTip="Left: back · Right: forward · Up, down: reload · Down, right: close tab · Down: new tab" />
                     <CheckBox x:Name="ForceDarkCheck" Content="Dark mode for every website (after restart)" Click="Customize_Changed" />
                     <CheckBox x:Name="ClassicScrollbarsCheck" Content="Classic scrollbars (after restart)" Click="Customize_Changed" />
+                    <CheckBox x:Name="SmoothScrollingCheck" Content="Smooth scrolling (after restart)" Click="Customize_Changed" />
                     <ComboBox x:Name="ColorSchemeCombo" Header="Websites see" HorizontalAlignment="Stretch" SelectionChanged="Customize_Changed">
                       <ComboBoxItem Content="The theme's light or dark" Tag="theme" />
                       <ComboBoxItem Content="Windows' light or dark" Tag="auto" />
@@ -356,6 +357,7 @@
                     <ToggleSwitch x:Name="CoveredSwitch" Header="Pause pages behind full-screen games" Toggled="Customize_Changed" />
                     <ToggleSwitch x:Name="OccludedSwitch" Header="Hide pages fully behind other windows" Toggled="Customize_Changed" />
                     <ToggleSwitch x:Name="LeanSwitch" Header="Lean mode: less memory, after restart" Toggled="Customize_Changed" />
+                    <ToggleSwitch x:Name="SolidAwaySwitch" Header="Solid window material while I'm away (saves the GPU blurring behind Acrylic)" Toggled="Customize_Changed" />
                     <Slider x:Name="SuspendSlider" Header="Suspend unused tabs after (minutes, 0 = never)" Minimum="0" Maximum="60" StepFrequency="1" ValueChanged="Customize_Changed" />
                     <TextBlock Text="Sleeping tabs" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
                     <Slider x:Name="SleepSlider" Header="Put tabs I haven't looked at to sleep after (minutes, 0 = never)" Minimum="0" Maximum="240" StepFrequency="5" ValueChanged="Customize_Changed" />

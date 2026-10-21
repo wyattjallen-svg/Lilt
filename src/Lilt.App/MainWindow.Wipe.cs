@@ -73,7 +73,7 @@ public sealed partial class MainWindow
         panel.Children.Add(new TextBlock
         {
             Text = $"To confirm, enter  {string.Join(' ', code.ToCharArray())}",
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0),
+            FontWeight = new Windows.UI.Text.FontWeight(600), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0),
         });
         panel.Children.Add(entry);
         panel.Children.Add(keypad);

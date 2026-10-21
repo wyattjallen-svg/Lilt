@@ -60,7 +60,8 @@ public sealed partial class MainWindow : Window
         // Media keys and lean mode are browser switches, fixed for the engine's lifetime.
         engine = new BrowserEngine(new EngineOptions(paths.WebView2, paths.PrepareNewTab(), paths.PrepareUserContent(), paths.Extensions,
             options.InPrivate, options.UserAgent, options.BrowserArgs, !options.NoExtensions, themes.Current.Media.MediaKeys, themes.Current.Power.Lean,
-            themes.Current.Pages.ForceDark, themes.Current.Pages.Scrollbars == Scrollbars.Classic, themes.Current.Storage.CacheLimit), queue);
+            themes.Current.Pages.ForceDark, themes.Current.Pages.Scrollbars == Scrollbars.Classic, themes.Current.Storage.CacheLimit,
+            themes.Current.Pages.SmoothScrolling), queue);
         var typography = themes.Current.Typography;
         Application.Current.Resources["ContentControlThemeFontFamily"] = new FontFamily(typography.Family);
         Application.Current.Resources["ControlContentThemeFontSize"] = typography.Size;
@@ -632,7 +633,8 @@ public sealed partial class MainWindow : Window
         engine.SetPageColorScheme(t.Pages.ColorScheme, t.Base);
         ApplyShortcuts(t.Shortcuts);
         if (previous is not null && (previous.Power.Lean != t.Power.Lean || previous.Media.MediaKeys != t.Media.MediaKeys
-            || previous.Pages.ForceDark != t.Pages.ForceDark || previous.Pages.Scrollbars != t.Pages.Scrollbars || previous.Storage.CacheLimit != t.Storage.CacheLimit))
+            || previous.Pages.ForceDark != t.Pages.ForceDark || previous.Pages.Scrollbars != t.Pages.Scrollbars || previous.Storage.CacheLimit != t.Storage.CacheLimit
+            || previous.Pages.SmoothScrolling != t.Pages.SmoothScrolling))
             ShowNotice(new("Restart Lilt to apply this change.", NoticeKind.Info, "Restart now", Restart));
         if (BrowserTab.CloseButtons != t.Sidebar.CloseButtons)
         {
