@@ -72,7 +72,7 @@ public sealed partial class MainWindow
         SaveHistory();
         try
         {
-            if (tabs.Select(t => t.Core).FirstOrDefault(c => c is not null) is { } c)
+            if (AllTabs.Select(t => t.Core).FirstOrDefault(c => c is not null) is { } c)
                 await c.Profile.ClearBrowsingDataAsync(Microsoft.Web.WebView2.Core.CoreWebView2BrowsingDataKinds.BrowsingHistory);
             ShowNotice(new("History cleared.", NoticeKind.Success));
         }
@@ -151,10 +151,10 @@ public sealed partial class MainWindow
         if (go.Kind == AddressKind.Navigate) suggestRows.Add((shown, go.Uri!.AbsoluteUri, "", "Go", () => Go(shown), null));
         // Search for what was typed, not the inline completion.
         suggestRows.Add((q, $"Search with {Engine.Name}", "", "", () => Navigate(AddressResolver.SearchUri(q, Engine.Template).AbsoluteUri), null));
-        var found = Suggestions.Find(q, tabs.Where(t => t != active && !t.IsHome).Select(t => (t.DisplayTitle, t.Url)), bookmarks.Items, history.All, Now, 7);
+        var found = Suggestions.Find(q, AllTabs.Where(t => t != active && !t.IsHome).Select(t => (t.DisplayTitle, t.Url)), bookmarks.Items, history.All, Now, 7);
         foreach (var s in found)
         {
-            var tab = s.Kind == SuggestionKind.Tab ? tabs.FirstOrDefault(t => t.Url == s.Url) : null;
+            var tab = s.Kind == SuggestionKind.Tab ? AllTabs.FirstOrDefault(t => t.Url == s.Url) : null;
             var (glyph, hint) = s.Kind switch
             {
                 SuggestionKind.Tab => ("", "Switch to tab"),

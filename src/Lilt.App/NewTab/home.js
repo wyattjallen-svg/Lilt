@@ -85,12 +85,30 @@ $('search').addEventListener('submit', e => {
 
 const letter = name => name.replace(/^www\./i, '').charAt(0).toUpperCase();
 
-// "hills" draws layered hills from the theme's colors; any other value is an image file next to this page.
+// "hills", "aurora" and "waves" are drawn from the theme's colors; any other value is an image file next to this page.
 function background(data) {
   const bg = typeof data.background === 'string' ? data.background : '';
-  if (bg === 'hills') {
-    const css = n => getComputedStyle(document.documentElement).getPropertyValue('--' + n).trim();
-    const accent = css('accent'), muted = css('textMuted'), base = css('background');
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue('--' + n).trim();
+  const accent = css('accent'), muted = css('textMuted'), base = css('background');
+  const safe = [accent, muted, base].every(c => /^#[0-9a-f]{3,8}$/i.test(c));
+  if (bg === 'aurora' && safe) {
+    // Soft blurred light, no animation (nothing to redraw).
+    $('scenery').innerHTML = `<svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <defs><filter id="b" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="90"/></filter></defs>
+      ${data.glass ? '' : `<rect width="1440" height="900" fill="${base}"/>`}
+      <g filter="url(#b)">
+        <ellipse cx="380" cy="260" rx="420" ry="160" fill="${accent}" fill-opacity="0.38"/>
+        <ellipse cx="1060" cy="200" rx="380" ry="140" fill="${muted}" fill-opacity="0.22"/>
+        <ellipse cx="820" cy="720" rx="520" ry="170" fill="${accent}" fill-opacity="0.22"/>
+      </g></svg>`;
+  } else if (bg === 'waves' && safe) {
+    const lines = Array.from({ length: 7 }, (_, i) => {
+      const y = 520 + i * 48, o = (0.08 + i * 0.05).toFixed(2);
+      return `<path d="M0 ${y} C 240 ${y - 60} 480 ${y + 60} 720 ${y} S 1200 ${y - 60} 1440 ${y}" fill="none" stroke="${i % 2 ? muted : accent}" stroke-opacity="${o}" stroke-width="2"/>`;
+    }).join('');
+    $('scenery').innerHTML = `<svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
+      ${data.glass ? '' : `<rect width="1440" height="900" fill="${base}"/>`}${lines}</svg>`;
+  } else if (bg === 'hills') {
     const sky = data.glass ? 'transparent' : base;
     const layers = [
       [muted, 0.18, 'M0 520 C 180 430 320 470 480 420 S 820 330 1000 400 S 1280 380 1440 340 V 900 H 0 Z'],
@@ -103,9 +121,10 @@ function background(data) {
       <rect width="1440" height="900" fill="url(#sky)"/>
       ${layers.map(([c, o, d]) => `<path d="${d}" fill="${c}" fill-opacity="${o}"/>`).join('')}
     </svg>`;
-    if ([accent, muted, base].every(c => /^#[0-9a-f]{3,8}$/i.test(c))) $('scenery').innerHTML = svg;
+    if (safe) $('scenery').innerHTML = svg;
   } else if (/^[\w .\-]{1,100}\.(png|jpe?g|webp|gif|svg)$/i.test(bg)) {
-    document.body.style.backgroundImage = `linear-gradient(rgba(0,0,0,.12), rgba(0,0,0,.28)), url("${encodeURI(bg)}")`;
+    const dim = Math.max(0, Math.min(0.8, Number(data.dim) || 0));
+    document.body.style.backgroundImage = `linear-gradient(rgba(0,0,0,${(0.08 + dim).toFixed(2)}), rgba(0,0,0,${(0.24 + dim).toFixed(2)})), url("${encodeURI(bg)}")`;
   }
 }
 

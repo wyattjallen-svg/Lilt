@@ -21,7 +21,9 @@ sealed record EngineOptions(
     string? BrowserArgs,
     bool Extensions,
     bool MediaKeys,
-    bool Lean);
+    bool Lean,
+    bool ForceDark = false,
+    bool ClassicScrollbars = false);
 
 enum NoticeKind { Info, Success, Warning, Error }
 
@@ -50,8 +52,12 @@ sealed class BrowserEngine
     // The isolated world's execution context in each view's current document, for Evaluate.
     readonly Dictionary<CoreWebView2, int> contexts = [];
     CoreWebView2PreferredColorScheme colorScheme = CoreWebView2PreferredColorScheme.Auto;
+    CoreWebView2TrackingPreventionLevel tracking = CoreWebView2TrackingPreventionLevel.Balanced;
     string keysJson = "[]";
-    bool peekEnabled = true;
+    // Page settings for the page helper (see Configure).
+    bool peekEnabled = true, gesturesEnabled = true;
+    double glassAlpha;
+    string[] glassOff = [];
 
     public BrowserEngine(EngineOptions options, DispatcherQueue queue)
     {
@@ -74,6 +80,10 @@ sealed class BrowserEngine
     public event Action<CoreWebView2, MediaInfo?>? MediaChanged;
     public event Action<CoreWebView2, string>? PeekRequested;
     public event Action<CoreWebView2, byte[]>? VisualizerData;
+    public event Action<CoreWebView2, string>? Gesture;
+    // Set by the window: asks you whether a site may use something (camera, location...). Null means you closed the
+    // question without answering.
+    public Func<string, CoreWebView2PermissionKind, Task<(bool Allow, bool Remember)?>>? AskPermission { get; set; }
     // Diagnostics for the startup report (CI only).
     public event Action<string>? Trace;
 
@@ -91,7 +101,7 @@ sealed class BrowserEngine
             IsCustomCrashReportingEnabled = true,
             AreBrowserExtensionsEnabled = options.Extensions,
             EnableTrackingPrevention = true,
-            ScrollBarStyle = CoreWebView2ScrollbarStyle.FluentOverlay,
+            ScrollBarStyle = options.ClassicScrollbars ? CoreWebView2ScrollbarStyle.Default : CoreWebView2ScrollbarStyle.FluentOverlay,
         };
         return CoreWebView2Environment.CreateWithOptionsAsync("", options.UserDataFolder, o).AsTask();
     }
@@ -105,6 +115,8 @@ sealed class BrowserEngine
         var args = new List<string>();
         if (o.MediaKeys) features.Add("HardwareMediaKeyHandling");
         if (o.Lean) args.AddRange(["--enable-low-end-device-mode", "--process-per-site"]);
+        // Chromium's automatic dark mode for sites that have no dark look of their own.
+        if (o.ForceDark) features.Add("WebContentsForceDark");
         foreach (var part in (o.BrowserArgs ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries))
         {
             if (part.StartsWith("--enable-features=", StringComparison.Ordinal)) features.AddRange(part["--enable-features=".Length..].Split(',', StringSplitOptions.RemoveEmptyEntries));
@@ -148,7 +160,7 @@ sealed class BrowserEngine
         if (!string.IsNullOrWhiteSpace(options.UserAgent)) s.UserAgent = options.UserAgent;
 
         core.Profile.PreferredColorScheme = colorScheme;
-        core.Profile.PreferredTrackingPreventionLevel = CoreWebView2TrackingPreventionLevel.Balanced;
+        core.Profile.PreferredTrackingPreventionLevel = tracking;
         core.SetVirtualHostNameToFolderMapping(NewTabHost, options.NewTabFolder, CoreWebView2HostResourceAccessKind.DenyCors);
         _ = userContent.ApplyAsync(core);
         InstallPageHelper(core);
@@ -178,6 +190,11 @@ sealed class BrowserEngine
             catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException) { }
         };
         core.DOMContentLoaded += (sender, e) => _ = AddPageHelperAsync(core);
+        // Single-page sites change content without a new document; see-through pages look again.
+        core.SourceChanged += (_, e) =>
+        {
+            if (!e.IsNewDocument && glassAlpha > 0) _ = EvaluateAsync(core, "__lilt.reglass()");
+        };
     }
 
     void OnPageMessage(CoreWebView2 core, string payload)
@@ -210,6 +227,9 @@ sealed class BrowserEngine
             case "peek" when m.TryGetProperty("url", out var u) && UrlPolicy.IsNavigable(u.GetString()):
                 PeekRequested?.Invoke(core, u.GetString()!);
                 break;
+            case "gesture" when m.TryGetProperty("g", out var g) && g.GetString() is { Length: > 0 and <= 4 } path:
+                Gesture?.Invoke(core, path);
+                break;
             case "behind" when m.TryGetProperty("url", out var b) && b.GetString() is { } link:
                 behindLink = (link, System.Environment.TickCount64);
                 break;
@@ -228,7 +248,7 @@ sealed class BrowserEngine
             var script = pageScript.Replace("__KEYS__", keysJson);
             var result = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", JsonSerializer.Serialize(new { expression = script, contextId = context }));
             contexts[core] = context;
-            if (!peekEnabled) await EvaluateAsync(core, "__lilt.setPeek(false)");
+            await EvaluateAsync(core, ConfigureScript(core));
             Trace?.Invoke($"shim context {context}: {result}");
         }
         catch (Exception e) when (e.Message.Contains("-3260", StringComparison.Ordinal))
@@ -279,11 +299,33 @@ sealed class BrowserEngine
         foreach (var core in contexts.Keys.ToArray()) _ = EvaluateAsync(core, $"__lilt.setKeys({json})");
     }
 
-    public void SetPeek(bool on)
+    // Peek, gestures and see-through pages (glass: 0 for off, else how much of a page's color stays; glassOff lists
+    // sites left solid). Sent to every open page when anything changes.
+    public void Configure(bool peek, bool gestures, double glass, IEnumerable<string> off)
     {
-        if (peekEnabled == on) return;
-        peekEnabled = on;
-        foreach (var core in contexts.Keys.ToArray()) _ = EvaluateAsync(core, $"__lilt.setPeek({(on ? "true" : "false")})");
+        var offList = off.ToArray();
+        if (peek == peekEnabled && gestures == gesturesEnabled && glass == glassAlpha && offList.SequenceEqual(glassOff)) return;
+        (peekEnabled, gesturesEnabled, glassAlpha, glassOff) = (peek, gestures, glass, offList);
+        foreach (var core in contexts.Keys.ToArray()) _ = EvaluateAsync(core, ConfigureScript(core));
+    }
+
+    public bool GlassFor(string? url) =>
+        glassAlpha > 0 && Uri.TryCreate(url, UriKind.Absolute, out var u) && UrlPolicy.IsWeb(u) && u.Host != NewTabHost
+        && !glassOff.Any(h => u.Host == h || u.Host.EndsWith("." + h, StringComparison.Ordinal));
+
+    string ConfigureScript(CoreWebView2 core) => string.Create(System.Globalization.CultureInfo.InvariantCulture,
+        $"__lilt.configure({{ peek: {(peekEnabled ? "true" : "false")}, gestures: {(gesturesEnabled ? "true" : "false")}, glass: {(GlassFor(core.Source) ? glassAlpha : 0)} }})");
+
+    public void SetTracking(TrackingLevel level)
+    {
+        tracking = level switch
+        {
+            TrackingLevel.Off => CoreWebView2TrackingPreventionLevel.None,
+            TrackingLevel.Basic => CoreWebView2TrackingPreventionLevel.Basic,
+            TrackingLevel.Strict => CoreWebView2TrackingPreventionLevel.Strict,
+            _ => CoreWebView2TrackingPreventionLevel.Balanced,
+        };
+        foreach (var core in cores) core.Profile.PreferredTrackingPreventionLevel = tracking;
     }
 
     public void SetPageColorScheme(PageColorScheme scheme, ThemeBase themeBase)
@@ -299,25 +341,49 @@ sealed class BrowserEngine
         foreach (var core in cores) core.Profile.PreferredColorScheme = colorScheme;
     }
 
-    void OnPermissionRequested(CoreWebView2 sender, CoreWebView2PermissionRequestedEventArgs e)
+    // You decide: Lilt asks (Allow / Block, remembered for the site unless you untick it). Notifications a site asks
+    // for on its own, without a click, are refused quietly; that's how most notification spam starts.
+    async void OnPermissionRequested(CoreWebView2 sender, CoreWebView2PermissionRequestedEventArgs e)
     {
         if (e.PermissionKind == CoreWebView2PermissionKind.Autoplay) return;
-        e.State = CoreWebView2PermissionState.Deny;
-        if (e.IsUserInitiated || e.PermissionKind != CoreWebView2PermissionKind.Notifications)
-            Noticed?.Invoke(new($"Blocked {Describe(e.PermissionKind)} for {UrlPolicy.DisplayHost(e.Uri)}. Per-site permissions come in a later version.", NoticeKind.Info));
+        if (AskPermission is not { } ask || (!e.IsUserInitiated && e.PermissionKind == CoreWebView2PermissionKind.Notifications))
+        {
+            e.SavesInProfile = false;
+            e.State = CoreWebView2PermissionState.Deny;
+            return;
+        }
+        var deferral = e.GetDeferral();
+        try
+        {
+            var answer = await ask(UrlPolicy.DisplayHost(e.Uri), e.PermissionKind);
+            e.SavesInProfile = answer is { Remember: true };
+            e.State = answer is { Allow: true } ? CoreWebView2PermissionState.Allow : CoreWebView2PermissionState.Deny;
+        }
+        catch (Exception ex)
+        {
+            LiltPaths.LogError(ex);
+            e.State = CoreWebView2PermissionState.Deny;
+        }
+        finally
+        {
+            deferral.Complete();
+        }
     }
 
-    static string Describe(CoreWebView2PermissionKind kind) => kind switch
+    public static string Describe(CoreWebView2PermissionKind kind) => kind switch
     {
-        CoreWebView2PermissionKind.Microphone => "microphone access",
-        CoreWebView2PermissionKind.Camera => "camera access",
-        CoreWebView2PermissionKind.Geolocation => "location access",
-        CoreWebView2PermissionKind.Notifications => "notifications",
-        CoreWebView2PermissionKind.OtherSensors => "motion sensors",
-        CoreWebView2PermissionKind.ClipboardRead => "clipboard reading",
-        CoreWebView2PermissionKind.MultipleAutomaticDownloads => "multiple downloads",
-        CoreWebView2PermissionKind.FileReadWrite => "file access",
-        _ => $"a permission ({kind})",
+        CoreWebView2PermissionKind.Microphone => "use your microphone",
+        CoreWebView2PermissionKind.Camera => "use your camera",
+        CoreWebView2PermissionKind.Geolocation => "know your location",
+        CoreWebView2PermissionKind.Notifications => "show notifications",
+        CoreWebView2PermissionKind.OtherSensors => "use motion sensors",
+        CoreWebView2PermissionKind.ClipboardRead => "read your clipboard",
+        CoreWebView2PermissionKind.MultipleAutomaticDownloads => "download several files",
+        CoreWebView2PermissionKind.FileReadWrite => "open and save files",
+        CoreWebView2PermissionKind.LocalFonts => "see your installed fonts",
+        CoreWebView2PermissionKind.WindowManagement => "place windows on your screens",
+        CoreWebView2PermissionKind.MidiSystemExclusiveMessages => "control MIDI devices",
+        _ => $"use {kind}",
     };
 
     void OnExternalScheme(CoreWebView2 sender, CoreWebView2LaunchingExternalUriSchemeEventArgs e)

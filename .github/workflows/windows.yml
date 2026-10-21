@@ -346,6 +346,43 @@ jobs:
           Check 'A shortcut changed in the theme works in pages and in Lilt' ([bool]($ck -match '(page|xaml) palette')) ($ck -join ' / ')
           Check 'A shortcut removed in the theme does nothing' (-not ($ck -match ' split$')) ($ck -join ' / ')
 
+          # v0.6: see-through websites, the bookmark manager, a whole-page screenshot, workspaces, the window lift, a mouse
+          # gesture (a real right-button drag, placed from the page position the state reports) and a site asking for a permission.
+          $script = 'wait 3000; go example.com; wait 4500; eval JSON.stringify([getComputedStyle(document.documentElement).backgroundColor, getComputedStyle(document.body).backgroundColor]); state; mark glass; wait 500; ' +
+            'bookmark; bookmarks; wait 1500; state; mark manager; wait 500; bookmarks; screenshot; wait 3000; dismiss; workspace Work; wait 2500; state; mark workspace; wait 500; ' +
+            'workspace Main; wait 2000; state; lift; wait 600; state; mark lifted; lift off; wait 800; mark gesture; wait 3500; state; mark back; wait 500; ' +
+            'eval (navigator.geolocation.getCurrentPosition(() => 0, () => 0), 1); wait 2500; state; mark permission'
+          $vdir = Smoke 'v06' @('--theme', "`"$env:RUNNER_TEMP\glass.json`"", '--run', "`"$script`"") {
+            param($p)
+            $p.Refresh(); [void][Lilt.Input]::SetForegroundWindow($p.MainWindowHandle)
+            Follow 'v06' -timeout 90 -until 'gesture'
+            $st = @(States 'v06')[-1]
+            if ($st.page) {
+              $x = [int]$st.page[0] + 500; $y = [int]$st.page[1] + 300
+              [void][Lilt.Input]::SetCursorPos($x, $y); Start-Sleep -Milliseconds 150
+              [Lilt.Input]::mouse_event(8, 0, 0, 0, 0); Start-Sleep -Milliseconds 80
+              foreach ($i in 1..10) { [Lilt.Input]::mouse_event(1, -15, 0, 0, 0); Start-Sleep -Milliseconds 30 }
+              [Lilt.Input]::mouse_event(0x10, 0, 0, 0, 0)
+            }
+            Follow 'v06'
+          } -settle 1
+          $vdir = @($vdir)[-1]
+          $s = States 'v06'
+          $vk = if (Test-Path smoke-v06.keys.txt) { @(Get-Content smoke-v06.keys.txt) } else { @() }
+          $bg = @($vk | Where-Object { $_ -match '^\d+ eval \[' } | ForEach-Object { ($_ -split ' eval ', 2)[1] | ConvertFrom-Json })
+          $alpha = if ($bg.Count -ge 1 -and $bg[0] -match 'rgba\([^,]+,[^,]+,[^,]+,\s*([0-9.]+)\)') { [double]$Matches[1] } else { 1 }
+          Check 'See-through websites: the page lets the window material show' ($alpha -lt 1) "root, body: $($bg -join ' | ')"
+          Check 'Bookmark manager opens with the bookmarks' ($s.Count -gt 1 -and $s[1].manager -ge 1) "$(if ($s.Count -gt 1) { "manager: $($s[1].manager)" })"
+          Check 'Whole-page screenshot saved' ([bool]($vk -match ' screenshot \d+ bytes')) (($vk -match ' screenshot ') -join ' / ')
+          Check 'Workspaces keep their own tabs' ($s.Count -gt 3 -and $s[2].workspace -eq 'Work' -and $s[2].tabs -eq 1 -and $s[2].allTabs -eq 2 -and $s[3].workspace -eq 'Main' -and $s[3].url -like '*example.com*') "$(if ($s.Count -gt 3) { "$($s[2].workspace): $($s[2].tabs)/$($s[2].allTabs); $($s[3].workspace): $($s[3].url)" })"
+          $vs = if (Test-Path "$vdir/session.json") { Get-Content "$vdir/session.json" -Raw | ConvertFrom-Json } else { $null }
+          Check 'Workspaces are saved with the session' ($vs -and ($vs.workspaces -contains 'Work') -and @($vs.tabs | Where-Object workspace -eq 'Work').Count -eq 1) "$(if ($vs) { ($vs.tabs | ForEach-Object { "$($_.workspace):$($_.url)" }) -join ', ' })"
+          Check 'Window lifts while dragged (motion.windowDrag)' ($s.Count -gt 4 -and $s[4].lifted) "$(if ($s.Count -gt 4) { "lifted: $($s[4].lifted)" })"
+          Check 'Mouse gesture (right-drag left) goes back' ($s.Count -gt 5 -and $s[5].url -notlike '*example.com*' -and ($vk -match 'gesture back')) "$(if ($s.Count -gt 5) { $s[5].url }) / $(($vk -match 'gesture') -join ' / ')"
+          Check 'A site asks before using your location' ($s.Count -gt 6 -and $s[6].permission) "$(if ($s.Count -gt 6) { $s[6].permission })"
+          $drm = @(Get-Content smoke-media-probe.txt -ErrorAction SilentlyContinue | Where-Object { $_ -match 'probe page \{' } | ForEach-Object { (($_ -split 'probe page ', 2)[1] | ConvertFrom-Json).drm })
+          Check 'Protected content (DRM) key systems (info)' $true "$(if ($drm) { ($drm[0].PSObject.Properties | ForEach-Object { "$($_.Name -replace 'com\.microsoft\.|com\.|org\.w3\.', ''): $($_.Value)" }) -join '; ' } else { 'no probe' })"
+
           [void](Smoke 'proton-pass' @('--install-extension', 'ghmbeldphafepmbegfdlkpapadhbakde') -settle 4)
           $pp = Extensions 'proton-pass'
           Check 'Proton Pass installs from the Chrome Web Store' ([bool]($pp -match 'Proton')) ($pp -join '; ')

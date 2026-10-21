@@ -40,6 +40,74 @@
   }, true);
   let peek = true;
 
+  // Mouse gestures: hold the right button and draw. Left of the page's own uses of that button: nothing starts when
+  // the page handled the press itself, on canvases, video, embeds, frames and text fields, or with the pointer locked.
+  let gestures = false, stroke = null, eatMenu = false;
+  addEventListener('mousedown', e => {
+    stroke = null;
+    if (!gestures || e.button !== 2 || e.defaultPrevented || document.pointerLockElement) return;
+    if (e.target instanceof Element && e.target.closest('canvas, video, embed, object, iframe, input, textarea, select, [contenteditable]')) return;
+    stroke = { x: e.clientX, y: e.clientY, path: '' };
+  }, false);
+  addEventListener('mousemove', e => {
+    if (!stroke) return;
+    if (!(e.buttons & 2)) { stroke = null; return; }
+    const dx = e.clientX - stroke.x, dy = e.clientY - stroke.y;
+    if (Math.abs(dx) < 36 && Math.abs(dy) < 36) return;
+    const d = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'R' : 'L') : (dy > 0 ? 'D' : 'U');
+    if (!stroke.path.endsWith(d)) stroke.path += d;
+    stroke.x = e.clientX;
+    stroke.y = e.clientY;
+  }, true);
+  addEventListener('mouseup', e => {
+    if (e.button !== 2 || !stroke) return;
+    const path = stroke.path;
+    stroke = null;
+    if (!path) return;
+    eatMenu = true;
+    post({ t: 'gesture', g: path.slice(0, 4) });
+  }, true);
+  addEventListener('contextmenu', e => {
+    if (!eatMenu) return;
+    eatMenu = false;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }, true);
+
+  // See-through websites: the page's own background color stays, translucent, on the root; the body and big
+  // containers painted that same color become clear, so the window's material shows through behind the page.
+  let glassAlpha = 0, glassed = [];
+  const rgb = c => {
+    const m = /rgba?\(([^)]+)\)/.exec(c || '');
+    if (!m) return null;
+    const p = m[1].split(/[\s,/]+/).filter(Boolean).map(parseFloat);
+    return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
+  };
+  const paint = (el, v) => { el.style.setProperty('background-color', v, 'important'); glassed.push(el); };
+  const glass = () => {
+    for (const el of glassed) el.style.removeProperty('background-color');
+    glassed = [];
+    const root = document.documentElement;
+    if (!glassAlpha || !root) return 'off';
+    const dark = /dark/.test(getComputedStyle(root).colorScheme) && matchMedia('(prefers-color-scheme: dark)').matches;
+    const page = [root, document.body].map(e => e && rgb(getComputedStyle(e).backgroundColor)).find(c => c && c.a > 0.85)
+      || (dark ? { r: 18, g: 18, b: 18 } : { r: 255, g: 255, b: 255 });
+    const same = c => c && c.a > 0.85 && Math.abs(c.r - page.r) + Math.abs(c.g - page.g) + Math.abs(c.b - page.b) < 30;
+    paint(root, `rgba(${page.r}, ${page.g}, ${page.b}, ${glassAlpha})`);
+    if (document.body) paint(document.body, 'transparent');
+    const w = innerWidth, h = innerHeight, seen = new Set();
+    for (const [x, y] of [[0.5, 0.5], [0.5, 0.2], [0.5, 0.85], [0.15, 0.5], [0.85, 0.5]])
+      for (const el of document.elementsFromPoint(w * x, h * y)) {
+        if (seen.has(el) || el === root || el === document.body) continue;
+        seen.add(el);
+        const r = el.getBoundingClientRect();
+        if (r.width >= w * 0.5 && r.height >= h * 0.3 && same(rgb(getComputedStyle(el).backgroundColor))) paint(el, 'transparent');
+      }
+    return 'on';
+  };
+  // Pages finish building after the helper arrives; look again when they're done.
+  addEventListener('load', () => { if (glassAlpha) { glass(); setTimeout(glass, 1500); } });
+
   // Ctrl+click and middle-click open a link in a tab behind this one; Lilt is told which link so it doesn't switch to it.
   const behind = e => {
     const a = e.target instanceof Element ? e.target.closest('a[href]') : null;
@@ -149,7 +217,15 @@
 
   globalThis.__lilt = {
     setKeys(k) { keys = k; },
-    setPeek(on) { peek = !!on; },
+    // Lilt's settings for this page: { peek, gestures, glass: 0 (off) or how much page color stays }.
+    configure(o) {
+      peek = !!o.peek;
+      gestures = !!o.gestures;
+      const a = Math.max(0, Math.min(1, Number(o.glass) || 0));
+      if (a !== glassAlpha) { glassAlpha = a; return glass(); }
+      return 'ok';
+    },
+    reglass() { return glassAlpha ? glass() : 'off'; },
     report() { last = ''; report(); },
     media(cmd, arg) {
       const m = pick();
@@ -184,11 +260,20 @@
     },
     hasVideo() { return !!bestVideo(); },
     capture(on, bars) { stopCapture(); return on ? startCapture(bars) : 'off'; },
-    probe() {
+    // What this engine supports, including which DRM systems protected streaming (Netflix, Disney+...) can use.
+    async probe() {
+      const drm = {};
+      const cfg = [{ initDataTypes: ['cenc'], videoCapabilities: [{ contentType: 'video/mp4; codecs="avc1.42E01E"' }],
+        audioCapabilities: [{ contentType: 'audio/mp4; codecs="mp4a.40.2"' }] }];
+      const late = new Promise(r => setTimeout(() => r('timeout'), 5000));
+      for (const ks of ['com.microsoft.playready.recommendation', 'com.microsoft.playready.recommendation.3000', 'com.microsoft.playready',
+        'com.widevine.alpha', 'org.w3.clearkey'])
+        drm[ks] = await Promise.race([late, navigator.requestMediaKeySystemAccess(ks, cfg)
+          .then(a => a.createMediaKeys().then(() => 'yes', e => 'no keys: ' + e.name), e => 'no: ' + e.name)]);
       return JSON.stringify({
         pip: !!document.pictureInPictureEnabled, documentPip: 'documentPictureInPicture' in globalThis,
         mediaSession: 'mediaSession' in navigator, captureStream: !!HTMLMediaElement.prototype.captureStream,
-        audioContext: typeof AudioContext === 'function', fullscreen: !!document.fullscreenEnabled,
+        audioContext: typeof AudioContext === 'function', fullscreen: !!document.fullscreenEnabled, drm,
       });
     },
   };

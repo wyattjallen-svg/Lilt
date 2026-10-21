@@ -91,6 +91,9 @@ public static class Commands
         ["media"] = ["Ctrl+Shift+M"],
         ["visualizer"] = ["Ctrl+Shift+U"],
         ["pip"] = ["Alt+P"],
+        ["bookmarks"] = ["Ctrl+Shift+O"],
+        ["screenshot"] = ["Ctrl+Shift+X"],
+        ["workspace"] = ["Ctrl+Shift+E"],
     };
 
     public static readonly HashSet<string> Reserved = ["newTab", "reopenTab", "closeTab", "nextTab", "prevTab", "address", "palette"];
@@ -102,6 +105,7 @@ public static class Commands
         ["reload"] = "Reload", ["home"] = "Home", ["bookmark"] = "Bookmark this page", ["sidebar"] = "Show or hide the sidebar",
         ["menu"] = "Open the menu", ["customize"] = "Customize", ["palette"] = "Command palette", ["split"] = "Split view",
         ["media"] = "Show or hide the media player", ["visualizer"] = "Show or hide the visualizer", ["pip"] = "Picture in picture",
+        ["bookmarks"] = "Manage bookmarks", ["screenshot"] = "Screenshot of the whole page", ["workspace"] = "Next workspace",
     };
 }
 

@@ -120,17 +120,16 @@
                 <SelectorBarItem Text="Home" Tag="home" />
                 <SelectorBarItem Text="Media" Tag="media" />
                 <SelectorBarItem Text="Keys" Tag="keys" />
+                <SelectorBarItem Text="Privacy" Tag="privacy" />
                 <SelectorBarItem Text="Power" Tag="power" />
               </SelectorBar>
               <ScrollViewer Grid.Row="1" MaxHeight="560" Padding="0,0,12,0">
                 <Grid>
                   <StackPanel x:Name="LookPage" Spacing="6">
                     <TextBlock Text="Theme" Style="{StaticResource SectionHeader}" />
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <Button Content="Minimal" Tag="minimal" Click="Preset_Click" />
-                      <Button Content="Glass" Tag="glass" Click="Preset_Click" />
-                      <Button Content="Light" Tag="light" Click="Preset_Click" />
-                    </StackPanel>
+                    <!-- Lilt's presets and yours (Save as preset); right-click one of yours to delete it. -->
+                    <VariableSizedWrapGrid x:Name="PresetList" Orientation="Horizontal" ItemWidth="112" ItemHeight="40" />
+                    <Button Content="Save as preset…" Click="SavePreset_Click" ToolTipService.ToolTip="Keep this look as a preset you can switch back to" />
                     <ComboBox x:Name="MaterialCombo" Header="Window material" HorizontalAlignment="Stretch" SelectionChanged="Customize_Changed">
                       <ComboBoxItem Content="Mica (recommended)" Tag="mica" />
                       <ComboBoxItem Content="Mica Alt" Tag="micaAlt" />
@@ -154,6 +153,19 @@
                       <ComboBoxItem Content="Standard" Tag="standard" />
                       <ComboBoxItem Content="Comfortable" Tag="comfortable" />
                     </ComboBox>
+
+                    <TextBlock Text="See-through websites" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
+                    <ToggleSwitch x:Name="GlassPagesSwitch" Header="Let the window material show behind websites" Toggled="Customize_Changed" />
+                    <Slider x:Name="GlassOpacitySlider" Header="Page color kept (%)" Minimum="20" Maximum="100" StepFrequency="1" ValueChanged="Customize_Changed" />
+                    <TextBlock Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}" TextWrapping="Wrap" FontSize="12"
+                               Text="Needs Mica or Acrylic. Some sites can get harder to read; turn it off for one site from the tab's right-click menu or Ctrl+K." />
+                    <TextBox x:Name="GlassOffBox" Header="Sites kept solid (one per line)" AcceptsReturn="True" TextWrapping="NoWrap" Height="90"
+                             IsSpellCheckEnabled="False" LostFocus="GlassOff_LostFocus" />
+
+                    <TextBlock Text="Motion" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
+                    <CheckBox x:Name="AnimationsCheck" Content="Animations" Click="Customize_Changed" />
+                    <CheckBox x:Name="WindowDragCheck" Content="Lift the window's content while I drag it" Click="Customize_Changed" />
+                    <Slider x:Name="DurationSlider" Header="Animation length (ms)" Minimum="0" Maximum="400" StepFrequency="10" ValueChanged="Customize_Changed" />
 
                     <TextBlock Text="Theme file" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
                     <TextBlock x:Name="ThemeName" Style="{StaticResource BodyText}" />
@@ -188,6 +200,9 @@
                       <Button Content="Bottom bar" Tag="bottom" Click="LayoutPreset_Click" ToolTipService.ToolTip="Tabs and tools below the page" />
                     </VariableSizedWrapGrid>
                     <Slider x:Name="SidebarWidthSlider" Header="Sidebar width" Minimum="160" Maximum="420" StepFrequency="4" ValueChanged="Customize_Changed" />
+                    <Slider x:Name="TabWidthSlider" Header="Tab width in a tab strip" Minimum="100" Maximum="400" StepFrequency="4" ValueChanged="Customize_Changed" />
+                    <CheckBox x:Name="CloseButtonsCheck" Content="Close button on every tab" Click="Customize_Changed" />
+                    <Slider x:Name="AddressWidthSlider" Header="Address bar width" Minimum="300" Maximum="2400" StepFrequency="20" ValueChanged="Customize_Changed" />
                     <TextBlock Text="Toolbar (top to bottom = left to right)" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
                     <StackPanel x:Name="ToolbarArrange" Spacing="2" />
                     <TextBlock Text="Sidebar sections" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
@@ -201,9 +216,11 @@
                     <Slider x:Name="SplitGapSlider" Header="Gap between panes" Minimum="0" Maximum="24" StepFrequency="1" ValueChanged="Customize_Changed" />
                     <TextBlock Text="Pages" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
                     <ComboBox x:Name="SearchCombo" Header="Search with" HorizontalAlignment="Stretch" SelectionChanged="Customize_Changed" />
-                    <CheckBox x:Name="HistoryCheck" Content="Suggest pages I've visited in the address bar" Click="Customize_Changed" />
-                    <Button Content="Clear history…" Click="ClearHistory_Click" />
                     <CheckBox x:Name="PeekCheck" Content="Shift+click a link to peek at it" Click="Customize_Changed" />
+                    <CheckBox x:Name="GesturesCheck" Content="Mouse gestures (hold the right button and draw)" Click="Customize_Changed"
+                              ToolTipService.ToolTip="Left: back · Right: forward · Up, down: reload · Down, right: close tab · Down: new tab" />
+                    <CheckBox x:Name="ForceDarkCheck" Content="Dark mode for every website (after restart)" Click="Customize_Changed" />
+                    <CheckBox x:Name="ClassicScrollbarsCheck" Content="Classic scrollbars (after restart)" Click="Customize_Changed" />
                     <ComboBox x:Name="ColorSchemeCombo" Header="Websites see" HorizontalAlignment="Stretch" SelectionChanged="Customize_Changed">
                       <ComboBoxItem Content="The theme's light or dark" Tag="theme" />
                       <ComboBoxItem Content="Windows' light or dark" Tag="auto" />
@@ -216,10 +233,14 @@
                     <TextBlock Text="Home tab" Style="{StaticResource SectionHeader}" />
                     <StackPanel x:Name="HomeArrange" Spacing="2" />
                     <ComboBox x:Name="BackgroundCombo" Header="Background" HorizontalAlignment="Stretch" SelectionChanged="Background_Changed">
-                      <ComboBoxItem Content="None" Tag="" />
+                      <ComboBoxItem Content="None" Tag="none" />
                       <ComboBoxItem Content="Hills" Tag="hills" />
+                      <ComboBoxItem Content="Aurora" Tag="aurora" />
+                      <ComboBoxItem Content="Waves" Tag="waves" />
+                      <ComboBoxItem Content="Your image" Tag="image" />
                       <ComboBoxItem Content="Pick an image…" Tag="pick" />
                     </ComboBox>
+                    <Slider x:Name="HomeDimSlider" Header="Darken the image (%)" Minimum="0" Maximum="80" StepFrequency="5" ValueChanged="Customize_Changed" />
                     <CheckBox x:Name="HomeGlassCheck" Content="See-through (window material shows through)" Click="Customize_Changed" />
                   </StackPanel>
 
@@ -271,6 +292,23 @@
                                Text="Click a box and press the keys you want. Backspace clears it. Letters need Ctrl or Alt. Shortcuts marked * also work inside pages; the rest let a page use the key first." />
                     <StackPanel x:Name="KeysList" Spacing="4" />
                     <Button Content="Restore all shortcuts" Click="ResetKeys_Click" />
+                  </StackPanel>
+
+                  <StackPanel x:Name="PrivacyPage" Spacing="6" Visibility="Collapsed">
+                    <TextBlock Text="Tracking" Style="{StaticResource SectionHeader}" />
+                    <ComboBox x:Name="TrackingCombo" Header="Block trackers" HorizontalAlignment="Stretch" SelectionChanged="Customize_Changed">
+                      <ComboBoxItem Content="Balanced (recommended)" Tag="balanced" />
+                      <ComboBoxItem Content="Strict (can break some sites)" Tag="strict" />
+                      <ComboBoxItem Content="Basic" Tag="basic" />
+                      <ComboBoxItem Content="Off" Tag="off" />
+                    </ComboBox>
+                    <TextBlock Text="History" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
+                    <CheckBox x:Name="HistoryCheck" Content="Suggest pages I've visited in the address bar" Click="Customize_Changed" />
+                    <Button Content="Clear history…" Click="ClearHistory_Click" />
+                    <TextBlock Text="Site permissions" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
+                    <TextBlock Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}" TextWrapping="Wrap" FontSize="12"
+                               Text="Sites ask before using your camera, microphone, location and the like. What you've allowed or blocked:" />
+                    <StackPanel x:Name="PermissionList" Spacing="2" />
                   </StackPanel>
 
                   <StackPanel x:Name="PowerPage" Spacing="6" Visibility="Collapsed">
@@ -345,6 +383,9 @@
               <MenuFlyoutItem x:Name="MenuBookmark" Text="Bookmark this page" KeyboardAcceleratorTextOverride="Ctrl+D" Click="Star_Click">
                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE734;" /></MenuFlyoutItem.Icon>
               </MenuFlyoutItem>
+              <MenuFlyoutItem x:Name="MenuManager" Text="Manage bookmarks" Click="BookmarkManage_Click">
+                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8F1;" /></MenuFlyoutItem.Icon>
+              </MenuFlyoutItem>
               <MenuFlyoutSubItem x:Name="ImportMenu" Text="Import bookmarks">
                 <MenuFlyoutSubItem.Icon><FontIcon Glyph="&#xE8B5;" /></MenuFlyoutSubItem.Icon>
               </MenuFlyoutSubItem>
@@ -364,6 +405,9 @@
               <MenuFlyoutSeparator />
               <MenuFlyoutItem Text="Print" KeyboardAcceleratorTextOverride="Ctrl+P" Click="Print_Click">
                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE749;" /></MenuFlyoutItem.Icon>
+              </MenuFlyoutItem>
+              <MenuFlyoutItem x:Name="MenuScreenshot" Text="Screenshot of the whole page" Click="Screenshot_Click">
+                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE722;" /></MenuFlyoutItem.Icon>
               </MenuFlyoutItem>
               <MenuFlyoutItem Text="Developer tools" KeyboardAcceleratorTextOverride="F12" Click="DevTools_Click">
                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xEC7A;" /></MenuFlyoutItem.Icon>
@@ -574,7 +618,13 @@
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock x:Name="TabsTitle" Text="Tabs" Style="{StaticResource SectionHeader}" VerticalAlignment="Center" />
+            <DropDownButton x:Name="WorkspaceButton" Padding="6,2" Background="Transparent" BorderThickness="0" VerticalAlignment="Center"
+                            ToolTipService.ToolTip="Workspaces: separate sets of tabs (Ctrl+Shift+E for the next one)" AutomationProperties.Name="Workspace">
+              <TextBlock x:Name="TabsTitle" Text="Tabs" Style="{StaticResource SectionHeader}" />
+              <DropDownButton.Flyout>
+                <MenuFlyout x:Name="WorkspaceMenu" Opening="WorkspaceMenu_Opening" />
+              </DropDownButton.Flyout>
+            </DropDownButton>
             <Button x:Name="NewTabButton" Grid.Column="1" Style="{StaticResource ChromeButton}" Click="NewTab_Click"
                     ToolTipService.ToolTip="New tab (Ctrl+T)" AutomationProperties.Name="New tab">
               <FontIcon Glyph="&#xE710;" />
@@ -606,7 +656,7 @@
                       <FontIcon Glyph="{x:Bind AudioGlyph, Mode=OneWay}" FontSize="11" />
                     </Button>
                     <Button Grid.Column="3" Style="{StaticResource ChromeButton}" Width="22" Height="22" CornerRadius="4" Click="CloseTab_Click"
-                            Visibility="{x:Bind LabelVisibility, Mode=OneWay}" ToolTipService.ToolTip="Close tab (Ctrl+W)" AutomationProperties.Name="Close tab">
+                            Visibility="{x:Bind CloseVisibility, Mode=OneWay}" ToolTipService.ToolTip="Close tab (Ctrl+W)" AutomationProperties.Name="Close tab">
                       <FontIcon Glyph="&#xE711;" FontSize="10" Foreground="{x:Bind GlyphBrush, Mode=OneWay}" />
                     </Button>
                   </Grid>
@@ -627,13 +677,19 @@
                 <ColumnDefinition Width="Auto" />
               </Grid.ColumnDefinitions>
               <TextBlock Text="Bookmarks" Style="{StaticResource SectionHeader}" VerticalAlignment="Center" />
-              <Button x:Name="BookmarkImportButton" Grid.Column="1" Style="{StaticResource ChromeButton}"
-                      ToolTipService.ToolTip="Import bookmarks" AutomationProperties.Name="Import bookmarks">
-                <FontIcon Glyph="&#xE8B5;" />
-                <Button.Flyout>
-                  <MenuFlyout x:Name="ImportFlyout" Opening="ImportFlyout_Opening" />
-                </Button.Flyout>
-              </Button>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
+                <Button x:Name="BookmarkManageButton" Style="{StaticResource ChromeButton}" Click="BookmarkManage_Click"
+                        ToolTipService.ToolTip="Manage bookmarks (Ctrl+Shift+O)" AutomationProperties.Name="Manage bookmarks">
+                  <FontIcon Glyph="&#xE8FD;" />
+                </Button>
+                <Button x:Name="BookmarkImportButton" Style="{StaticResource ChromeButton}"
+                        ToolTipService.ToolTip="Import bookmarks" AutomationProperties.Name="Import bookmarks">
+                  <FontIcon Glyph="&#xE8B5;" />
+                  <Button.Flyout>
+                    <MenuFlyout x:Name="ImportFlyout" Opening="ImportFlyout_Opening" />
+                  </Button.Flyout>
+                </Button>
+              </StackPanel>
             </Grid>
             <TextBox x:Name="BookmarkSearch" Grid.Row="1" PlaceholderText="Search bookmarks" TextChanged="BookmarkSearch_TextChanged"
                      AutomationProperties.Name="Search bookmarks" />
@@ -697,7 +753,88 @@
         <StackPanel x:Name="SuggestList" Spacing="1" />
       </Border>
 
-      <InfoBar x:Name="NoticeBar" Grid.Row="1" Grid.Column="1" Canvas.ZIndex="4" IsOpen="False" IsClosable="True"
+      <!-- A site asking for something (camera, location...). -->
+      <InfoBar x:Name="PermissionBar" Grid.Row="1" Grid.Column="1" Canvas.ZIndex="5" IsOpen="False" IsClosable="True" Severity="Informational"
+               VerticalAlignment="Top" HorizontalAlignment="Center" MaxWidth="640" Margin="12" CloseButtonClick="PermissionBar_CloseButtonClick">
+        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
+          <Button Content="Allow" Style="{StaticResource AccentButtonStyle}" Click="PermissionAllow_Click" />
+          <Button Content="Block" Click="PermissionBlock_Click" />
+          <CheckBox x:Name="PermissionRemember" Content="Remember for this site" IsChecked="True" Margin="8,0,0,0" />
+        </StackPanel>
+      </InfoBar>
+
+      <!-- Bookmark manager (Ctrl+Shift+O). -->
+      <Grid x:Name="BookmarksOverlay" Grid.RowSpan="3" Grid.ColumnSpan="3" Canvas.ZIndex="7" Visibility="Collapsed" Background="#66000000"
+            Tapped="BookmarksOverlay_Tapped" KeyDown="BookmarksOverlay_KeyDown">
+        <Border Margin="40,28" MaxWidth="1100" CornerRadius="12" BorderThickness="1" Background="{StaticResource LiltBackgroundBrush}"
+                BorderBrush="{StaticResource LiltBorderBrush}" Tapped="PeekPanel_Tapped" Padding="14">
+          <Grid RowSpacing="10" ColumnSpacing="12">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="200" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid Grid.ColumnSpan="2" ColumnSpacing="8">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBlock Text="Bookmarks" Style="{StaticResource SectionHeader}" FontSize="16" VerticalAlignment="Center" />
+              <TextBox x:Name="ManagerSearch" Grid.Column="1" PlaceholderText="Search names and addresses" TextChanged="ManagerSearch_TextChanged"
+                       AutomationProperties.Name="Search bookmarks" />
+              <ComboBox x:Name="ManagerSort" Grid.Column="2" MinWidth="170" SelectionChanged="ManagerSort_SelectionChanged" AutomationProperties.Name="Sort">
+                <ComboBoxItem Content="Your order" Tag="order" IsSelected="True" />
+                <ComboBoxItem Content="Name A–Z" Tag="name" />
+                <ComboBoxItem Content="Address A–Z" Tag="address" />
+                <ComboBoxItem Content="Folder" Tag="folder" />
+              </ComboBox>
+              <Button Grid.Column="3" Style="{StaticResource ChromeButton}" Click="ManagerClose_Click" ToolTipService.ToolTip="Close (Esc)" AutomationProperties.Name="Close bookmarks">
+                <FontIcon Glyph="&#xE711;" FontSize="12" />
+              </Button>
+            </Grid>
+            <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="6">
+              <Button x:Name="ManagerOpenButton" Content="Open" Click="ManagerOpen_Click" ToolTipService.ToolTip="Open the selected bookmarks in new tabs" />
+              <Button x:Name="ManagerEditButton" Content="Edit…" Click="ManagerEdit_Click" ToolTipService.ToolTip="Edit the selected bookmark (F2)" />
+              <DropDownButton x:Name="ManagerMove" Content="Move to">
+                <DropDownButton.Flyout>
+                  <MenuFlyout x:Name="ManagerMoveMenu" Opening="ManagerMoveMenu_Opening" />
+                </DropDownButton.Flyout>
+              </DropDownButton>
+              <Button x:Name="ManagerSortFolderButton" Content="Sort A–Z" Click="ManagerSortFolder_Click" ToolTipService.ToolTip="Puts the bookmarks in this folder in name order for good" />
+              <Button x:Name="ManagerRemoveButton" Content="Remove" Click="ManagerRemove_Click" ToolTipService.ToolTip="Remove the selected bookmarks (Delete)" />
+              <TextBlock x:Name="ManagerCount" VerticalAlignment="Center" Foreground="{StaticResource LiltTextMutedBrush}" Margin="8,0,0,0" />
+            </StackPanel>
+            <ListView x:Name="ManagerFolders" Grid.Row="1" Grid.RowSpan="2" SelectionMode="Single" SelectionChanged="ManagerFolders_SelectionChanged"
+                      AutomationProperties.Name="Folders" />
+            <ListView x:Name="ManagerList" Grid.Row="2" Grid.Column="1" SelectionMode="Extended" CanReorderItems="False" AllowDrop="True" CanDragItems="False"
+                      DoubleTapped="ManagerList_DoubleTapped" KeyDown="ManagerList_KeyDown" DragItemsCompleted="ManagerList_DragItemsCompleted"
+                      SelectionChanged="ManagerList_SelectionChanged" AutomationProperties.Name="Bookmarks">
+              <ListView.ItemTemplate>
+                <DataTemplate x:DataType="bm:Bookmark">
+                  <Grid ColumnSpacing="12" Padding="0,6">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="2*" />
+                      <ColumnDefinition Width="3*" />
+                      <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="1" Text="{x:Bind Url}" TextTrimming="CharacterEllipsis" Foreground="{StaticResource LiltTextMutedBrush}" />
+                    <TextBlock Grid.Column="2" Text="{x:Bind Folder}" TextTrimming="CharacterEllipsis" Foreground="{StaticResource LiltTextMutedBrush}" />
+                  </Grid>
+                </DataTemplate>
+              </ListView.ItemTemplate>
+            </ListView>
+          </Grid>
+        </Border>
+      </Grid>
+
+      <InfoBar x:Name="NoticeBar" Grid.Row="1" Grid.Column="1" Canvas.ZIndex="8" IsOpen="False" IsClosable="True"
                VerticalAlignment="Bottom" HorizontalAlignment="Center" MaxWidth="680" Margin="16" />
     </Grid>
 

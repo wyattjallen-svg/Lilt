@@ -28,6 +28,7 @@
 
   "toolbar": {
     "height": 40,
+    "addressWidth": 900,
     "items": ["back", "forward", "reload", "home", "address", "bookmark", "media", "downloads", "extensions", "customize", "sidebar", "menu"]
   },
   "sidebar": {
@@ -37,13 +38,19 @@
     "autoHide": false,
     "revealEdge": 6,
     "hideDelay": 350,
-    "sections": ["tabs", "bookmarks", "layout"]
+    "sections": ["tabs", "bookmarks", "layout"],
+    // In a tab strip (sidebar at the top or bottom), each tab is this wide. closeButtons: an × on every tab.
+    "tabWidth": 200,
+    "closeButtons": true
   },
-  "motion": { "animations": true, "duration": 160 },
-  // theme follows "base"; auto follows Windows; or force light/dark for websites.
-  "pages": { "colorScheme": "theme", "peek": true, "search": "duckduckgo", "history": true },
-  // items: logo, clock, search, tiles, hint, gear (the Customize button in the corner). background: "", "hills", or an image file in the newtab folder.
-  "home": { "items": ["logo", "search", "tiles", "gear"], "glass": true, "background": "" },
+  "motion": { "animations": true, "duration": 160, "windowDrag": true },
+  // colorScheme: theme follows "base"; auto follows Windows; or force light/dark for websites.
+  // search: duckduckgo, google, bing, brave, startpage, ecosia, kagi, or "https://...%s". glass: see-through websites
+  // (glassOff lists sites to leave solid). forceDark and scrollbars apply after a restart. gestures: right-button drags.
+  "pages": { "colorScheme": "theme", "peek": true, "search": "duckduckgo", "history": true,
+    "glass": false, "glassOpacity": 0.72, "glassOff": [], "forceDark": false, "tracking": "balanced", "gestures": true, "scrollbars": "overlay" },
+  // items: logo, clock, search, tiles, hint, gear (the Customize button in the corner). background: "", "hills", "aurora", "waves", or an image file in the newtab folder (dim darkens it).
+  "home": { "items": ["logo", "search", "tiles", "gear"], "glass": true, "background": "", "dim": 0 },
   // While you're in another app: lower priority and memory, suspend idle tabs, pause pages hidden behind full-screen games.
   "power": { "efficiency": true, "suspendMinutes": 5, "hideWhenCovered": true, "hideWhenOccluded": true, "lean": false },
   // The "now playing" panel and visualizer float over the page; drag them anywhere (x and y are fractions of the page area).

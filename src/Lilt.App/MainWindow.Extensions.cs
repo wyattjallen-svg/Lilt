@@ -10,7 +10,7 @@ public sealed partial class MainWindow
 {
     const string ProtonPassId = "ghmbeldphafepmbegfdlkpapadhbakde";
 
-    CoreWebView2Profile? Profile => tabs.Select(t => t.Core).FirstOrDefault(c => c is not null)?.Profile;
+    CoreWebView2Profile? Profile => AllTabs.Select(t => t.Core).FirstOrDefault(c => c is not null)?.Profile;
 
     async void Extensions_Click(object sender, RoutedEventArgs e)
     {

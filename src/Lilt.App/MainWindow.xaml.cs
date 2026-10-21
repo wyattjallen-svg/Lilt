@@ -37,6 +37,7 @@ public sealed partial class MainWindow : Window
     readonly DispatcherQueueTimer hideTimer;
     readonly StartupReport report;
     readonly UISettings uiSettings = new();
+    WindowMotion? windowMotion;
     readonly string appName;
     Theme theme = Theme.Default;
     ShellMetrics metrics;
@@ -57,7 +58,8 @@ public sealed partial class MainWindow : Window
         var load = themes.Load();
         // Media keys and lean mode are browser switches, fixed for the engine's lifetime.
         engine = new BrowserEngine(new EngineOptions(paths.WebView2, paths.PrepareNewTab(), paths.PrepareUserContent(), paths.Extensions,
-            options.InPrivate, options.UserAgent, options.BrowserArgs, !options.NoExtensions, themes.Current.Media.MediaKeys, themes.Current.Power.Lean), queue);
+            options.InPrivate, options.UserAgent, options.BrowserArgs, !options.NoExtensions, themes.Current.Media.MediaKeys, themes.Current.Power.Lean,
+            themes.Current.Pages.ForceDark, themes.Current.Pages.Scrollbars == Scrollbars.Classic), queue);
         var typography = themes.Current.Typography;
         Application.Current.Resources["ContentControlThemeFontFamily"] = new FontFamily(typography.Family);
         Application.Current.Resources["ControlContentThemeFontSize"] = typography.Size;
@@ -109,6 +111,8 @@ public sealed partial class MainWindow : Window
             else if (tabs.Any(t => t.Core == sender)) ShowPeek(url);
         };
         engine.Trace += message => report.Key("trace", message);
+        engine.Gesture += OnGesture;
+        engine.AskPermission = AskPermissionAsync;
         engine.OpenTabForPage = OpenTabForPageAsync;
         engine.OpenUrlInTab = url => AddTab(url);
         AdBlockMenuItem.Visibility = ExtensionsMenuItem.Visibility = engine.ExtensionsEnabled ? Visibility.Visible : Visibility.Collapsed;
@@ -231,6 +235,9 @@ public sealed partial class MainWindow : Window
                     case "import": Import(arg, Path.GetFileName(arg)); break;
                     case "go": Go(arg); break;
                     case "dismiss": NoticeBar.IsOpen = false; break;
+                    case "workspace" when arg.Length > 0: SwitchWorkspace(Workspace.Clean(arg)); break;
+                    case "move": if (active is not null) MoveToWorkspace(active, Workspace.Clean(arg)); break;
+                    case "lift": windowMotion?.Lift(arg != "off"); break;
                     case "mark": break;
                     default: RunCommand(verb, "run"); break;
                 }
@@ -246,6 +253,12 @@ public sealed partial class MainWindow : Window
     string State() => System.Text.Json.JsonSerializer.Serialize(new
     {
         tabs = tabs.Count,
+        workspace = Workspace.Display(workspace),
+        workspaces = workspaces.Count,
+        lifted = windowMotion?.Lifted == true,
+        manager = ManagerShown ? managerItems.Count : -1,
+        permission = PermissionBar.IsOpen ? PermissionBar.Message : null,
+        allTabs = AllTabs.Count(),
         active = active is null ? -1 : tabs.IndexOf(active),
         split = active is not null && Partner(active) is { } p ? tabs.IndexOf(p) : -1,
         floating = floating is null ? -1 : tabs.IndexOf(floating),
@@ -414,6 +427,7 @@ public sealed partial class MainWindow : Window
         foreach (var (item, command) in new (MenuFlyoutItem, string)[]
         {
             (MenuNewTab, "newTab"), (MenuReopen, "reopenTab"), (MenuSplit, "split"), (MenuPalette, "palette"), (MenuBookmark, "bookmark"), (MenuCustomize, "customize"),
+            (MenuManager, "bookmarks"), (MenuScreenshot, "screenshot"),
         })
             item.KeyboardAcceleratorTextOverride = Shortcut(command);
     }
@@ -450,6 +464,9 @@ public sealed partial class MainWindow : Window
             case "forward": core?.GoForward(); break;
             case "reload": core?.Reload(); break;
             case "newTab": NewTab(); break;
+            case "bookmarks": ShowManager(); break;
+            case "screenshot": Screenshot(); break;
+            case "workspace": NextWorkspace(); break;
             case "reopenTab": ReopenTab(); break;
             case "closeTab": if (active is not null) CloseTab(active); break;
             case "nextTab": CycleTab(1); break;
@@ -492,13 +509,14 @@ public sealed partial class MainWindow : Window
         engine.CloseWindows();
         themes.Dispose();
         engine.UserContent.Dispose();
-        foreach (var tab in tabs)
+        foreach (var tab in AllTabs)
         {
             engine.Detach(tab.Core);
             tab.View?.Close();
         }
     }
 
+    void Screenshot_Click(object sender, RoutedEventArgs e) => Screenshot();
     void Print_Click(object sender, RoutedEventArgs e) => core?.ShowPrintUI(CoreWebView2PrintDialogKind.Browser);
     void DevTools_Click(object sender, RoutedEventArgs e) => core?.OpenDevToolsWindow();
     void CustomizeMenu_Click(object sender, RoutedEventArgs e) => ShowCustomize();
@@ -564,12 +582,22 @@ public sealed partial class MainWindow : Window
         Root.RequestedTheme = highContrast ? ElementTheme.Default : t.Base == ThemeBase.Light ? ElementTheme.Light : ElementTheme.Dark;
         ApplyBackdrop(highContrast ? new BackdropSpec(Backdrop.None) : t.Backdrop, t.Base, colors.Background);
         ApplyCaptionColors(colors);
-        foreach (var tab in tabs) SetPageBackground(tab);
+        // See-through websites need a window material to show.
+        engine.Configure(t.Pages.Peek, t.Pages.Gestures, t.Pages.Glass && SystemBackdrop is not null ? t.Pages.GlassOpacity : 0, t.Pages.GlassOffSites.Items);
+        engine.SetTracking(t.Pages.Tracking);
+        foreach (var tab in AllTabs) SetPageBackground(tab);
         engine.SetPageColorScheme(t.Pages.ColorScheme, t.Base);
-        engine.SetPeek(t.Pages.Peek);
         ApplyShortcuts(t.Shortcuts);
-        if (previous is not null && (previous.Power.Lean != t.Power.Lean || previous.Media.MediaKeys != t.Media.MediaKeys))
+        if (previous is not null && (previous.Power.Lean != t.Power.Lean || previous.Media.MediaKeys != t.Media.MediaKeys
+            || previous.Pages.ForceDark != t.Pages.ForceDark || previous.Pages.Scrollbars != t.Pages.Scrollbars))
             ShowNotice(new("Restart Lilt to apply this change.", NoticeKind.Info, "Restart now", Restart));
+        if (BrowserTab.CloseButtons != t.Sidebar.CloseButtons)
+        {
+            BrowserTab.CloseButtons = t.Sidebar.CloseButtons;
+            foreach (var tab in AllTabs) tab.RefreshCloseButton();
+        }
+        AddressHost.MaxWidth = t.Toolbar.AddressWidth;
+        windowMotion?.Apply(t.Motion.WindowDrag && AnimationsOn, t.Motion.Duration);
 
         var m = metrics;
         var radius = new CornerRadius(t.Shape.ControlRadius);
@@ -671,7 +699,7 @@ public sealed partial class MainWindow : Window
     {
         if (tab.View is null) return;
         var home = Uri.TryCreate(url ?? tab.Url, UriKind.Absolute, out var u) && u.Host == BrowserEngine.NewTabHost;
-        tab.View.DefaultBackgroundColor = home && HomeGlass ? Colors.Transparent : ThemeResources.ToColor(theme.Colors.Page.Opaque);
+        tab.View.DefaultBackgroundColor = (home && HomeGlass) || engine.GlassFor(url ?? tab.Url) ? Colors.Transparent : ThemeResources.ToColor(theme.Colors.Page.Opaque);
     }
 
     void OnThemeReloaded(ThemeLoadResult result)
@@ -829,9 +857,10 @@ public sealed partial class MainWindow : Window
         SidebarFooter.Visibility = sections.Has("layout") ? Visibility.Visible : Visibility.Collapsed;
         BookmarkList.MaxHeight = showTabs ? 300 : double.PositiveInfinity;
         BookmarksPanel.RowDefinitions[2].Height = showTabs ? GridLength.Auto : new GridLength(1, GridUnitType.Star);
-        TabsTitle.Visibility = vertical ? Visibility.Visible : Visibility.Collapsed;
+
         TabsHeader.VerticalAlignment = SidebarFooter.VerticalAlignment = vertical ? VerticalAlignment.Stretch : VerticalAlignment.Center;
         SetTabStripOrientation(vertical);
+        UpdateWorkspaceButton();
 
         foreach (var (button, e) in EdgeToggles()) button.IsChecked = e == edge;
         PinToggle.IsChecked = !sidebar.AutoHide;

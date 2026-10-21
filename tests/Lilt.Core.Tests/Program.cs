@@ -472,7 +472,9 @@ Test("glass.json: backdrop object with tint", () =>
     Equal(0, r.Issues.Count);
     Equal(Backdrop.Acrylic, r.Theme.Backdrop.Material);
     Equal(Rgba.Parse("#171A1E"), r.Theme.Backdrop.Tint);
-    Equal(0.3, r.Theme.Backdrop.TintOpacity);
+    Equal(0.22, r.Theme.Backdrop.TintOpacity);
+    True(r.Theme.Pages.Glass);
+    Equal("aurora", r.Theme.Home.Background);
     True(r.Theme.Home.Glass);
 });
 
@@ -933,6 +935,62 @@ Test("address bar shows pages without https:// and a lone slash", () =>
     Equal("example.com/a/", UrlPolicy.Pretty(new Uri("https://example.com/a/")));
     Equal("http://example.com", UrlPolicy.Pretty(new Uri("http://example.com/")));
     Equal("example.com/?q=1", UrlPolicy.Pretty(new Uri("https://example.com/?q=1")));
+});
+
+Test("workspaces: names cleaned, split kept only within one workspace", () =>
+{
+    var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json");
+    try
+    {
+        new Session([new("https://a.example/", "A"), new("https://b.example/", "B", false, "Work"), new("https://c.example/", "C", false, "Main")], 0, 1, ["Work", "Play"]).Save(path);
+        var s = Session.Load(path)!;
+        Equal(-1, s.Split);
+        Equal("", s.Tabs[2].Workspace);
+        Equal("Work", s.Tabs[1].Workspace);
+        True(s.Workspaces!.SequenceEqual(["", "Work", "Play"]));
+        Equal("Main", Workspace.Display(""));
+        Equal("", Workspace.Clean(" Main "));
+    }
+    finally
+    {
+        File.Delete(path);
+    }
+});
+
+Test("v0.6 settings parse, write back and keep defaults equal", () =>
+{
+    var json = """
+    {"schemaVersion":1,
+     "toolbar":{"addressWidth":1200},
+     "sidebar":{"tabWidth":160,"closeButtons":false},
+     "motion":{"windowDrag":false},
+     "pages":{"glass":true,"glassOpacity":0.5,"glassOff":["mail.example.com"],"forceDark":true,"tracking":"strict","gestures":false,"scrollbars":"classic"},
+     "home":{"background":"aurora","dim":0.4}}
+    """;
+    var r = ThemeParser.Parse(json);
+    Equal(0, r.Issues.Count);
+    var t = r.Theme;
+    Equal(1200.0, t.Toolbar.AddressWidth);
+    Equal(160.0, t.Sidebar.TabWidth);
+    True(!t.Sidebar.CloseButtons && !t.Motion.WindowDrag && t.Pages.Glass && t.Pages.ForceDark && !t.Pages.Gestures);
+    Equal(TrackingLevel.Strict, t.Pages.Tracking);
+    Equal(Scrollbars.Classic, t.Pages.Scrollbars);
+    True(t.Pages.GlassOffSites.Has("mail.example.com"));
+    Equal("aurora", t.Home.Background);
+    Equal(0.4, t.Home.Dim);
+    Equal(t, ThemeParser.Parse(ThemeWriter.ToJson(t)).Theme);
+    Equal(Theme.Default, ThemeParser.Parse(ThemeWriter.ToJson(Theme.Default)).Theme);
+    True(ThemeParser.Parse("{\"schemaVersion\":1,\"home\":{\"background\":\"lava\"}}").Issues.Count == 1);
+});
+
+Test("every bundled preset loads without issues", () =>
+{
+    foreach (var file in Directory.GetFiles(RepoFile(themes), "*.json").Where(f => !f.EndsWith("schema.json")))
+    {
+        var r = ThemeParser.LoadFile(file);
+        Equal($"{Path.GetFileName(file)}: 0", $"{Path.GetFileName(file)}: {r.Issues.Count}");
+    }
+    Equal(Rgba.Parse("#000000"), ThemeParser.LoadFile(RepoFile($"{themes}/midnight.json")).Theme.Colors.Background);
 });
 
 return Summary();

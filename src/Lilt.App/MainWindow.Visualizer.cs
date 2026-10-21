@@ -33,7 +33,7 @@ public sealed partial class MainWindow
     bool VisualizerWanted()
     {
         if (visualizerToggle is { } forced) return forced;
-        var playing = tabs.Where(t => t.IsAudible && !t.IsMuted);
+        var playing = AllTabs.Where(t => t.IsAudible && !t.IsMuted);
         return theme.Media.Visualizer.Show switch
         {
             WidgetShow.Never => false,
@@ -101,7 +101,7 @@ public sealed partial class MainWindow
             }
         }
         if (m.Source == VisualizerSource.System) return;
-        var tab = mediaTab is { IsAudible: true } t ? t : tabs.FirstOrDefault(x => x.IsAudible) ?? mediaTab;
+        var tab = mediaTab is { IsAudible: true } t ? t : AllTabs.FirstOrDefault(x => x.IsAudible) ?? mediaTab;
         if (tab?.Core is not { } c || (c == captureCore && levels.Length == m.Bars)) return;
         if (captureCore is { } old) _ = engine.EvaluateAsync(old, "__lilt.capture(false)");
         captureCore = c;
@@ -167,7 +167,7 @@ public sealed partial class MainWindow
         // Loopback that has heard nothing at all while a tab plays (no audio device, or sound Windows can't loop back):
         // listen to the playing tab instead. Once it has heard something it's working, and quiet passages are just quiet.
         if (loopback is not null && m.Source == VisualizerSource.Auto && now - loopbackSince > 2500 && heardAt == 0
-            && tabs.Any(t => t.Media is { Playing: true } && !t.IsMuted))
+            && AllTabs.Any(t => t.Media is { Playing: true } && !t.IsMuted))
         {
             loopbackFailed = true;
             loopback.Dispose();
@@ -201,7 +201,7 @@ public sealed partial class MainWindow
         }
 
         // Nothing audible and the bars have settled: stop drawing until sound starts again (UpdateVisualizer restarts it).
-        if (peak > 0.02 || tabs.Any(t => t.IsAudible)) quietSince = 0;
+        if (peak > 0.02 || AllTabs.Any(t => t.IsAudible)) quietSince = 0;
         else if (quietSince == 0) quietSince = now;
         else if (now - quietSince > 2000) vizTimer?.Stop();
     }

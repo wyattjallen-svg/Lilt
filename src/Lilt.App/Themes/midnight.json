@@ -1,0 +1,50 @@
+{
+  // Lilt Midnight: true black for OLED screens (black pixels are off), solid chrome, quiet sage accent.
+  "$schema": "./theme.schema.json",
+  "schemaVersion": 1,
+  "name": "Midnight",
+  "base": "dark",
+  "backdrop": "none",
+
+  "colors": {
+    "background": "#000000",
+    "surface": "#000000",
+    "surfaceRaised": "#141619",
+    "border": "#FFFFFF14",
+    "text": "#ECEDEA",
+    "textMuted": "#8B949C",
+    "accent": "#7FA99A",
+    "onAccent": "#0B1310",
+    "hover": "#FFFFFF10",
+    "pressed": "#FFFFFF1C",
+    "page": "#000000"
+  },
+
+  "typography": { "family": "Segoe UI Variable Text", "size": 13, "weight": 400 },
+  "shape": { "radius": 10, "controlRadius": 8, "borderWidth": 1 },
+  "density": "standard",
+  "toolbar": {
+    "height": 40,
+    "addressWidth": 900,
+    "items": ["back", "forward", "reload", "home", "address", "bookmark", "media", "downloads", "extensions", "customize", "sidebar", "menu"]
+  },
+  "sidebar": { "edge": "left", "width": 220, "height": 44, "autoHide": false, "revealEdge": 6, "hideDelay": 350, "sections": ["tabs", "bookmarks", "layout"], "tabWidth": 200, "closeButtons": true },
+  "motion": { "animations": true, "duration": 160, "windowDrag": true },
+  "pages": { "colorScheme": "theme", "peek": true, "search": "duckduckgo", "history": true,
+    "glass": false, "glassOpacity": 0.72, "glassOff": [], "forceDark": false, "tracking": "balanced", "gestures": true, "scrollbars": "overlay" },
+  "home": { "items": ["logo", "search", "tiles", "gear"], "glass": false, "background": "hills", "dim": 0 },
+  "power": { "efficiency": true, "suspendMinutes": 5, "hideWhenCovered": true, "hideWhenOccluded": true, "lean": false },
+  // The "now playing" panel and visualizer float over the page; drag them anywhere (x and y are fractions of the page area).
+  "media": {
+    "player": { "show": "auto", "x": 0.66, "y": 0.74, "width": 300, "height": 0, "opacity": 1 },
+    "visualizer": { "show": "auto", "x": 0.66, "y": 0.6, "width": 300, "height": 72, "opacity": 0.9 },
+    // Videos popped out (Alt+P): "auto" uses Windows' floating window when it can, "always" keeps them inside Lilt.
+    "pip": { "show": "auto", "x": 0.6, "y": 0.55, "width": 400, "height": 0, "opacity": 1 },
+    "bars": 32, "style": "bars", "source": "auto", "mediaKeys": true, "autoPictureInPicture": false,
+    "musicSites": ["music.youtube.com", "open.spotify.com", "soundcloud.com", "music.apple.com", "listen.tidal.com", "www.deezer.com",
+      "bandcamp.com", "www.pandora.com", "music.amazon.com", "www.mixcloud.com", "tunein.com", "radio.garden"]
+  },
+  "split": { "orientation": "horizontal", "ratio": 0.5, "gap": 6 },
+  // Change any shortcut: "command": "Ctrl+Shift+K", a list, or "" for none. Commands left out keep their defaults.
+  "shortcuts": {}
+}

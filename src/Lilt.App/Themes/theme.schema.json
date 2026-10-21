@@ -205,6 +205,12 @@
           },
           "uniqueItems": true,
           "description": "Toolbar elements in order. Items before \"address\" sit left of it, the rest right. Leave one out to hide it."
+        },
+        "addressWidth": {
+          "type": "number",
+          "minimum": 300,
+          "maximum": 2400,
+          "description": "The address bar's widest width."
         }
       }
     },
@@ -258,6 +264,16 @@
           },
           "uniqueItems": true,
           "description": "Sidebar sections in order (top to bottom). Leave one out to hide it. Bookmarks only show when docked left or right."
+        },
+        "tabWidth": {
+          "type": "number",
+          "minimum": 100,
+          "maximum": 400,
+          "description": "A tab's width in a tab strip (sidebar along the top or bottom)."
+        },
+        "closeButtons": {
+          "type": "boolean",
+          "description": "Show an \u00d7 on every tab (middle-click and Ctrl+W still close tabs without it)."
         }
       }
     },
@@ -273,6 +289,10 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 1000
+        },
+        "windowDrag": {
+          "type": "boolean",
+          "description": "The window's content lifts slightly while you drag the window."
         }
       }
     },
@@ -305,6 +325,48 @@
         "history": {
           "type": "boolean",
           "description": "Remember visited pages for address-bar suggestions (never in InPrivate)."
+        },
+        "glass": {
+          "type": "boolean",
+          "description": "See-through websites: the window material shows behind pages. Can make some sites harder to read; turn it off per site with glassOff."
+        },
+        "glassOpacity": {
+          "type": "number",
+          "minimum": 0.2,
+          "maximum": 1,
+          "description": "How much of a page's own background color stays when glass is on."
+        },
+        "glassOff": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true,
+          "description": "Sites (like \"mail.google.com\") that stay solid when glass is on."
+        },
+        "forceDark": {
+          "type": "boolean",
+          "description": "Darken websites that have no dark look of their own (after a restart)."
+        },
+        "tracking": {
+          "enum": [
+            "off",
+            "basic",
+            "balanced",
+            "strict"
+          ],
+          "description": "Tracking prevention. strict blocks the most trackers and can break some sites."
+        },
+        "gestures": {
+          "type": "boolean",
+          "description": "Mouse gestures: hold the right button and draw. Left: back, right: forward, up then down: reload, down then right: close tab, down: new tab."
+        },
+        "scrollbars": {
+          "enum": [
+            "overlay",
+            "classic"
+          ],
+          "description": "Thin overlay scrollbars or classic ones (after a restart)."
         }
       }
     },
@@ -334,7 +396,7 @@
         "background": {
           "type": "string",
           "maxLength": 100,
-          "description": "\"\" for none, \"hills\" for built-in scenery, or an image file name (png, jpg, webp, gif, svg) in Lilt's newtab folder."
+          "description": "\"\" for none, \"hills\", \"aurora\" or \"waves\" (drawn from your colors), or an image file in the newtab folder."
         },
         "clock": {
           "type": "boolean",
@@ -347,6 +409,12 @@
         "tiles": {
           "type": "boolean",
           "description": "Older setting; use items."
+        },
+        "dim": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.8,
+          "description": "Darkens a background image so the home tab stays readable."
         }
       }
     },
@@ -812,6 +880,45 @@
           ]
         },
         "pip": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "bookmarks": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "screenshot": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "workspace": {
           "anyOf": [
             {
               "type": "string"

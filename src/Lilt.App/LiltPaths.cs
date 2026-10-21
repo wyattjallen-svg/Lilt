@@ -12,6 +12,8 @@ sealed record LiltPaths(string Root)
     public string Session => Path.Combine(Root, "session.json");
     public string Bookmarks => Path.Combine(Root, "bookmarks.json");
     public string History => Path.Combine(Root, "history.json");
+    // Your own theme presets ("Save as preset" in Customize), one theme file each.
+    public string Presets => Path.Combine(Root, "themes");
     public string Extensions => Path.Combine(Root, "Extensions");
     public static string Bundled => Path.Combine(AppContext.BaseDirectory, "Themes");
     static string BundledNewTab => Path.Combine(AppContext.BaseDirectory, "NewTab");
@@ -31,7 +33,7 @@ sealed record LiltPaths(string Root)
         try
         {
             if (!File.Exists(Theme) || IsOldDefault(Theme)) File.Copy(Path.Combine(Bundled, "minimal.json"), Theme, overwrite: true);
-            foreach (var name in new[] { "theme.schema.json", "minimal.json", "glass.json", "light.json" }) CopyIfDifferent(name);
+            foreach (var file in Directory.EnumerateFiles(Bundled, "*.json")) CopyIfDifferent(Path.GetFileName(file));
             return Theme;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

@@ -23,12 +23,12 @@ public static class ThemeParser
         ["colors"] = ["background", "surface", "surfaceRaised", "border", "text", "textMuted", "accent", "onAccent", "hover", "pressed", "page"],
         ["typography"] = ["family", "size", "weight"],
         ["shape"] = ["radius", "controlRadius", "borderWidth"],
-        ["toolbar"] = ["height", "items"],
-        ["sidebar"] = ["edge", "width", "height", "autoHide", "revealEdge", "hideDelay", "sections"],
-        ["motion"] = ["animations", "duration"],
-        ["pages"] = ["colorScheme", "peek", "search", "history"],
+        ["toolbar"] = ["height", "items", "addressWidth"],
+        ["sidebar"] = ["edge", "width", "height", "autoHide", "revealEdge", "hideDelay", "sections", "tabWidth", "closeButtons"],
+        ["motion"] = ["animations", "duration", "windowDrag"],
+        ["pages"] = ["colorScheme", "peek", "search", "history", "glass", "glassOpacity", "glassOff", "forceDark", "tracking", "gestures", "scrollbars"],
         // clock/search/tiles are the v0.2 switches, still read when "items" is absent.
-        ["home"] = ["items", "glass", "background", "clock", "search", "tiles"],
+        ["home"] = ["items", "glass", "background", "dim", "clock", "search", "tiles"],
         ["power"] = ["efficiency", "suspendMinutes", "hideWhenCovered", "hideWhenOccluded", "lean"],
         ["media"] = ["player", "visualizer", "pip", "bars", "style", "source", "mediaKeys", "autoPictureInPicture", "musicSites"],
         ["media.player"] = ["show", "x", "y", "width", "height", "opacity"],
@@ -125,7 +125,8 @@ public static class ThemeParser
                 r.Num(sh, "borderWidth", 0, 4, d.Shape.BorderWidth));
 
             var tb = r.Section(root, "toolbar");
-            var toolbar = new ToolbarSpec(r.Num(tb, "height", 32, 64, d.Toolbar.Height), r.List(tb, "items", ToolbarSpec.All, d.Toolbar.Items));
+            var toolbar = new ToolbarSpec(r.Num(tb, "height", 32, 64, d.Toolbar.Height), r.List(tb, "items", ToolbarSpec.All, d.Toolbar.Items),
+                r.Num(tb, "addressWidth", 300, 2400, d.Toolbar.AddressWidth));
 
             var sb = r.Section(root, "sidebar");
             var ds = d.Sidebar;
@@ -136,12 +137,15 @@ public static class ThemeParser
                 r.Bool(sb, "autoHide", ds.AutoHide),
                 r.Num(sb, "revealEdge", 1, 32, ds.RevealEdge),
                 r.Int(sb, "hideDelay", 0, 5000, ds.HideDelay),
-                r.List(sb, "sections", SidebarSpec.All, ds.Sections));
+                r.List(sb, "sections", SidebarSpec.All, ds.Sections),
+                r.Num(sb, "tabWidth", 100, 400, ds.TabWidth),
+                r.Bool(sb, "closeButtons", ds.CloseButtons));
 
             var mo = r.Section(root, "motion");
             var motion = new MotionSpec(
                 r.Bool(mo, "animations", d.Motion.Animations),
-                r.Int(mo, "duration", 0, 1000, d.Motion.Duration));
+                r.Int(mo, "duration", 0, 1000, d.Motion.Duration),
+                r.Bool(mo, "windowDrag", d.Motion.WindowDrag));
 
             var pg = r.Section(root, "pages");
             var search = r.Str(pg, "search", 300, d.Pages.Search);
@@ -150,7 +154,10 @@ public static class ThemeParser
                 issues.Add(new("pages.search", $"\"{search}\" isn't a search engine Lilt knows ({string.Join(", ", Navigation.SearchEngines.Known.Keys)}) or an https address with %s; using {d.Pages.Search}"));
                 search = d.Pages.Search;
             }
-            var pages = new PagesSpec(r.Enum(pg, "colorScheme", d.Pages.ColorScheme), r.Bool(pg, "peek", d.Pages.Peek), search, r.Bool(pg, "history", d.Pages.History));
+            var pages = new PagesSpec(r.Enum(pg, "colorScheme", d.Pages.ColorScheme), r.Bool(pg, "peek", d.Pages.Peek), search, r.Bool(pg, "history", d.Pages.History),
+                r.Bool(pg, "glass", d.Pages.Glass), r.Num(pg, "glassOpacity", 0.2, 1, d.Pages.GlassOpacity), r.Hosts(pg, "glassOff", d.Pages.GlassOffSites),
+                r.Bool(pg, "forceDark", d.Pages.ForceDark), r.Enum(pg, "tracking", d.Pages.Tracking), r.Bool(pg, "gestures", d.Pages.Gestures),
+                r.Enum(pg, "scrollbars", d.Pages.Scrollbars));
 
             var hm = r.Section(root, "home");
             var homeItems = d.Home.Items;
@@ -158,7 +165,7 @@ public static class ThemeParser
                 homeItems = new Ids(new[] { "clock", "search", "tiles" }.Where(k => r.Bool(hm, k, true)).ToArray());
             else
                 homeItems = r.List(hm, "items", HomeSpec.All, d.Home.Items);
-            var home = new HomeSpec(homeItems, r.Bool(hm, "glass", d.Home.Glass), r.Background(hm, "background", d.Home.Background));
+            var home = new HomeSpec(homeItems, r.Bool(hm, "glass", d.Home.Glass), r.Background(hm, "background", d.Home.Background), r.Num(hm, "dim", 0, 0.8, d.Home.Dim));
 
             var pw = r.Section(root, "power");
             var power = new PowerSpec(
@@ -368,7 +375,7 @@ public static class ThemeParser
         {
             if (!Get(o, key, out var v, out var path)) return fallback;
             if (v.ValueKind == JsonValueKind.String && v.GetString() is { } s && IsBackground(s)) return s;
-            return Bad(path, "expected \"\", \"hills\" or an image file name like \"background.jpg\"", fallback);
+            return Bad(path, "expected \"\", \"hills\", \"aurora\", \"waves\" or an image file name like \"background.jpg\"", fallback);
         }
 
         public bool Bool(Obj? o, string key, bool fallback)
@@ -421,7 +428,7 @@ public static class ThemeParser
     }
 
     public static bool IsBackground(string s) =>
-        s is "" or "hills"
+        s.Length == 0 || HomeSpec.Scenes.Contains(s)
         || (s.Length <= 100 && s.IndexOfAny(['/', '\\', ':']) < 0 && !s.StartsWith('.')
             && new[] { ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg" }.Contains(Path.GetExtension(s).ToLowerInvariant()));
 

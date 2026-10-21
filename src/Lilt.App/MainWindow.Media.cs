@@ -37,7 +37,7 @@ public sealed partial class MainWindow
 
     void OnMediaChanged(CoreWebView2 core, MediaInfo? info)
     {
-        if (tabs.FirstOrDefault(t => t.Core == core) is not { } tab) return;
+        if (AllTabs.FirstOrDefault(t => t.Core == core) is not { } tab) return;
         var was = tab.Media;
         tab.Media = info;
         tab.MediaAt = Environment.TickCount64;
@@ -46,7 +46,7 @@ public sealed partial class MainWindow
             if (mediaTab != tab || was?.Title != info.Title) playerToggle = playerToggle == true ? true : null;
             mediaTab = tab;
         }
-        else if (mediaTab == tab && info is null) mediaTab = tabs.FirstOrDefault(t => t.Media is { Playing: true });
+        else if (mediaTab == tab && info is null) mediaTab = AllTabs.FirstOrDefault(t => t.Media is { Playing: true });
         if (floating == tab && info is null) DockFloating(activate: false);
         UpdateMedia();
     }

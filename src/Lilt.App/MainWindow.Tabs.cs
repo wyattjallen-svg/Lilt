@@ -34,16 +34,25 @@ public sealed partial class MainWindow
         startProblem = start.Kind == AddressKind.Rejected ? start.Reason : null;
 
         BrowserTab? pick = null, partner = null;
+        var restored = new List<BrowserTab>();
         if (!options.InPrivate && Session.Load(paths.Session) is { } session)
+        {
+            workspaces.AddRange(session.Workspaces!.Skip(1));
             for (var i = 0; i < session.Tabs.Count; i++)
             {
                 var saved = session.Tabs[i];
                 if (!UrlPolicy.IsNavigable(saved.Url)) continue;
-                var tab = new BrowserTab(saved.Url, saved.Title, saved.Pinned);
-                tabs.Add(tab);
+                var tab = new BrowserTab(saved.Url, saved.Title, saved.Pinned) { Workspace = saved.Workspace };
+                restored.Add(tab);
                 if (i <= session.Active || pick is null) pick = tab;
                 if (i == session.Split) partner = tab;
             }
+        }
+        // The workspace you were in comes back; the others wait, unloaded, until you switch to them.
+        workspace = pick?.Workspace ?? "";
+        foreach (var tab in restored)
+            if (tab.Workspace == workspace) tabs.Add(tab);
+            else Stash(tab, tab.Workspace);
         if (start.Kind is AddressKind.Navigate or AddressKind.Search || tabs.Count == 0)
         {
             pick = new BrowserTab(start.Uri?.AbsoluteUri ?? BrowserEngine.NewTabUri.AbsoluteUri);
@@ -55,6 +64,7 @@ public sealed partial class MainWindow
         active!.IsActive = true;
         TabList.SelectedItem = active;
         tabs.CollectionChanged += (_, _) => ScheduleSave();
+        UpdateWorkspaceButton();
 
         saveTimer = DispatcherQueue.CreateTimer();
         saveTimer.Interval = TimeSpan.FromSeconds(1);
@@ -198,7 +208,11 @@ public sealed partial class MainWindow
 
     void Activate(BrowserTab tab)
     {
-        if (!tabs.Contains(tab)) return;
+        if (!tabs.Contains(tab))
+        {
+            if (WorkspaceOf(tab) is { } w) SwitchWorkspace(w, tab);
+            return;
+        }
         if (tab == floating)
         {
             floating = null;
@@ -286,17 +300,10 @@ public sealed partial class MainWindow
         else if (tab == active) Activate(Partner(tab) ?? tabs[i + 1 < tabs.Count ? i + 1 : i - 1]);
         if (InSplit(tab)) split = null;
         if (floating == tab) floating = null;
-        if (mediaTab == tab) mediaTab = tabs.FirstOrDefault(t => t != tab && t.Media is { Playing: true });
+        if (mediaTab == tab) mediaTab = AllTabs.FirstOrDefault(t => t != tab && t.Media is { Playing: true });
         tabs.Remove(tab);
         LayoutPages();
-        engine.Detach(tab.Core);
-        if (tab.View is { } view)
-        {
-            PageHost.Children.Remove(view);
-            view.Close();
-        }
-        tab.View = null;
-        tab.Core = null;
+        DisposeTab(tab);
     }
 
     void ReopenTab()
@@ -334,7 +341,7 @@ public sealed partial class MainWindow
     {
         var now = Environment.TickCount64;
         var spec = theme.Power;
-        foreach (var tab in tabs.ToArray())
+        foreach (var tab in AllTabs.ToArray())
         {
             if (closing || tab.Core is not { } c || tab.IsAudible) continue;
             var hidden = !OnScreen(tab) || force;
@@ -359,10 +366,12 @@ public sealed partial class MainWindow
         if (options.InPrivate || tabs.Count == 0) return;
         try
         {
-            var list = tabs.Where(t => UrlPolicy.IsNavigable(t.Url)).ToList();
+            var list = workspaces.SelectMany(w => (w == workspace ? tabs.ToList() : stashed.GetValueOrDefault(w) ?? [])
+                .Where(t => UrlPolicy.IsNavigable(t.Url)).Select(t => (Tab: t, Workspace: w))).ToList();
+            var order = list.Select(x => x.Tab).ToList();
             var partner = active is null ? null : Partner(active);
-            new Session(list.Select(t => new SessionTab(t.Url, t.Title, t.IsPinned)).ToList(), Math.Max(0, active is null ? 0 : list.IndexOf(active)),
-                partner is null ? -1 : list.IndexOf(partner)).Save(paths.Session);
+            new Session(list.Select(x => new SessionTab(x.Tab.Url, x.Tab.Title, x.Tab.IsPinned, x.Workspace)).ToList(), Math.Max(0, active is null ? 0 : order.IndexOf(active)),
+                partner is null ? -1 : order.IndexOf(partner), workspaces).Save(paths.Session);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -405,7 +414,7 @@ public sealed partial class MainWindow
     // Pinned tabs in a strip are icon-sized; other strip tabs are a fixed width. Row height follows the spacing setting.
     void SizeTab(ListViewItem item, BrowserTab tab)
     {
-        item.Width = verticalTabs ? double.NaN : tab.IsPinned ? 48 : 200;
+        item.Width = verticalTabs ? double.NaN : tab.IsPinned ? 48 : theme.Sidebar.TabWidth;
         item.MinHeight = metrics.ControlHeight + 4;
         item.Padding = new Thickness(metrics.Unit / 2, 1, metrics.Unit / 2, 1);
     }
@@ -467,6 +476,9 @@ public sealed partial class MainWindow
             bookmarks.Add(tab.Title, tab.Url);
             SaveBookmarks();
         });
+        if (Uri.TryCreate(tab.Url, UriKind.Absolute, out var site) && UrlPolicy.IsWeb(site) && theme.Pages.Glass)
+            Add(engine.GlassFor(tab.Url) ? "Keep this site solid" : "Make this site see-through", "\uE7B3", () => ToggleGlassHere(tab));
+        menu.Items.Add(WorkspaceSubMenu(tab));
         menu.Items.Add(new MenuFlyoutSeparator());
         Add("Close", "", () => CloseTab(tab));
         if (tabs.Count > 1) Add("Close other tabs", "", () =>

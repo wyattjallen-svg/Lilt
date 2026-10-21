@@ -21,6 +21,7 @@ public sealed partial class MainWindow
         ["address"] = "\uE721", ["back"] = "\uE72B", ["forward"] = "\uE72A", ["reload"] = "\uE72C", ["home"] = "\uE80F",
         ["bookmark"] = "\uE734", ["sidebar"] = "\uE8A0", ["menu"] = "\uE712", ["customize"] = "\uE790", ["palette"] = "\uE945",
         ["split"] = "\uE8A9", ["media"] = "\uE8D6", ["visualizer"] = "\uE9D9", ["pip"] = "\uE8A7",
+        ["bookmarks"] = "\uE8F1", ["screenshot"] = "\uE722", ["workspace"] = "\uE8B7",
     };
 
     void ShowPalette()
@@ -118,8 +119,10 @@ public sealed partial class MainWindow
     {
         foreach (var (id, label) in Commands.Labels)
             yield return new(label, Shortcut(id), commandGlyphs.GetValueOrDefault(id, "\uE756"), () => RunCommand(id, keyboard: true), Listed: true);
-        foreach (var tab in tabs)
-            yield return new(tab.DisplayTitle, tab == active ? "This tab" : "Switch to tab", "", () => Activate(tab), Listed: true);
+        foreach (var name in workspaces.Where(n => n != workspace))
+            yield return new($"Workspace: {Workspace.Display(name)}", "Switch workspace", "\uE8B7", () => SwitchWorkspace(name), Listed: true);
+        foreach (var tab in AllTabs)
+            yield return new(tab.DisplayTitle, tab == active ? "This tab" : tabs.Contains(tab) ? "Switch to tab" : $"Tab in {Workspace.Display(tab.Workspace)}", "", () => Activate(tab), Listed: true);
         if (active is { } a && Partner(a) is not null)
         {
             yield return new("Swap split panes", "Split view", "", SwapSplit, Listed: true);
@@ -136,11 +139,11 @@ public sealed partial class MainWindow
         yield return new("Open data folder", "", "", () => Open("explorer.exe", paths.Root));
         yield return new("Open user styles and scripts folder", "", "", () => Open("explorer.exe", engine.UserContent.Folder));
         yield return new("Put the player and visualizer back", "Media", "", () => ResetWidgets_Click(this, new RoutedEventArgs()));
-        foreach (var page in new[] { "look", "layout", "home", "media", "keys", "power" })
+        foreach (var page in new[] { "look", "layout", "home", "media", "keys", "power", "privacy" })
             yield return new($"Customize: {char.ToUpperInvariant(page[0])}{page[1..]}", "Settings", "", () => ShowCustomize(page));
 
-        foreach (var name in new[] { "Minimal", "Glass", "Light" })
-            yield return new($"Theme: {name}", "Preset", "", () => ApplyPreset(name.ToLowerInvariant()));
+        foreach (var (name, path, mine) in Presets())
+            yield return new($"Theme: {name}", mine ? "Your preset" : "Preset", "", () => ApplyPreset(path));
         foreach (var (name, tag) in new[] { ("Compact", "compact"), ("Research", "research"), ("Vertical tabs", "vertical"), ("Top tabs", "top"), ("Bottom bar", "bottom") })
             yield return new($"Layout: {name}", "Preset", "", () => ApplyLayout(tag));
         foreach (var edge in Enum.GetValues<DockEdge>())
@@ -162,6 +165,20 @@ public sealed partial class MainWindow
         yield return Toggle("Hide pages behind other windows", t.Power.HideWhenOccluded, x => x with { Power = x.Power with { HideWhenOccluded = !x.Power.HideWhenOccluded } });
         yield return Toggle("Lean mode", t.Power.Lean, x => x with { Power = x.Power with { Lean = !x.Power.Lean } });
         yield return Toggle("Animations", t.Motion.Animations, x => x with { Motion = x.Motion with { Animations = !x.Motion.Animations } });
+        yield return Toggle("Lift the window while dragging it", t.Motion.WindowDrag, x => x with { Motion = x.Motion with { WindowDrag = !x.Motion.WindowDrag } });
+        yield return Toggle("See-through websites", t.Pages.Glass, x => x with { Pages = x.Pages with { Glass = !x.Pages.Glass } });
+        if (t.Pages.Glass && active is { } here && Uri.TryCreate(here.Url, UriKind.Absolute, out var hu) && UrlPolicy.IsWeb(hu))
+            yield return new(GlassOffHere(here) ? "See-through on this site" : "Keep this site solid", UrlPolicy.DisplayHost(here.Url), "\uE7B3", () => ToggleGlassHere(here));
+        yield return Toggle("Mouse gestures", t.Pages.Gestures, x => x with { Pages = x.Pages with { Gestures = !x.Pages.Gestures } });
+        yield return Toggle("Dark mode for every website", t.Pages.ForceDark, x => x with { Pages = x.Pages with { ForceDark = !x.Pages.ForceDark } });
+        yield return Toggle("Close button on every tab", t.Sidebar.CloseButtons, x => x with { Sidebar = x.Sidebar with { CloseButtons = !x.Sidebar.CloseButtons } });
+        foreach (var level in Enum.GetValues<TrackingLevel>())
+            yield return new($"Block trackers: {level.ToString().ToLowerInvariant()}", t.Pages.Tracking == level ? "Current" : "Privacy", "\uE72E",
+                () => Queue(Current with { Pages = Current.Pages with { Tracking = level } }));
+        yield return new("New workspace", "Workspaces", "\uE710", () => _ = NewWorkspaceAsync(null));
+        if (active is { } mt && workspaces.Count > 1)
+            foreach (var name in workspaces.Where(n => n != workspace))
+                yield return new($"Move this tab to {Workspace.Display(name)}", "Workspaces", "\uE8B7", () => MoveToWorkspace(mt, name));
         yield return Toggle("Peek with Shift+click", t.Pages.Peek, x => x with { Pages = x.Pages with { Peek = !x.Pages.Peek } });
         yield return Toggle("See-through home tab", t.Home.Glass, x => x with { Home = x.Home with { Glass = !x.Home.Glass } });
         yield return Toggle("Pop videos out when switching tabs", t.Media.AutoPictureInPicture, x => x with { Media = x.Media with { AutoPictureInPicture = !x.Media.AutoPictureInPicture } });

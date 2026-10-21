@@ -32,6 +32,8 @@ public sealed partial class MainWindow
         Activated += (_, _) => DispatcherQueue.TryEnqueue(() => UpdatePower());
         powerTimer.Start();
         Native.OnForegroundChanged(() => UpdatePower());
+        windowMotion = new WindowMotion(hwnd, Root);
+        windowMotion.Apply(theme.Motion.WindowDrag && AnimationsOn, theme.Motion.Duration);
         try
         {
             energySaver = PowerManager.EnergySaverStatus == EnergySaverStatus.On;
@@ -58,7 +60,7 @@ public sealed partial class MainWindow
         if (focused) powerTimer.Stop();
         else if (!powerTimer.IsRunning) powerTimer.Start();
         var away = awaySince < 0 ? 0 : (Environment.TickCount64 - awaySince) / 1000.0;
-        var audible = tabs.Any(t => t.IsAudible);
+        var audible = AllTabs.Any(t => t.IsAudible);
         var covered = !focused && !minimized && Native.IsCovered(hwnd);
         var occluded = !focused && !minimized && !covered && Native.IsOccluded(hwnd);
         // Whatever the level, nothing Lilt draws for itself (the visualizer, the player's clock) runs while it can't be seen.
@@ -85,7 +87,7 @@ public sealed partial class MainWindow
                 if (p.Kind is CoreWebView2ProcessKind.Browser or CoreWebView2ProcessKind.Gpu or CoreWebView2ProcessKind.Utility) pids.Add(p.ProcessId);
         var changed = pids.Count(pid => Native.SetEfficient(pid, efficient));
 
-        foreach (var tab in tabs)
+        foreach (var tab in AllTabs)
         {
             if (tab.Core is not { } c) continue;
             try

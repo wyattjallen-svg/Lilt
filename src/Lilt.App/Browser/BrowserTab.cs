@@ -29,7 +29,7 @@ public sealed class BrowserTab(string url, string title = "", bool pinned = fals
     public bool IsLoading { get => loading; set => Set(ref loading, value, nameof(IsLoading), nameof(IconVisibility), nameof(GlyphVisibility)); }
     public bool IsAudible { get => audible; set => Set(ref audible, value, nameof(AudioVisibility), nameof(AudioGlyph)); }
     public bool IsMuted { get => muted; set => Set(ref muted, value, nameof(AudioVisibility), nameof(AudioGlyph)); }
-    public bool IsPinned { get => pinned; set => Set(ref pinned, value, nameof(LabelVisibility)); }
+    public bool IsPinned { get => pinned; set => Set(ref pinned, value, nameof(LabelVisibility), nameof(CloseVisibility)); }
     public bool HasError { get => failed; set => Set(ref failed, value, nameof(Glyph), nameof(GlyphBrush), nameof(StateBorder), nameof(IconVisibility), nameof(GlyphVisibility)); }
 
     public string DisplayTitle => !string.IsNullOrWhiteSpace(title) ? title : IsHome ? "Home" : UrlPolicy.DisplayHost(url);
@@ -42,6 +42,12 @@ public sealed class BrowserTab(string url, string title = "", bool pinned = fals
     public Visibility IconVisibility => icon is not null && !loading && !failed ? Visibility.Visible : Visibility.Collapsed;
     public Visibility GlyphVisibility => (icon is null || failed) && !loading ? Visibility.Visible : Visibility.Collapsed;
     public Visibility LabelVisibility => pinned ? Visibility.Collapsed : Visibility.Visible;
+    // sidebar.closeButtons, for every tab.
+    public static bool CloseButtons { get; set; } = true;
+    public Visibility CloseVisibility => !pinned && CloseButtons ? Visibility.Visible : Visibility.Collapsed;
+    public void RefreshCloseButton() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CloseVisibility)));
+    // On another workspace (kept loaded, or loaded when you switch to it).
+    internal string Workspace { get; set; } = "";
     public Visibility AudioVisibility => audible || muted ? Visibility.Visible : Visibility.Collapsed;
     public string AudioGlyph => muted ? "" : "";
 

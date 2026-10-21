@@ -48,6 +48,7 @@ public sealed partial class MainWindow
             items = t.Home.Items.Items,
             glass = HomeGlass,
             background = t.Home.Background,
+            dim = t.Home.Dim,
             @base = t.Base == ThemeBase.Light ? "light" : "dark",
             font = t.Typography.Family,
             radius = t.Shape.Radius,
@@ -86,7 +87,7 @@ public sealed partial class MainWindow
             homeDataWritten = true;
             return;
         }
-        foreach (var tab in tabs)
+        foreach (var tab in AllTabs)
             if (tab.IsHome && tab.Core is { } core) core.Reload();
     }
 

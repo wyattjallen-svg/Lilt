@@ -66,6 +66,7 @@ public sealed partial class MainWindow
     {
         ShowBookmarks();
         WriteHomeData();
+        if (!keepManager) FillManager();
     }
 
     void ShowBookmarks()
@@ -149,9 +150,13 @@ public sealed partial class MainWindow
         }));
     }
 
-    async void BookmarkEdit_Click(object sender, RoutedEventArgs e)
+    void BookmarkEdit_Click(object sender, RoutedEventArgs e)
     {
-        if (menuBookmark is not { } b) return;
+        if (menuBookmark is { } b) _ = EditBookmarkAsync(b);
+    }
+
+    async Task EditBookmarkAsync(Bookmark b)
+    {
         var title = new TextBox { Header = "Name", Text = b.Title };
         var address = new TextBox { Header = "Address", Text = b.Url, IsSpellCheckEnabled = false };
         var folder = new TextBox { Header = "Folder (Home = home tab tiles; empty = bookmarks bar)", Text = b.Folder };

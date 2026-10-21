@@ -10,9 +10,9 @@
     "background": "#F3F4F1",
     "surface": "#E9F0ECE6",
     "surfaceRaised": "#FFFFFFD9",
-    "border": "#1E23281A",
+    "border": "#1E23281F",
     "text": "#1E2328",
-    "textMuted": "#5E6A73",
+    "textMuted": "#56626B",
     "accent": "#496B5D",
     "onAccent": "#FFFFFF",
     "hover": "#1E23280D",
@@ -25,12 +25,14 @@
   "density": "standard",
   "toolbar": {
     "height": 40,
+    "addressWidth": 900,
     "items": ["back", "forward", "reload", "home", "address", "bookmark", "media", "downloads", "extensions", "customize", "sidebar", "menu"]
   },
-  "sidebar": { "edge": "left", "width": 220, "height": 44, "autoHide": false, "revealEdge": 6, "hideDelay": 350, "sections": ["tabs", "bookmarks", "layout"] },
-  "motion": { "animations": true, "duration": 160 },
-  "pages": { "colorScheme": "theme", "peek": true, "search": "duckduckgo", "history": true },
-  "home": { "items": ["logo", "search", "tiles", "gear"], "glass": false, "background": "hills" },
+  "sidebar": { "edge": "left", "width": 220, "height": 44, "autoHide": false, "revealEdge": 6, "hideDelay": 350, "sections": ["tabs", "bookmarks", "layout"], "tabWidth": 200, "closeButtons": true },
+  "motion": { "animations": true, "duration": 160, "windowDrag": true },
+  "pages": { "colorScheme": "theme", "peek": true, "search": "duckduckgo", "history": true,
+    "glass": false, "glassOpacity": 0.72, "glassOff": [], "forceDark": false, "tracking": "balanced", "gestures": true, "scrollbars": "overlay" },
+  "home": { "items": ["logo", "search", "tiles", "gear"], "glass": false, "background": "hills", "dim": 0 },
   "power": { "efficiency": true, "suspendMinutes": 5, "hideWhenCovered": true, "hideWhenOccluded": true, "lean": false },
   // The "now playing" panel and visualizer float over the page; drag them anywhere (x and y are fractions of the page area).
   "media": {

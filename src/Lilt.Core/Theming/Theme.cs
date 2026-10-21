@@ -44,28 +44,53 @@ public sealed record Ids(IReadOnlyList<string> Items)
 }
 
 // Every toolbar element; "address" stretches, the rest sit to its left or right in list order.
-public sealed record ToolbarSpec(double Height, Ids Items)
+// AddressWidth: the address bar's widest width.
+public sealed record ToolbarSpec(double Height, Ids Items, double AddressWidth = 900)
 {
     public static readonly string[] All = ["back", "forward", "reload", "home", "address", "bookmark", "media", "split", "downloads", "extensions", "palette", "customize", "sidebar", "menu"];
     public static readonly string[] Defaults = ["back", "forward", "reload", "home", "address", "bookmark", "media", "downloads", "extensions", "customize", "sidebar", "menu"];
 }
 
-public sealed record SidebarSpec(DockEdge Edge, double Width, double Height, bool AutoHide, double RevealEdge, int HideDelay, Ids Sections)
+// TabWidth: a tab's width in a tab strip (sidebar along the top or bottom). CloseButtons: an × on every tab.
+public sealed record SidebarSpec(DockEdge Edge, double Width, double Height, bool AutoHide, double RevealEdge, int HideDelay, Ids Sections,
+    double TabWidth = 200, bool CloseButtons = true)
 {
     public static readonly string[] All = ["tabs", "bookmarks", "layout"];
 }
 
-public sealed record MotionSpec(bool Animations, int Duration);
+// WindowDrag: the window's content lifts slightly while you drag the window around.
+public sealed record MotionSpec(bool Animations, int Duration, bool WindowDrag = true);
+
+// How hard the engine blocks trackers (WebView2's tracking prevention levels).
+public enum TrackingLevel { Off, Basic, Balanced, Strict }
+
+public enum Scrollbars { Overlay, Classic }
 
 // Peek: Shift+click a link to preview it in a panel over the page.
 // Search: the address bar's search engine (a name like "duckduckgo" or "google", or an https address with %s).
 // History: remember visited pages for address-bar suggestions (never in InPrivate windows).
-public sealed record PagesSpec(PageColorScheme ColorScheme, bool Peek, string Search = "duckduckgo", bool History = true);
+// Glass: websites become see-through so the window material shows behind them (GlassOpacity is how much of the
+// page's own color stays; GlassOff lists sites left alone). ForceDark darkens sites that have no dark look of their own;
+// Scrollbars and ForceDark apply after a restart. Gestures: hold the right button and draw (← back, → forward,
+// ↑↓ reload, ↓→ close tab, ↓ new tab).
+public sealed record PagesSpec(PageColorScheme ColorScheme, bool Peek, string Search = "duckduckgo", bool History = true,
+    bool Glass = false, double GlassOpacity = 0.72, Ids? GlassOff = null, bool ForceDark = false, TrackingLevel Tracking = TrackingLevel.Balanced,
+    bool Gestures = true, Scrollbars Scrollbars = Scrollbars.Overlay)
+{
+    public Ids GlassOffSites => GlassOff ?? new Ids();
+    public bool Equals(PagesSpec? o) => o is not null && ColorScheme == o.ColorScheme && Peek == o.Peek && Search == o.Search && History == o.History
+        && Glass == o.Glass && GlassOpacity == o.GlassOpacity && GlassOffSites.Equals(o.GlassOffSites) && ForceDark == o.ForceDark
+        && Tracking == o.Tracking && Gestures == o.Gestures && Scrollbars == o.Scrollbars;
+    public override int GetHashCode() => HashCode.Combine(ColorScheme, Search, Glass, GlassOpacity);
+}
 
 // The home tab. Glass makes its background transparent so the window material shows through.
 // Background: "" for none, "hills" for the built-in scenery, or an image file name in the newtab folder.
-public sealed record HomeSpec(Ids Items, bool Glass, string Background)
+// Background: "" none, "hills", "aurora" or "waves" (drawn from the theme's colors), or an image file in the newtab folder.
+// Dim darkens an image so the home tab stays readable (0 = off).
+public sealed record HomeSpec(Ids Items, bool Glass, string Background, double Dim = 0)
 {
+    public static readonly string[] Scenes = ["hills", "aurora", "waves"];
     public static readonly string[] All = ["logo", "clock", "search", "tiles", "hint", "gear"];
 }
 

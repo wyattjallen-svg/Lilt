@@ -46,7 +46,9 @@ public sealed partial class MainWindow
         MediaPage.Visibility = page == "media" ? Visibility.Visible : Visibility.Collapsed;
         KeysPage.Visibility = page == "keys" ? Visibility.Visible : Visibility.Collapsed;
         PowerPage.Visibility = page == "power" ? Visibility.Visible : Visibility.Collapsed;
+        PrivacyPage.Visibility = page == "privacy" ? Visibility.Visible : Visibility.Collapsed;
         if (page == "keys") BuildKeys();
+        if (page == "privacy") FillPermissions();
     }
 
     void SyncCustomize()
@@ -70,7 +72,12 @@ public sealed partial class MainWindow
         ToolbarHeightSlider.Value = t.Toolbar.Height;
         Select(DensityCombo, Camel(t.Density.ToString()));
         SidebarWidthSlider.Value = t.Sidebar.Width;
-        Select(BackgroundCombo, t.Home.Background is "" or "hills" ? t.Home.Background : "pick");
+        // "None" has its own tag: an empty Tag doesn't reliably come back as "" from XAML, which made None sometimes do nothing.
+        var bg = t.Home.Background;
+        ((ComboBoxItem)BackgroundCombo.Items[4]).Visibility = HomeSpec.Scenes.Contains(bg) || bg.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        Select(BackgroundCombo, bg.Length == 0 ? "none" : HomeSpec.Scenes.Contains(bg) ? bg : "image");
+        HomeDimSlider.Value = Math.Round(t.Home.Dim * 100);
+        HomeDimSlider.IsEnabled = bg.Length > 0 && !HomeSpec.Scenes.Contains(bg);
         HomeGlassCheck.IsChecked = t.Home.Glass;
         EfficiencySwitch.IsOn = t.Power.Efficiency;
         CoveredSwitch.IsOn = t.Power.HideWhenCovered;
@@ -82,6 +89,21 @@ public sealed partial class MainWindow
         SplitGapSlider.Value = t.Split.Gap;
         PeekCheck.IsChecked = t.Pages.Peek;
         HistoryCheck.IsChecked = t.Pages.History;
+        GlassPagesSwitch.IsOn = t.Pages.Glass;
+        GlassOpacitySlider.Value = Math.Round(t.Pages.GlassOpacity * 100);
+        GlassOpacitySlider.IsEnabled = t.Pages.Glass;
+        if (GlassOffBox.FocusState == FocusState.Unfocused) GlassOffBox.Text = string.Join("\r", t.Pages.GlassOffSites.Items);
+        GesturesCheck.IsChecked = t.Pages.Gestures;
+        ForceDarkCheck.IsChecked = t.Pages.ForceDark;
+        ClassicScrollbarsCheck.IsChecked = t.Pages.Scrollbars == Scrollbars.Classic;
+        Select(TrackingCombo, Camel(t.Pages.Tracking.ToString()));
+        AnimationsCheck.IsChecked = t.Motion.Animations;
+        WindowDragCheck.IsChecked = t.Motion.WindowDrag;
+        WindowDragCheck.IsEnabled = DurationSlider.IsEnabled = t.Motion.Animations;
+        DurationSlider.Value = t.Motion.Duration;
+        TabWidthSlider.Value = t.Sidebar.TabWidth;
+        CloseButtonsCheck.IsChecked = t.Sidebar.CloseButtons;
+        AddressWidthSlider.Value = t.Toolbar.AddressWidth;
         // The known engines, plus your own address when theme.json has one.
         SearchCombo.Items.Clear();
         foreach (var (key, engine) in Lilt.Core.Navigation.SearchEngines.Known) SearchCombo.Items.Add(new ComboBoxItem { Content = engine.Name, Tag = key });
@@ -105,6 +127,7 @@ public sealed partial class MainWindow
         AutoPipCheck.IsChecked = m.AutoPictureInPicture;
         MediaKeysCheck.IsChecked = m.MediaKeys;
         if (KeysPage.Visibility == Visibility.Visible) BuildKeys();
+        BuildPresets();
         BuildArrange(ToolbarArrange, ToolbarSpec.All, t.Toolbar.Items, ids => Current with { Toolbar = Current.Toolbar with { Items = ids } });
         BuildArrange(SidebarArrange, SidebarSpec.All, t.Sidebar.Sections, ids => Current with { Sidebar = Current.Sidebar with { Sections = ids } });
         BuildArrange(HomeArrange, HomeSpec.All, t.Home.Items, ids => Current with { Home = Current.Home with { Items = ids } });
@@ -178,12 +201,19 @@ public sealed partial class MainWindow
             Colors = t.Colors with { Surface = t.Colors.Surface.WithAlpha((byte)Math.Round(ChromeOpacitySlider.Value * 2.55)) },
             Shape = t.Shape with { Radius = radius, ControlRadius = Math.Round(radius * 0.75) },
             Typography = t.Typography with { Size = FontSizeSlider.Value, Family = family },
-            Toolbar = t.Toolbar with { Height = ToolbarHeightSlider.Value },
-            Sidebar = t.Sidebar with { Width = SidebarWidthSlider.Value },
+            Toolbar = t.Toolbar with { Height = ToolbarHeightSlider.Value, AddressWidth = AddressWidthSlider.Value },
+            Sidebar = t.Sidebar with { Width = SidebarWidthSlider.Value, TabWidth = TabWidthSlider.Value, CloseButtons = CloseButtonsCheck.IsChecked == true },
+            Motion = new MotionSpec(AnimationsCheck.IsChecked == true, (int)DurationSlider.Value, WindowDragCheck.IsChecked == true),
             Density = DensityCombo.SelectedItem is ComboBoxItem { Tag: string d } && Enum.TryParse<Density>(d, true, out var density) ? density : t.Density,
-            Home = t.Home with { Glass = HomeGlassCheck.IsChecked == true },
-            Pages = new PagesSpec(Pick(ColorSchemeCombo, t.Pages.ColorScheme), PeekCheck.IsChecked == true,
-                SearchCombo.SelectedItem is ComboBoxItem { Tag: string engine } ? engine : t.Pages.Search, HistoryCheck.IsChecked == true),
+            Home = t.Home with { Glass = HomeGlassCheck.IsChecked == true, Dim = HomeDimSlider.Value / 100 },
+            Pages = t.Pages with
+            {
+                ColorScheme = Pick(ColorSchemeCombo, t.Pages.ColorScheme), Peek = PeekCheck.IsChecked == true,
+                Search = SearchCombo.SelectedItem is ComboBoxItem { Tag: string engine } ? engine : t.Pages.Search, History = HistoryCheck.IsChecked == true,
+                Glass = GlassPagesSwitch.IsOn, GlassOpacity = GlassOpacitySlider.Value / 100, Gestures = GesturesCheck.IsChecked == true,
+                ForceDark = ForceDarkCheck.IsChecked == true, Scrollbars = ClassicScrollbarsCheck.IsChecked == true ? Scrollbars.Classic : Scrollbars.Overlay,
+                Tracking = Pick(TrackingCombo, t.Pages.Tracking),
+            },
             Power = new PowerSpec(EfficiencySwitch.IsOn, (int)SuspendSlider.Value, CoveredSwitch.IsOn, OccludedSwitch.IsOn, LeanSwitch.IsOn),
             Split = new SplitSpec(Pick(SplitOrientationCombo, t.Split.Orientation), SplitRatioSlider.Value / 100, SplitGapSlider.Value),
             Media = t.Media with
@@ -211,13 +241,22 @@ public sealed partial class MainWindow
         box.SelectedItem is ComboBoxItem { Tag: string tag } && Enum.TryParse<T>(tag, true, out var v) ? v : fallback;
 
     // One site per line; anything that isn't a host name ("open.spotify.com") is left out.
+    static string[] Hosts(string text) => text.Split(['\r', '\n', ',', ' '], StringSplitOptions.RemoveEmptyEntries)
+        .Select(h => (Uri.TryCreate(h.Contains("://") ? h : "https://" + h, UriKind.Absolute, out var u) ? u.Host : "").ToLowerInvariant())
+        .Where(h => Uri.CheckHostName(h) == UriHostNameType.Dns).Distinct().Take(200).ToArray();
+
     void MusicSites_LostFocus(object sender, RoutedEventArgs e)
     {
-        var hosts = MusicSitesBox.Text.Split(['\r', '\n', ',', ' '], StringSplitOptions.RemoveEmptyEntries)
-            .Select(h => (Uri.TryCreate(h.Contains("://") ? h : "https://" + h, UriKind.Absolute, out var u) ? u.Host : "").ToLowerInvariant())
-            .Where(h => Uri.CheckHostName(h) == UriHostNameType.Dns).Distinct().Take(200).ToArray();
+        var hosts = Hosts(MusicSitesBox.Text);
         if (hosts.SequenceEqual(Current.Media.MusicSites.Items)) return;
         Queue(Current with { Media = Current.Media with { MusicSites = new Ids(hosts) } });
+    }
+
+    void GlassOff_LostFocus(object sender, RoutedEventArgs e)
+    {
+        var hosts = Hosts(GlassOffBox.Text).Select(h => h.StartsWith("www.", StringComparison.Ordinal) ? h[4..] : h).Distinct().ToArray();
+        if (hosts.SequenceEqual(Current.Pages.GlassOffSites.Items)) return;
+        Queue(Current with { Pages = Current.Pages with { GlassOff = new Ids(hosts) } });
     }
 
     // Keys: one row per command with its shortcut. Click the box and press keys to change it; Backspace clears it.
@@ -335,10 +374,11 @@ public sealed partial class MainWindow
 
     async void Background_Changed(object sender, SelectionChangedEventArgs e)
     {
-        if (syncing || BackgroundCombo.SelectedItem is not ComboBoxItem { Tag: string tag }) return;
+        if (syncing || BackgroundCombo.SelectedItem is not ComboBoxItem { Tag: string tag } || tag == "image") return;
         if (tag != "pick")
         {
-            Queue(Current with { Home = Current.Home with { Background = tag } });
+            Queue(Current with { Home = Current.Home with { Background = tag == "none" ? "" : tag } });
+            HomeDimSlider.IsEnabled = false;
             return;
         }
         // The picked image is copied into the newtab folder, which is all the home page can read.
@@ -417,26 +457,103 @@ public sealed partial class MainWindow
     }
 
     // A theme preset changes the look; where things are (sidebar, toolbar order, home layout, power) stays yours.
-    void Preset_Click(object sender, RoutedEventArgs e)
+    // Presets: Lilt's (in the app's Themes folder) in a fixed order, then yours (the data folder's "themes").
+    static readonly string[] presetOrder = ["minimal", "glass", "light", "midnight", "paper"];
+
+    List<(string Name, string Path, bool Mine)> Presets()
     {
-        if (sender is FrameworkElement { Tag: string name }) ApplyPreset(name);
+        var list = new List<(string, string, bool)>();
+        try
+        {
+            foreach (var file in Directory.GetFiles(LiltPaths.Bundled, "*.json").Where(f => !f.EndsWith("schema.json", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(f => Array.IndexOf(presetOrder, System.IO.Path.GetFileNameWithoutExtension(f)) is var i && i < 0 ? 99 : i))
+                list.Add((ThemeParser.LoadFile(file).Theme.Name, file, false));
+            if (Directory.Exists(paths.Presets))
+                foreach (var file in Directory.GetFiles(paths.Presets, "*.json").Order())
+                    list.Add((ThemeParser.LoadFile(file).Theme.Name, file, true));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            LiltPaths.LogError(e);
+        }
+        return list;
     }
 
-    void ApplyPreset(string name)
+    void BuildPresets()
     {
-        var result = ThemeParser.LoadFile(System.IO.Path.Combine(LiltPaths.Bundled, name + ".json"));
+        PresetList.Children.Clear();
+        foreach (var (name, path, mine) in Presets())
+        {
+            var button = new Button { Content = name, Tag = path, HorizontalAlignment = HorizontalAlignment.Stretch };
+            if (name == theme.Name) button.BorderBrush = ThemeResources.Get("LiltAccentBrush");
+            button.Click += (_, _) => ApplyPreset(path);
+            if (mine)
+            {
+                ToolTipService.SetToolTip(button, "Your preset · right-click to delete");
+                var menu = new MenuFlyout();
+                var delete = new MenuFlyoutItem { Text = $"Delete “{name}”" };
+                delete.Click += (_, _) =>
+                {
+                    try
+                    {
+                        File.Delete(path);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        ShowNotice(new($"Couldn't delete it: {ex.Message}", NoticeKind.Error));
+                    }
+                    BuildPresets();
+                };
+                menu.Items.Add(delete);
+                button.ContextFlyout = menu;
+            }
+            PresetList.Children.Add(button);
+        }
+    }
+
+    async void SavePreset_Click(object sender, RoutedEventArgs e)
+    {
+        var box = new TextBox { Header = "Name", Text = Current.Name, MaxLength = 40 };
+        CustomizeFlyout.Hide();
+        if (await AskAsync("Save this look as a preset", box, "Save") != ContentDialogResult.Primary) return;
+        var name = box.Text.Trim();
+        var file = string.Concat(name.Select(c => char.IsLetterOrDigit(c) || c is ' ' or '-' or '_' ? c : '_')).Trim();
+        if (file.Length == 0)
+        {
+            ShowNotice(new("A preset needs a name.", NoticeKind.Warning));
+            return;
+        }
+        try
+        {
+            Directory.CreateDirectory(paths.Presets);
+            Files.WriteAtomic(System.IO.Path.Combine(paths.Presets, file + ".json"), ThemeWriter.ToJson(Current with { Name = name }));
+            Queue(Current with { Name = name });
+            ShowNotice(new($"Saved “{name}”. It's in Customize → Look with the other presets.", NoticeKind.Success, "Show", () => ShowCustomize("look")));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ShowNotice(new($"Couldn't save the preset: {ex.Message}", NoticeKind.Error));
+        }
+    }
+
+    // A preset changes the look; where things are (sidebar, toolbar order, home layout), behavior and shortcuts stay yours.
+    // Your home background stays too, unless it's one of your own presets.
+    void ApplyPreset(string path)
+    {
+        var result = ThemeParser.LoadFile(path);
         if (result.Failed) return;
         themeLoadFailed = false;
         var p = result.Theme;
         var cur = Current;
+        var mine = path.StartsWith(paths.Presets, StringComparison.OrdinalIgnoreCase);
         pendingTheme = null;
         ApplyTheme(p with
         {
             Sidebar = cur.Sidebar,
             Toolbar = cur.Toolbar with { Height = p.Toolbar.Height },
-            Home = cur.Home with { Glass = p.Home.Glass, Background = cur.Home.Background is "" or "hills" ? p.Home.Background : cur.Home.Background },
+            Home = cur.Home with { Glass = p.Home.Glass, Background = mine ? p.Home.Background : cur.Home.Background, Dim = mine ? p.Home.Dim : cur.Home.Dim },
             Power = cur.Power,
-            Pages = cur.Pages,
+            Pages = cur.Pages with { Glass = p.Pages.Glass, GlassOpacity = p.Pages.GlassOpacity },
             Media = cur.Media,
             Split = cur.Split,
             Shortcuts = cur.Shortcuts,

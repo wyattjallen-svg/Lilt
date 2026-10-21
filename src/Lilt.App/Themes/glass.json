@@ -1,15 +1,15 @@
 {
-  // Lilt Glass: translucent chrome over Windows acrylic, scenery on the home tab.
+  // Lilt Glass: clear chrome over Windows acrylic, see-through websites, aurora on the home tab.
   "$schema": "./theme.schema.json",
   "schemaVersion": 1,
   "name": "Glass",
   "base": "dark",
-  "backdrop": { "material": "acrylic", "tint": "#171A1E", "tintOpacity": 0.3, "luminosityOpacity": 0.45 },
+  "backdrop": { "material": "acrylic", "tint": "#171A1E", "tintOpacity": 0.22, "luminosityOpacity": 0.4 },
 
   "colors": {
     "background": "#171A1E",
-    "surface": "#171A1E59",
-    "surfaceRaised": "#2A2F3680",
+    "surface": "#171A1E47",
+    "surfaceRaised": "#2A2F3673",
     "border": "#FFFFFF1A",
     "text": "#F3F4F1",
     "textMuted": "#C3CBD2",
@@ -25,12 +25,14 @@
   "density": "standard",
   "toolbar": {
     "height": 40,
+    "addressWidth": 900,
     "items": ["back", "forward", "reload", "home", "address", "bookmark", "media", "downloads", "extensions", "customize", "sidebar", "menu"]
   },
-  "sidebar": { "edge": "left", "width": 220, "height": 44, "autoHide": false, "revealEdge": 6, "hideDelay": 350, "sections": ["tabs", "bookmarks", "layout"] },
-  "motion": { "animations": true, "duration": 160 },
-  "pages": { "colorScheme": "theme", "peek": true, "search": "duckduckgo", "history": true },
-  "home": { "items": ["logo", "search", "tiles", "gear"], "glass": true, "background": "hills" },
+  "sidebar": { "edge": "left", "width": 220, "height": 44, "autoHide": false, "revealEdge": 6, "hideDelay": 350, "sections": ["tabs", "bookmarks", "layout"], "tabWidth": 200, "closeButtons": true },
+  "motion": { "animations": true, "duration": 160, "windowDrag": true },
+  "pages": { "colorScheme": "theme", "peek": true, "search": "duckduckgo", "history": true,
+    "glass": true, "glassOpacity": 0.72, "glassOff": [], "forceDark": false, "tracking": "balanced", "gestures": true, "scrollbars": "overlay" },
+  "home": { "items": ["logo", "search", "tiles", "gear"], "glass": true, "background": "aurora", "dim": 0 },
   "power": { "efficiency": true, "suspendMinutes": 5, "hideWhenCovered": true, "hideWhenOccluded": true, "lean": false },
   // The "now playing" panel and visualizer float over the page; drag them anywhere (x and y are fractions of the page area).
   "media": {
