@@ -92,7 +92,7 @@ public sealed partial class MainWindow : Window
         AppWindow.Title = appName;
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "lilt.ico"));
         VersionItem.Text = $"Lilt {typeof(MainWindow).Assembly.GetName().Version?.ToString(3)}";
-        WindowSizing.Place(this, 1280, 820);
+        PlaceWindow();
 
         ApplyTheme(themes.Current, previous: null);
         ShowThemeLoad(load, startup: true);
@@ -149,7 +149,20 @@ public sealed partial class MainWindow : Window
 
         Activated += (_, e) =>
         {
-            if (e.WindowActivationState != WindowActivationState.Deactivated) report.WindowShown();
+            if (e.WindowActivationState == WindowActivationState.Deactivated) return;
+            report.WindowShown();
+            if (maximizeOnShow && AppWindow.Presenter is OverlappedPresenter p)
+            {
+                maximizeOnShow = false;
+                p.Maximize();
+            }
+        };
+        AppWindow.Changed += (_, e) =>
+        {
+            if (!e.DidPositionChange && !e.DidSizeChange && !e.DidPresenterChange) return;
+            if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Restored } && !fullScreen)
+                normalBounds = new RectInt32(AppWindow.Position.X, AppWindow.Position.Y, AppWindow.Size.Width, AppWindow.Size.Height);
+            ScheduleSave();
         };
         Closed += OnClosed;
 

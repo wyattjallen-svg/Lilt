@@ -763,7 +763,7 @@
             <ListView.ItemTemplate>
               <DataTemplate x:DataType="browser:BrowserTab">
                 <Border BorderBrush="{x:Bind StateBorder, Mode=OneWay}" BorderThickness="1" CornerRadius="6" Padding="6,0,2,0" Background="Transparent"
-                        PointerPressed="Tab_PointerPressed" RightTapped="Tab_RightTapped" ToolTipService.ToolTip="{x:Bind Url, Mode=OneWay}">
+                        PointerPressed="Tab_PointerPressed" RightTapped="Tab_RightTapped" ToolTipService.ToolTip="{x:Bind Tip, Mode=OneWay}">
                   <Grid ColumnSpacing="8" MinHeight="30" Opacity="{x:Bind ContentOpacity, Mode=OneWay}">
                     <Grid.ColumnDefinitions>
                       <ColumnDefinition Width="Auto" />

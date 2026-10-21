@@ -1029,6 +1029,10 @@ Test("v0.7: panel, storage and site color settings, panel tabs in the session", 
         True(s.PanelOpen);
         new Session([new("https://a.example/", "A")], 0).Save(path);
         Equal(0, Session.Load(path)!.Panel!.Count);
+        new Session([new("https://a.example/", "A")], 0, Window: new WindowPlace(-1900, 40, 1200, 800, true)).Save(path);
+        Equal(new WindowPlace(-1900, 40, 1200, 800, true), Session.Load(path)!.Window);
+        new Session([new("https://a.example/", "A")], 0, Window: new WindowPlace(0, 0, 5, 5, false)).Save(path);
+        Equal(null, Session.Load(path)!.Window);
     }
     finally
     {

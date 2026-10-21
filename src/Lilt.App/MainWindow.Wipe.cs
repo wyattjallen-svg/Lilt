@@ -72,7 +72,7 @@ public sealed partial class MainWindow
         panel.Children.Add(keepLook);
         panel.Children.Add(new TextBlock
         {
-            Text = $"To confirm, enter  {string.Join(' ', code.ToCharArray())}",
+            Text = $"To confirm, enter  {string.Join("  ", code.Select(c => c.ToString()))}",
             FontWeight = new Windows.UI.Text.FontWeight(600), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0),
         });
         panel.Children.Add(entry);

@@ -6,8 +6,9 @@ public sealed record SessionTab(string Url, string Title, bool Pinned = false, s
 // Open tabs, saved on every change and restored on the next start. Active is the shown tab's index; Split is the
 // index of the tab beside it in split view, or -1. Workspaces lists their names in order (tabs name theirs).
 // Panel: the tabs kept in the panel beside the page (PanelShown is the one showing; PanelOpen whether the panel is).
+// Window: where the window was (physical pixels, its normal size when it was maximized) and whether it was maximized.
 public sealed record Session(IReadOnlyList<SessionTab> Tabs, int Active, int Split = -1, IReadOnlyList<string>? Workspaces = null,
-    IReadOnlyList<SessionTab>? Panel = null, int PanelShown = 0, bool PanelOpen = false)
+    IReadOnlyList<SessionTab>? Panel = null, int PanelShown = 0, bool PanelOpen = false, WindowPlace? Window = null)
 {
     public static Session? Load(string path)
     {
@@ -22,12 +23,15 @@ public sealed record Session(IReadOnlyList<SessionTab> Tabs, int Active, int Spl
             Split = s.Split >= 0 && s.Split < s.Tabs.Count && s.Split != active && tabs[s.Split].Workspace == tabs[active].Workspace ? s.Split : -1,
             Workspaces = names,
             Panel = s.Panel ?? [],
+            Window = s.Window is { Width: >= 200 and <= 32768, Height: >= 150 and <= 32768 } ? s.Window : null,
             PanelShown = Math.Clamp(s.PanelShown, 0, Math.Max(0, (s.Panel?.Count ?? 1) - 1)),
         };
     }
 
     public void Save(string path) => Files.WriteJson(path, this);
 }
+
+public sealed record WindowPlace(int X, int Y, int Width, int Height, bool Maximized);
 
 public static class Workspace
 {

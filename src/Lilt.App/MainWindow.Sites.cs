@@ -44,7 +44,7 @@ public sealed partial class MainWindow
     async void FillPermissions()
     {
         PermissionList.Children.Clear();
-        if (tabs.Select(t => t.Core).FirstOrDefault(c => c is not null) is not { } core) return;
+        if (AnyCore is not { } core) return;
         try
         {
             var settings = await core.Profile.GetNonDefaultPermissionSettingsAsync();

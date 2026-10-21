@@ -1,4 +1,6 @@
-# Release report (v0.7, with v0.4's numbers)
+# Release report (v0.8, with v0.4's numbers)
+
+**v0.8**: sleeping tabs, what's using memory, solid-when-away and frame-rate settings, the coded wipe, window placement, recently closed tabs. Five new CI checks drive these: a wipe requested before start runs (bookmarks kept as asked, files that aren't Lilt's untouched), a background tab sleeps and wakes, the memory list fills in, and the wipe dialog opens and waits for its code. (At the time of writing GitHub had paused Actions for the account, so the run that checks them is listed on the release once it goes through.)
 
 **v0.7**: the panel beside the page (any tab, with the visualizer and player docked under it), site colors for the toolbar and sidebar, and storage that stays small without signing you out. CI now runs 43 feature checks, all passing ([run](https://github.com/wyattjallen-svg/Lilt/actions/runs/39611352942)). The new ones:
 
@@ -78,7 +80,14 @@ Reading these:
 
 ## Testing this build
 
-Unzip `Lilt-v0.7.0-win-x64.zip` and run `Lilt.exe`. Tabs, bookmarks and settings from earlier builds carry over; your `theme.json` gains the new settings with their defaults.
+Unzip `Lilt-v0.8.0-win-x64.zip` and run `Lilt.exe`. Tabs, bookmarks and settings from earlier builds carry over; your `theme.json` gains the new settings with their defaults.
+
+**New in v0.8**
+- [ ] Open a few tabs, leave them for a while (or Customize → Power → "Put background tabs to sleep now"): they fade; Task Manager shows fewer Lilt processes. Click one: it reloads.
+- [ ] Customize → Power → "What's using memory": tabs and their memory; Sleep frees one.
+- [ ] Resize and move the window, maximize it, close Lilt and open it again: it comes back the same.
+- [ ] Customize → Privacy → "Wipe everything and start fresh…": try a wrong code (the button stays off) and Cancel. When you do want a fresh start, enter the code; Lilt restarts empty (or with your bookmarks or look, if you ticked those).
+- [ ] Menu → Recently closed.
 
 **New in v0.7**
 - [ ] Play something on Spotify or YouTube, then drag its tab to the right edge of the page (or right-click it → Move to the panel). It keeps playing in the panel; the visualizer shows under it. Browse, switch workspaces, press F4 to hide and show it.

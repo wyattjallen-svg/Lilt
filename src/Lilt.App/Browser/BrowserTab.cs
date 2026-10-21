@@ -21,7 +21,7 @@ public sealed class BrowserTab(string url, string title = "", bool pinned = fals
     ImageSource? icon;
     bool active, loading, audible, muted, pinned = pinned, failed, shown, asleep;
 
-    public string Url { get => url; set => Set(ref url, value, nameof(Url), nameof(DisplayTitle), nameof(Glyph)); }
+    public string Url { get => url; set => Set(ref url, value, nameof(Url), nameof(DisplayTitle), nameof(Glyph), nameof(Tip)); }
     public string Title { get => title; set => Set(ref title, value, nameof(Title), nameof(DisplayTitle)); }
     public ImageSource? Icon { get => icon; set => Set(ref icon, value, nameof(Icon), nameof(IconVisibility), nameof(GlyphVisibility)); }
     public bool IsActive { get => active; set => Set(ref active, value, nameof(StateBorder)); }
@@ -31,7 +31,8 @@ public sealed class BrowserTab(string url, string title = "", bool pinned = fals
     public bool IsMuted { get => muted; set => Set(ref muted, value, nameof(AudioVisibility), nameof(AudioGlyph)); }
     public bool IsPinned { get => pinned; set => Set(ref pinned, value, nameof(LabelVisibility), nameof(CloseVisibility)); }
     // Asleep: its page was closed to free memory; it reloads when shown. Drawn faded.
-    public bool IsAsleep { get => asleep; set => Set(ref asleep, value, nameof(IsAsleep), nameof(ContentOpacity)); }
+    public bool IsAsleep { get => asleep; set => Set(ref asleep, value, nameof(IsAsleep), nameof(ContentOpacity), nameof(Tip)); }
+    public string Tip => asleep ? url + "\nAsleep to save memory; it reloads when you open it." : url;
     public double ContentOpacity => asleep ? 0.5 : 1;
     public bool HasError { get => failed; set => Set(ref failed, value, nameof(Glyph), nameof(GlyphBrush), nameof(StateBorder), nameof(IconVisibility), nameof(GlyphVisibility)); }
 

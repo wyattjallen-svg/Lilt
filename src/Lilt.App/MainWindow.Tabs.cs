@@ -6,6 +6,7 @@ using Lilt.Core.Navigation;
 using Microsoft.UI;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Input;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -54,6 +55,7 @@ public sealed partial class MainWindow
                 if (UrlPolicy.IsNavigable(saved.Url)) panelTabs.Add(new BrowserTab(saved.Url, saved.Title));
             panelTab = panelTabs.ElementAtOrDefault(session.PanelShown) ?? panelTabs.FirstOrDefault();
             panelOpen = session.PanelOpen;
+            savedPlace = session.Window;
         }
         // The workspace you were in comes back; the others wait, unloaded, until you switch to them.
         workspace = pick?.Workspace ?? "";
@@ -393,14 +395,38 @@ public sealed partial class MainWindow
             var order = list.Select(x => x.Tab).ToList();
             var partner = active is null ? null : Partner(active);
             var panel = panelTabs.Where(t => UrlPolicy.IsNavigable(t.Url)).ToList();
+            var maximized = AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Maximized };
+            var place = normalBounds is { } b ? new WindowPlace(b.X, b.Y, b.Width, b.Height, maximized) : savedPlace;
             new Session(list.Select(x => new SessionTab(x.Tab.Url, x.Tab.Title, x.Tab.IsPinned, x.Workspace)).ToList(), Math.Max(0, active is null ? 0 : order.IndexOf(active)),
                 partner is null ? -1 : order.IndexOf(partner), workspaces, panel.Select(t => new SessionTab(t.Url, t.Title)).ToList(),
-                panelTab is null ? 0 : Math.Max(0, panel.IndexOf(panelTab)), panelOpen).Save(paths.Session);
+                panelTab is null ? 0 : Math.Max(0, panel.IndexOf(panelTab)), panelOpen, place).Save(paths.Session);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             LiltPaths.LogError(e);
         }
+    }
+
+    // The window opens where it was last time (and maximized if it was), as long as that's still on a screen.
+    WindowPlace? savedPlace;
+    Windows.Graphics.RectInt32? normalBounds;
+    bool maximizeOnShow;
+
+    void PlaceWindow()
+    {
+        if (savedPlace is { } p)
+        {
+            var rect = new Windows.Graphics.RectInt32(p.X, p.Y, p.Width, p.Height);
+            var work = DisplayArea.GetFromRect(rect, DisplayAreaFallback.None)?.WorkArea;
+            if (work is { } w && p.X < w.X + w.Width - 80 && p.Y < w.Y + w.Height - 40 && p.X + p.Width > w.X + 80 && p.Y >= w.Y - 20)
+            {
+                AppWindow.MoveAndResize(rect);
+                normalBounds = rect;
+                maximizeOnShow = p.Maximized;
+                return;
+            }
+        }
+        WindowSizing.Place(this, 1280, 820);
     }
 
     // A tab strip along the top or bottom; a list down the side.
