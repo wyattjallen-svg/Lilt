@@ -1,4 +1,17 @@
-# Release report (v0.6, with v0.4's numbers)
+# Release report (v0.7, with v0.4's numbers)
+
+**v0.7**: the panel beside the page (any tab, with the visualizer and player docked under it), site colors for the toolbar and sidebar, and storage that stays small without signing you out. CI now runs 43 feature checks, all passing ([run](https://github.com/wyattjallen-svg/Lilt/actions/runs/39611352942)). The new ones:
+
+| Check | Result |
+|---|---|
+| A playing tab moves into the panel and keeps playing (the tab list keeps a home tab) | Pass |
+| The visualizer and player dock under it | Pass |
+| The toolbar takes a page's theme-color (#3366CC at 45%, still readable) | Pass |
+| Emptying caches leaves cookies alone (a cookie set before is still there after) | Pass |
+| Hiding the panel keeps it playing, and the visualizer floats again | Pass |
+| The panel is saved with the session | Pass |
+
+Bug CI caught: moving the visualizer and player relied on `FrameworkElement.Parent`, which is still empty while the window is being built, so Lilt crashed at launch; the panel now asks its containers instead.
 
 **v0.6** (after your second playtest): see-through websites, a bookmark manager, workspaces, mouse gestures, site permissions, tracker levels, whole-page screenshots, the window lift, your own presets, Midnight and Paper, Aurora and Waves, and the home "None" background fix. CI now runs 37 feature checks, all passing ([run](https://github.com/wyattjallen-svg/Lilt/actions/runs/39534250757)). The new ones:
 
@@ -65,7 +78,13 @@ Reading these:
 
 ## Testing this build
 
-Unzip `Lilt-v0.6.0-win-x64.zip` and run `Lilt.exe`. Tabs, bookmarks and settings from earlier builds carry over; your `theme.json` gains the new settings with their defaults.
+Unzip `Lilt-v0.7.0-win-x64.zip` and run `Lilt.exe`. Tabs, bookmarks and settings from earlier builds carry over; your `theme.json` gains the new settings with their defaults.
+
+**New in v0.7**
+- [ ] Play something on Spotify or YouTube, then drag its tab to the right edge of the page (or right-click it → Move to the panel). It keeps playing in the panel; the visualizer shows under it. Browse, switch workspaces, press F4 to hide and show it.
+- [ ] Put a second site in the panel and switch between them with the buttons along its top. Drag the panel's edge to resize it; its menu (⋯) moves it to the left or lets the visualizer float.
+- [ ] Visit a few colorful sites (YouTube, GitHub, Spotify): the toolbar picks up each one's color. Customize → Look → Site colors.
+- [ ] Customize → Privacy → Storage: the numbers, "Empty caches now" (you stay signed in everywhere), the cache limit and the tidy-up settings.
 
 **New in v0.6**
 - [ ] Customize → Home → Background: None. Pick a preset (Customize → Look), then another: the background stays None.

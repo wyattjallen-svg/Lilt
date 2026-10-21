@@ -544,13 +544,13 @@
             <Button x:Name="PanelReload" Style="{StaticResource ChromeButton}" Click="PanelReload_Click" ToolTipService.ToolTip="Reload" AutomationProperties.Name="Reload the panel">
               <FontIcon Glyph="&#xE72C;" FontSize="12" />
             </Button>
-            <Button Style="{StaticResource ChromeButton}" ToolTipService.ToolTip="More" AutomationProperties.Name="Panel menu">
+            <Button x:Name="PanelMoreButton" Style="{StaticResource ChromeButton}" ToolTipService.ToolTip="More" AutomationProperties.Name="Panel menu">
               <FontIcon Glyph="&#xE712;" FontSize="12" />
               <Button.Flyout>
                 <MenuFlyout x:Name="PanelMenu" Opening="PanelMenu_Opening" />
               </Button.Flyout>
             </Button>
-            <Button Style="{StaticResource ChromeButton}" Click="PanelToggle_Click" ToolTipService.ToolTip="Hide the panel (F4); what's in it keeps playing" AutomationProperties.Name="Hide the panel">
+            <Button x:Name="PanelCloseButton" Style="{StaticResource ChromeButton}" Click="PanelToggle_Click" ToolTipService.ToolTip="Hide the panel (F4); what's in it keeps playing" AutomationProperties.Name="Hide the panel">
               <FontIcon Glyph="&#xE711;" FontSize="12" />
             </Button>
           </StackPanel>

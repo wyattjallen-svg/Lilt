@@ -68,6 +68,9 @@ public sealed partial class MainWindow
         PanelGrip.HorizontalAlignment = left ? HorizontalAlignment.Right : HorizontalAlignment.Left;
         var taken = open ? width : 0;
         PageHost.Margin = WidgetLayer.Margin = left ? new Thickness(taken, 0, 0, 0) : new Thickness(0, 0, taken, 0);
+        // Notices and permission questions stay over the page.
+        NoticeBar.Margin = left ? new Thickness(16 + taken, 16, 16, 16) : new Thickness(16, 16, 16 + taken, 16);
+        PermissionBar.Margin = left ? new Thickness(12 + taken, 12, 12, 12) : new Thickness(12, 12, 12 + taken, 12);
     }
 
     void LayoutPanel()

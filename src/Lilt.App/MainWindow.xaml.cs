@@ -683,6 +683,7 @@ public sealed partial class MainWindow : Window
         BackButton, ForwardButton, ReloadButton, HomeButton, StarButton, MediaButton, SplitButton, PanelButton, PaletteButton, DownloadsButton, ExtensionsButton,
         CustomizeButton, SidebarButton, MenuButton,
         NewTabButton, BookmarkImportButton, EdgeLeft, EdgeRight, EdgeTop, EdgeBottom, PanelToggle, PinToggle,
+        PanelBack, PanelReload, PanelMoreButton, PanelCloseButton,
         ReloadThemeButton, EditThemeButton, DataFolderButton, UserContentButton, MeasureButton,
     ];
 
