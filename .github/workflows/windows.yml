@@ -406,6 +406,25 @@ jobs:
           $ss = if (Test-Path "$sdir/session.json") { Get-Content "$sdir/session.json" -Raw | ConvertFrom-Json } else { $null }
           Check 'The panel is saved with the session' ($ss -and @($ss.panel).Count -eq 1 -and @($ss.panel)[0].url -like '*media-test*') "$(if ($ss) { ($ss.panel | ForEach-Object url) -join ', ' })"
 
+          # v0.8: a wipe asked for last time runs at start (keeping bookmarks, leaving files that aren't Lilt's), background
+          # tabs sleep and wake, the memory list fills in, and the wipe dialog (with its keypad) opens.
+          $wdir = Join-Path $env:RUNNER_TEMP 'lilt-v08'
+          New-Item -ItemType Directory $wdir -Force | Out-Null
+          Set-Content (Join-Path $wdir 'bookmarks.json') '[{"title":"Kept","url":"https://kept.example/","folder":""}]'
+          Set-Content (Join-Path $wdir 'session.json') '{"tabs":[{"url":"https://example.com/","title":"A"},{"url":"https://example.org/","title":"B"}],"active":1}'
+          Set-Content (Join-Path $wdir 'notes.txt') 'not Lilt''s'
+          Set-Content (Join-Path $wdir 'wipe.json') '{"keep":["bookmarks"],"pid":0}'
+          $script = 'wait 3000; state; mark fresh; go example.com; wait 3500; open https://example.org; wait 3500; sleepTabs; wait 1500; state; mark asleep; ' +
+            'memory; wait 500; state; mark memory; prevTab; wait 3500; state; wipe; wait 1500; state; mark dialog; closedialog; wait 500'
+          $wdir = Smoke 'v08' @('--run', "`"$script`"") { param($p); $p.Refresh(); [void][Lilt.Input]::SetForegroundWindow($p.MainWindowHandle); Follow 'v08' } -settle 1
+          $wdir = @($wdir)[-1]
+          $s = States 'v08'
+          Check 'A wipe runs at start: fresh tabs, bookmarks kept as asked, other files untouched' ($s.Count -gt 0 -and $s[0].tabs -eq 1 -and $s[0].url -like '*newtab*' -and $s[0].bookmarks -eq 1 -and $s[0].wiped -eq '' -and (Test-Path "$wdir/notes.txt") -and -not (Test-Path "$wdir/wipe.json")) "$(if ($s.Count) { "tabs $($s[0].tabs), $($s[0].url), bookmarks $($s[0].bookmarks), left '$($s[0].wiped)'" }), notes.txt $(Test-Path "$wdir/notes.txt"), marker $(Test-Path "$wdir/wipe.json")"
+          Check 'Background tabs sleep (their page closes)' ($s.Count -gt 1 -and $s[1].asleep -eq 1 -and $s[1].tabs -eq 2) "$(if ($s.Count -gt 1) { "asleep $($s[1].asleep) of $($s[1].tabs)" })"
+          Check 'What''s using memory lists the engine''s processes' ($s.Count -gt 2 -and $s[2].memoryRows -ge 3) "$(if ($s.Count -gt 2) { "rows $($s[2].memoryRows)" })"
+          Check 'A sleeping tab wakes when opened' ($s.Count -gt 3 -and $s[3].asleep -eq 0 -and $s[3].url -like '*example.com*') "$(if ($s.Count -gt 3) { "asleep $($s[3].asleep), $($s[3].url)" })"
+          Check 'The wipe dialog opens and waits for the code' ($s.Count -gt 4 -and $s[4].dialog -like 'Wipe everything*') "$(if ($s.Count -gt 4) { $s[4].dialog })"
+
           [void](Smoke 'proton-pass' @('--install-extension', 'ghmbeldphafepmbegfdlkpapadhbakde') -settle 4)
           $pp = Extensions 'proton-pass'
           Check 'Proton Pass installs from the Chrome Web Store' ([bool]($pp -match 'Proton')) ($pp -join '; ')

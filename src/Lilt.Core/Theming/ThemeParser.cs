@@ -26,11 +26,11 @@ public static class ThemeParser
         ["toolbar"] = ["height", "items", "addressWidth", "siteColor"],
         ["sidebar"] = ["edge", "width", "height", "autoHide", "revealEdge", "hideDelay", "sections", "tabWidth", "closeButtons", "siteColor"],
         ["motion"] = ["animations", "duration", "windowDrag"],
-        ["pages"] = ["colorScheme", "peek", "search", "history", "glass", "glassOpacity", "glassOff", "forceDark", "tracking", "gestures", "scrollbars"],
+        ["pages"] = ["colorScheme", "peek", "search", "history", "glass", "glassOpacity", "glassOff", "forceDark", "tracking", "gestures", "scrollbars", "restore"],
         // clock/search/tiles are the v0.2 switches, still read when "items" is absent.
         ["home"] = ["items", "glass", "background", "dim", "clock", "search", "tiles"],
-        ["power"] = ["efficiency", "suspendMinutes", "hideWhenCovered", "hideWhenOccluded", "lean"],
-        ["media"] = ["player", "visualizer", "pip", "bars", "style", "source", "mediaKeys", "autoPictureInPicture", "musicSites"],
+        ["power"] = ["efficiency", "suspendMinutes", "hideWhenCovered", "hideWhenOccluded", "lean", "sleepMinutes", "sleepWhenLowMemory"],
+        ["media"] = ["player", "visualizer", "pip", "bars", "style", "source", "mediaKeys", "autoPictureInPicture", "musicSites", "fps"],
         ["media.player"] = ["show", "x", "y", "width", "height", "opacity"],
         ["media.visualizer"] = ["show", "x", "y", "width", "height", "opacity"],
         ["media.pip"] = ["show", "x", "y", "width", "height", "opacity"],
@@ -160,7 +160,7 @@ public static class ThemeParser
             var pages = new PagesSpec(r.Enum(pg, "colorScheme", d.Pages.ColorScheme), r.Bool(pg, "peek", d.Pages.Peek), search, r.Bool(pg, "history", d.Pages.History),
                 r.Bool(pg, "glass", d.Pages.Glass), r.Num(pg, "glassOpacity", 0.2, 1, d.Pages.GlassOpacity), r.Hosts(pg, "glassOff", d.Pages.GlassOffSites),
                 r.Bool(pg, "forceDark", d.Pages.ForceDark), r.Enum(pg, "tracking", d.Pages.Tracking), r.Bool(pg, "gestures", d.Pages.Gestures),
-                r.Enum(pg, "scrollbars", d.Pages.Scrollbars));
+                r.Enum(pg, "scrollbars", d.Pages.Scrollbars), r.Bool(pg, "restore", d.Pages.Restore));
 
             var hm = r.Section(root, "home");
             var homeItems = d.Home.Items;
@@ -176,7 +176,9 @@ public static class ThemeParser
                 r.Int(pw, "suspendMinutes", 0, 240, d.Power.SuspendMinutes),
                 r.Bool(pw, "hideWhenCovered", d.Power.HideWhenCovered),
                 r.Bool(pw, "hideWhenOccluded", d.Power.HideWhenOccluded),
-                r.Bool(pw, "lean", d.Power.Lean));
+                r.Bool(pw, "lean", d.Power.Lean),
+                r.Int(pw, "sleepMinutes", 0, 1440, d.Power.SleepMinutes),
+                r.Bool(pw, "sleepWhenLowMemory", d.Power.SleepWhenLowMemory));
 
             var md = r.Section(root, "media");
             var dm = d.Media;
@@ -189,7 +191,8 @@ public static class ThemeParser
                 r.Enum(md, "source", dm.Source),
                 r.Bool(md, "mediaKeys", dm.MediaKeys),
                 r.Bool(md, "autoPictureInPicture", dm.AutoPictureInPicture),
-                r.Hosts(md, "musicSites", dm.MusicSites));
+                r.Hosts(md, "musicSites", dm.MusicSites),
+                r.Int(md, "fps", 10, 60, dm.Fps));
 
             var sp = r.Section(root, "split");
             var split = new SplitSpec(

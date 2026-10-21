@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Lilt.App.Browser;
+using Lilt.App.Shell;
 using Lilt.Core;
 using Lilt.Core.Navigation;
 using Microsoft.UI;
@@ -37,8 +38,10 @@ public sealed partial class MainWindow
         var restored = new List<BrowserTab>();
         if (!options.InPrivate && Session.Load(paths.Session) is { } session)
         {
-            workspaces.AddRange(session.Workspaces!.Skip(1));
-            for (var i = 0; i < session.Tabs.Count; i++)
+            // pages.restore off: a fresh start every time (the panel keeps its sites; it's part of the layout).
+            var restore = themes.Current.Pages.Restore;
+            if (restore) workspaces.AddRange(session.Workspaces!.Skip(1));
+            for (var i = 0; restore && i < session.Tabs.Count; i++)
             {
                 var saved = session.Tabs[i];
                 if (!UrlPolicy.IsNavigable(saved.Url)) continue;
@@ -84,6 +87,7 @@ public sealed partial class MainWindow
 
     async Task<CoreWebView2> CreateViewAsync(BrowserTab tab, bool navigate)
     {
+        tab.IsAsleep = false;
         var view = new WebView2 { Visibility = Visibility.Collapsed };
         // Lets a transparent page (the glass home tab) show the window material instead of the control's own theme background.
         view.Resources["BrushForThemeBackgroundColor"] = new SolidColorBrush(Colors.Transparent);
@@ -316,11 +320,13 @@ public sealed partial class MainWindow
         DisposeTab(tab);
     }
 
-    void ReopenTab()
+    // index: which closed tab (the last one closed by default).
+    void ReopenTab(int index = -1)
     {
         if (closedTabs.Count == 0) return;
-        var last = closedTabs[^1];
-        closedTabs.RemoveAt(closedTabs.Count - 1);
+        if (index < 0 || index >= closedTabs.Count) index = closedTabs.Count - 1;
+        var last = closedTabs[index];
+        closedTabs.RemoveAt(index);
         var tab = AddTab(last.Url);
         tab.Title = last.Title;
         if (last.Pinned) SetPinned(tab, true);
@@ -351,9 +357,15 @@ public sealed partial class MainWindow
     {
         var now = Environment.TickCount64;
         var spec = theme.Power;
+        var load = force ? 0 : Native.MemoryLoad();
         foreach (var tab in AllTabs.ToArray())
         {
             if (closing || tab.Core is not { } c || tab.IsAudible) continue;
+            if (!force && CanSleep(tab, manual: false) && PowerPolicy.ShouldSleep(spec, (now - tab.LastActive) / 60000.0, load))
+            {
+                SleepTab(tab);
+                continue;
+            }
             var hidden = !OnScreen(tab) || force;
             if (!hidden || (!force && !PowerPolicy.ShouldSuspend(spec, (now - tab.LastActive) / 60000.0, energySaver))) continue;
             try
@@ -464,6 +476,7 @@ public sealed partial class MainWindow
             if (tab.Core is { } core) core.Reload();
             else Activate(tab);
         });
+        if (CanSleep(tab, manual: true)) Add("Sleep (free its memory)", "\uE708", () => SleepTab(tab, manual: true));
         Add("Duplicate", "", () => AddTab(tab.Url));
         Add("Copy address", "\uE8C8", () => CopyText(tab.Url));
         if (InSplit(tab))
@@ -498,6 +511,11 @@ public sealed partial class MainWindow
         {
             foreach (var other in tabs.Where(t => t != tab && !t.IsPinned).ToArray()) CloseTab(other);
             Activate(tab);
+        });
+        var after = tabs.Skip(tabs.IndexOf(tab) + 1).Where(t => !t.IsPinned).ToArray();
+        if (after.Length > 0) Add(verticalTabs ? "Close tabs below" : "Close tabs to the right", "\uE8BB", () =>
+        {
+            foreach (var t in after) CloseTab(t);
         });
         menu.ShowAt(element, new FlyoutShowOptions { Position = e.GetPosition(element) });
     }

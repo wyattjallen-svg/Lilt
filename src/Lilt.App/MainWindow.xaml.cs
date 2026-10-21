@@ -53,6 +53,7 @@ public sealed partial class MainWindow : Window
         this.options = options;
         report = new StartupReport(options.StartupReportPath);
         paths = LiltPaths.Resolve(options.UserDataDir);
+        WipeIfRequested();
         var queue = DispatcherQueue.GetForCurrentThread();
         themes = new ThemeService(paths.PrepareTheme(options.ThemePath), queue);
         var load = themes.Load();
@@ -198,8 +199,11 @@ public sealed partial class MainWindow : Window
         if (tab.IsHome && tab == active) AddressBox.Focus(FocusState.Programmatic);
         if (startProblem is not null) ShowNotice(new(startProblem, NoticeKind.Warning));
         if (firstRun && startProblem is null)
-            ShowNotice(new("Welcome to Lilt. Bring your bookmarks over from another browser, and press Ctrl+K whenever you're looking for something.",
+            ShowNotice(new((wipeLeft is null ? "Welcome to Lilt." : "Lilt was wiped and starts fresh.") + " Bring your bookmarks over from another browser, and press Ctrl+K whenever you're looking for something.",
                 NoticeKind.Info, "Import bookmarks", () => ShowFlyout(ImportFlyout, BookmarkImportButton, FlyoutHost)));
+        else if (wipeLeft is { Count: 0 }) ShowNotice(new("Everything else was wiped; Lilt starts fresh.", NoticeKind.Success));
+        if (wipeLeft is { Count: > 0 } left)
+            ShowNotice(new($"Lilt starts fresh, but {string.Join(", ", left)} was still in use and stayed. Wipe again to remove it.", NoticeKind.Warning));
         if (options.Run is { } script) await RunScriptAsync(script);
     }
 
@@ -245,6 +249,8 @@ public sealed partial class MainWindow : Window
                     case "lift": windowMotion?.Lift(arg != "off"); break;
                     // Storage tidy-up now ("tidy caches": also empty the caches, as the button does).
                     case "tidy": await TidyStorageAsync(arg == "caches"); break;
+                    case "closedialog": openDialog?.Hide(); break;
+                    case "memory": await FillMemoryListAsync(); break;
                     case "mark": break;
                     default: RunCommand(verb, "run"); break;
                 }
@@ -267,6 +273,10 @@ public sealed partial class MainWindow : Window
         permission = PermissionBar.IsOpen ? PermissionBar.Message : null,
         allTabs = AllTabs.Count(),
         panel = panelOpen ? panelTabs.Count : -1,
+        asleep = AllTabs.Count(t => t.IsAsleep),
+        memoryRows = MemoryList.Children.Count,
+        dialog = openDialog?.Title as string,
+        wiped = wipeLeft is null ? null : string.Join(",", wipeLeft),
         panelUrl = panelTab?.Url,
         docked = (PanelHost.Children.Contains(VisualizerWidget) ? "visualizer " : "") + (PanelHost.Children.Contains(MediaWidget) ? "player" : ""),
         siteColor = active?.SiteColor?.ToString(),
@@ -482,6 +492,8 @@ public sealed partial class MainWindow : Window
             case "screenshot": Screenshot(); break;
             case "workspace": NextWorkspace(); break;
             case "panel": TogglePanel(); break;
+            case "wipe": _ = WipeAsync(); break;
+            case "sleepTabs": SleepBackgroundTabs(); break;
             case "toPanel": if (active is not null) MoveToPanel(active); break;
             case "reopenTab": ReopenTab(); break;
             case "closeTab": if (active is not null) CloseTab(active); break;
@@ -585,7 +597,21 @@ public sealed partial class MainWindow : Window
         UpdateDragRegions();
     }
 
-    void MainMenu_Opening(object sender, object e) => FillImportMenu(ImportMenu.Items);
+    void MainMenu_Opening(object sender, object e)
+    {
+        FillImportMenu(ImportMenu.Items);
+        RecentMenu.Items.Clear();
+        for (var i = closedTabs.Count - 1; i >= Math.Max(0, closedTabs.Count - 12); i--)
+        {
+            var index = i;
+            var t = closedTabs[i];
+            var item = new MenuFlyoutItem { Text = string.IsNullOrWhiteSpace(t.Title) ? UrlPolicy.DisplayHost(t.Url) : t.Title };
+            ToolTipService.SetToolTip(item, t.Url);
+            item.Click += (_, _) => ReopenTab(index);
+            RecentMenu.Items.Add(item);
+        }
+        RecentMenu.IsEnabled = closedTabs.Count > 0;
+    }
 
     // ---- Theme ----
 

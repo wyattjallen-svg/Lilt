@@ -69,6 +69,7 @@ public sealed partial class MainWindow
             vizTimer.Interval = TimeSpan.FromMilliseconds(33);
             vizTimer.Tick += (_, _) => DrawVisualizer();
         }
+        vizTimer.Interval = TimeSpan.FromMilliseconds(1000.0 / Math.Clamp(theme.Media.Fps, 10, 60));
         vizTimer.Start();
     }
 

@@ -37,6 +37,9 @@ public sealed partial class MainWindow
         if (tabs.Count == 0) AddTab(BrowserEngine.NewTabUri.AbsoluteUri);
         else Activate(show ?? tabs.MaxBy(t => t.LastActive)!);
         UpdateWorkspaceButton();
+        // Focus goes to the page (or the address box on a home tab), not wherever the old tab list left it.
+        if (active is { IsHome: true }) AddressBox.Focus(FocusState.Programmatic);
+        else active?.View?.Focus(FocusState.Programmatic);
         ScheduleSave();
     }
 

@@ -73,15 +73,15 @@ public enum Scrollbars { Overlay, Classic }
 // Glass: websites become see-through so the window material shows behind them (GlassOpacity is how much of the
 // page's own color stays; GlassOff lists sites left alone). ForceDark darkens sites that have no dark look of their own;
 // Scrollbars and ForceDark apply after a restart. Gestures: hold the right button and draw (← back, → forward,
-// ↑↓ reload, ↓→ close tab, ↓ new tab).
+// ↑↓ reload, ↓→ close tab, ↓ new tab). Restore: start with the tabs from last time (off: a fresh home tab each start).
 public sealed record PagesSpec(PageColorScheme ColorScheme, bool Peek, string Search = "duckduckgo", bool History = true,
     bool Glass = false, double GlassOpacity = 0.72, Ids? GlassOff = null, bool ForceDark = false, TrackingLevel Tracking = TrackingLevel.Balanced,
-    bool Gestures = true, Scrollbars Scrollbars = Scrollbars.Overlay)
+    bool Gestures = true, Scrollbars Scrollbars = Scrollbars.Overlay, bool Restore = true)
 {
     public Ids GlassOffSites => GlassOff ?? new Ids();
     public bool Equals(PagesSpec? o) => o is not null && ColorScheme == o.ColorScheme && Peek == o.Peek && Search == o.Search && History == o.History
         && Glass == o.Glass && GlassOpacity == o.GlassOpacity && GlassOffSites.Equals(o.GlassOffSites) && ForceDark == o.ForceDark
-        && Tracking == o.Tracking && Gestures == o.Gestures && Scrollbars == o.Scrollbars;
+        && Tracking == o.Tracking && Gestures == o.Gestures && Scrollbars == o.Scrollbars && Restore == o.Restore;
     public override int GetHashCode() => HashCode.Combine(ColorScheme, Search, Glass, GlassOpacity);
 }
 
@@ -98,7 +98,11 @@ public sealed record HomeSpec(Ids Items, bool Glass, string Background, double D
 // How hard Lilt saves power. SuspendMinutes 0 never suspends background tabs. HideWhenCovered pauses pages behind
 // full-screen apps; HideWhenOccluded hides (throttles, without suspending) pages fully behind another window.
 // Lean trades a little speed for less memory (Chromium's low-end-device mode and one process per site); it needs a restart.
-public sealed record PowerSpec(bool Efficiency, int SuspendMinutes, bool HideWhenCovered, bool HideWhenOccluded, bool Lean);
+// SleepMinutes: tabs you haven't looked at for that long are put to sleep, their page closed so it uses no memory at all
+// (the tab stays and reloads when you open it; 0 = never; pinned tabs and tabs playing sound never sleep).
+// SleepWhenLowMemory: when Windows runs short of memory, tabs unused for a few minutes sleep early.
+public sealed record PowerSpec(bool Efficiency, int SuspendMinutes, bool HideWhenCovered, bool HideWhenOccluded, bool Lean,
+    int SleepMinutes = 60, bool SleepWhenLowMemory = true);
 
 public enum WidgetShow { Auto, Always, Never }
 
@@ -115,8 +119,9 @@ public enum VisualizerSource { Auto, System, Page }
 // Media: the "now playing" panel, the visualizer and picture in picture. Auto shows the panel while a tab you can't see
 // plays, and the visualizer while a music site in MusicSites plays. Pip places videos popped out inside Lilt; its Show
 // picks Windows' own floating window when available (auto), always inside Lilt (always), or off (never). Height 0 is 16:9.
+// Fps: how often the visualizer redraws (lower saves power).
 public sealed record MediaSpec(WidgetSpec Player, WidgetSpec Visualizer, WidgetSpec Pip, int Bars, VisualizerStyle Style, VisualizerSource Source,
-    bool MediaKeys, bool AutoPictureInPicture, Ids MusicSites)
+    bool MediaKeys, bool AutoPictureInPicture, Ids MusicSites, int Fps = 30)
 {
     public static readonly string[] DefaultMusicSites =
     [

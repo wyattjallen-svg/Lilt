@@ -39,10 +39,10 @@ public static class ThemeWriter
             ["motion"] = Obj(("animations", t.Motion.Animations), ("duration", t.Motion.Duration), ("windowDrag", t.Motion.WindowDrag)),
             ["pages"] = With(Obj(("colorScheme", Camel(t.Pages.ColorScheme)), ("peek", t.Pages.Peek), ("search", t.Pages.Search), ("history", t.Pages.History),
                 ("glass", t.Pages.Glass), ("glassOpacity", t.Pages.GlassOpacity), ("forceDark", t.Pages.ForceDark), ("tracking", Camel(t.Pages.Tracking)),
-                ("gestures", t.Pages.Gestures), ("scrollbars", Camel(t.Pages.Scrollbars))), "glassOff", t.Pages.GlassOffSites),
+                ("gestures", t.Pages.Gestures), ("scrollbars", Camel(t.Pages.Scrollbars)), ("restore", t.Pages.Restore)), "glassOff", t.Pages.GlassOffSites),
             ["home"] = With(Obj(("glass", t.Home.Glass), ("background", t.Home.Background), ("dim", t.Home.Dim)), "items", t.Home.Items),
             ["power"] = Obj(("efficiency", t.Power.Efficiency), ("suspendMinutes", t.Power.SuspendMinutes), ("hideWhenCovered", t.Power.HideWhenCovered),
-                ("hideWhenOccluded", t.Power.HideWhenOccluded), ("lean", t.Power.Lean)),
+                ("hideWhenOccluded", t.Power.HideWhenOccluded), ("lean", t.Power.Lean), ("sleepMinutes", t.Power.SleepMinutes), ("sleepWhenLowMemory", t.Power.SleepWhenLowMemory)),
             ["media"] = Media(t.Media),
             ["split"] = Obj(("orientation", Camel(t.Split.Orientation)), ("ratio", t.Split.Ratio), ("gap", t.Split.Gap)),
             ["panel"] = With(Obj(("edge", Camel(t.Panel.Edge)), ("width", t.Panel.Width)), "sections", t.Panel.Sections),
@@ -56,7 +56,7 @@ public static class ThemeWriter
     {
         static JsonObject Widget(WidgetSpec w) =>
             Obj(("show", Camel(w.Show)), ("x", w.X), ("y", w.Y), ("width", w.Width), ("height", w.Height), ("opacity", w.Opacity));
-        var o = Obj(("bars", m.Bars), ("style", Camel(m.Style)), ("source", Camel(m.Source)), ("mediaKeys", m.MediaKeys), ("autoPictureInPicture", m.AutoPictureInPicture));
+        var o = Obj(("bars", m.Bars), ("style", Camel(m.Style)), ("source", Camel(m.Source)), ("mediaKeys", m.MediaKeys), ("autoPictureInPicture", m.AutoPictureInPicture), ("fps", m.Fps));
         o["player"] = Widget(m.Player);
         o["visualizer"] = Widget(m.Visualizer);
         o["pip"] = Widget(m.Pip);

@@ -1095,4 +1095,44 @@ Test("site tint keeps the theme's text readable", () =>
     Equal(0, (int)SiteTint.For(Rgba.Parse("#FF0000"), surface, text, 0).A);
 });
 
+Test("v0.8: wipe keeps only what was chosen and nothing that isn't Lilt's", () =>
+{
+    var dir = Directory.CreateTempSubdirectory().FullName;
+    try
+    {
+        foreach (var f in new[] { "theme.json", "session.json", "bookmarks.json", "history.json", "glass.json", "notes.txt" }) File.WriteAllText(Path.Combine(dir, f), "{}");
+        Directory.CreateDirectory(Path.Combine(dir, "WebView2", "EBWebView", "Default"));
+        File.WriteAllText(Path.Combine(dir, "WebView2", "EBWebView", "Default", "Cookies"), "x");
+        Directory.CreateDirectory(Path.Combine(dir, "themes"));
+        Equal(null, DataWipe.RunIfRequested(dir, ["glass.json"], TimeSpan.FromSeconds(1)));
+        DataWipe.Request(dir, ["bookmarks", "nonsense"], 0);
+        var left = DataWipe.RunIfRequested(dir, ["glass.json"], TimeSpan.FromSeconds(1))!;
+        Equal(0, left.Count);
+        True(File.Exists(Path.Combine(dir, "bookmarks.json")) && File.Exists(Path.Combine(dir, "notes.txt")));
+        True(!File.Exists(Path.Combine(dir, "session.json")) && !File.Exists(Path.Combine(dir, "theme.json")) && !File.Exists(Path.Combine(dir, "glass.json")));
+        True(!Directory.Exists(Path.Combine(dir, "WebView2")) && !Directory.Exists(Path.Combine(dir, "themes")));
+        True(!File.Exists(Path.Combine(dir, DataWipe.Marker)));
+    }
+    finally
+    {
+        Directory.Delete(dir, true);
+    }
+});
+
+Test("v0.8: sleep rules and new settings", () =>
+{
+    var p = Theme.Default.Power;
+    True(!PowerPolicy.ShouldSleep(p, 30, 50));
+    True(PowerPolicy.ShouldSleep(p, 60, 50));
+    True(PowerPolicy.ShouldSleep(p, 6, 90));
+    True(!PowerPolicy.ShouldSleep(p, 3, 90));
+    True(!PowerPolicy.ShouldSleep(p with { SleepMinutes = 0, SleepWhenLowMemory = false }, 600, 99));
+    var t = ThemeParser.Parse("{\"schemaVersion\":1,\"power\":{\"sleepMinutes\":15,\"sleepWhenLowMemory\":false},\"media\":{\"fps\":20},\"pages\":{\"restore\":false}}");
+    Equal(0, t.Issues.Count);
+    Equal(15, t.Theme.Power.SleepMinutes);
+    True(!t.Theme.Power.SleepWhenLowMemory && !t.Theme.Pages.Restore);
+    Equal(20, t.Theme.Media.Fps);
+    Equal(t.Theme, ThemeParser.Parse(ThemeWriter.ToJson(t.Theme)).Theme);
+});
+
 return Summary();

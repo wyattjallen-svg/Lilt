@@ -380,6 +380,10 @@
             "classic"
           ],
           "description": "Thin overlay scrollbars or classic ones (after a restart)."
+        },
+        "restore": {
+          "type": "boolean",
+          "description": "Start with the tabs from last time. Off: a fresh home tab each start (the panel keeps its sites)."
         }
       }
     },
@@ -457,6 +461,16 @@
         "lean": {
           "type": "boolean",
           "description": "Use less memory: Chromium's low-end-device mode and one process per site. Takes effect after a restart."
+        },
+        "sleepMinutes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1440,
+          "description": "Tabs you haven't looked at for this many minutes sleep: their page closes and uses no memory; the tab reloads when you open it (0 = never). Pinned tabs and tabs playing sound never sleep."
+        },
+        "sleepWhenLowMemory": {
+          "type": "boolean",
+          "description": "When Windows runs short of memory, tabs unused for 5 minutes sleep early."
         }
       }
     },
@@ -625,6 +639,12 @@
             "type": "string"
           },
           "description": "Sites where the visualizer shows automatically."
+        },
+        "fps": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 60,
+          "description": "How often the visualizer redraws per second (lower saves power)."
         }
       }
     },
@@ -958,6 +978,19 @@
           ]
         },
         "toPanel": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "sleepTabs": {
           "anyOf": [
             {
               "type": "string"

@@ -33,6 +33,11 @@
     <ProjectReference Include="..\Lilt.Core\Lilt.Core.csproj" />
   </ItemGroup>
 
+  <!-- The GC compacts harder before growing the heap (0-9; 5 favours memory over a little CPU). -->
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" />
+  </ItemGroup>
+
   <ItemGroup>
     <Content Include="Themes\*.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="NewTab\*.*" CopyToOutputDirectory="PreserveNewest" />

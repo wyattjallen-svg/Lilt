@@ -48,6 +48,22 @@ static class Native
     [DllImport("kernel32.dll")] static extern bool SetProcessWorkingSetSizeEx(IntPtr process, IntPtr min, IntPtr max, uint flags);
 
     [StructLayout(LayoutKind.Sequential)]
+    struct MemoryStatus
+    {
+        public uint Length, Load;
+        public ulong TotalPhys, AvailPhys, TotalPageFile, AvailPageFile, TotalVirtual, AvailVirtual, AvailExtendedVirtual;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GlobalMemoryStatusEx(ref MemoryStatus status);
+
+    // Percent of the PC's physical memory in use (0 if Windows won't say).
+    public static int MemoryLoad()
+    {
+        var s = new MemoryStatus { Length = (uint)Marshal.SizeOf<MemoryStatus>() };
+        return GlobalMemoryStatusEx(ref s) ? (int)s.Load : 0;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     struct Rect
     {
         public int Left, Top, Right, Bottom;

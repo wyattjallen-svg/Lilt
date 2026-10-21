@@ -109,6 +109,10 @@ public sealed partial class MainWindow
         TabWidthSlider.Value = t.Sidebar.TabWidth;
         CloseButtonsCheck.IsChecked = t.Sidebar.CloseButtons;
         AddressWidthSlider.Value = t.Toolbar.AddressWidth;
+        SleepSlider.Value = t.Power.SleepMinutes;
+        LowMemoryCheck.IsChecked = t.Power.SleepWhenLowMemory;
+        FpsSlider.Value = t.Media.Fps;
+        RestoreCheck.IsChecked = t.Pages.Restore;
         ToolbarSiteColorSlider.Value = Math.Round(t.Toolbar.SiteColor * 100);
         SidebarSiteColorSlider.Value = Math.Round(t.Sidebar.SiteColor * 100);
         Select(PanelEdgeCombo, Camel(t.Panel.Edge.ToString()));
@@ -237,8 +241,13 @@ public sealed partial class MainWindow
                 Glass = GlassPagesSwitch.IsOn, GlassOpacity = GlassOpacitySlider.Value / 100, Gestures = GesturesCheck.IsChecked == true,
                 ForceDark = ForceDarkCheck.IsChecked == true, Scrollbars = ClassicScrollbarsCheck.IsChecked == true ? Scrollbars.Classic : Scrollbars.Overlay,
                 Tracking = Pick(TrackingCombo, t.Pages.Tracking),
+                Restore = RestoreCheck.IsChecked == true,
             },
-            Power = new PowerSpec(EfficiencySwitch.IsOn, (int)SuspendSlider.Value, CoveredSwitch.IsOn, OccludedSwitch.IsOn, LeanSwitch.IsOn),
+            Power = t.Power with
+            {
+                Efficiency = EfficiencySwitch.IsOn, SuspendMinutes = (int)SuspendSlider.Value, HideWhenCovered = CoveredSwitch.IsOn,
+                HideWhenOccluded = OccludedSwitch.IsOn, Lean = LeanSwitch.IsOn, SleepMinutes = (int)SleepSlider.Value, SleepWhenLowMemory = LowMemoryCheck.IsChecked == true,
+            },
             Split = new SplitSpec(Pick(SplitOrientationCombo, t.Split.Orientation), SplitRatioSlider.Value / 100, SplitGapSlider.Value),
             Media = t.Media with
             {
@@ -250,6 +259,7 @@ public sealed partial class MainWindow
                 },
                 Pip = t.Media.Pip with { Show = Pick(PipShowCombo, t.Media.Pip.Show) },
                 Bars = (int)BarsSlider.Value,
+                Fps = (int)FpsSlider.Value,
                 Style = Pick(VisualizerStyleCombo, t.Media.Style),
                 Source = Pick(VisualizerSourceCombo, t.Media.Source),
                 MediaKeys = MediaKeysCheck.IsChecked == true,

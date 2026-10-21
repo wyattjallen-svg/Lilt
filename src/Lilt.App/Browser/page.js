@@ -140,7 +140,10 @@
   const recolorSoon = () => { clearTimeout(colorTimer); colorTimer = setTimeout(siteColor, 250); };
   addEventListener('load', recolorSoon);
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', recolorSoon);
-  if (document.head) new MutationObserver(recolorSoon).observe(document.head, { subtree: true, childList: true, attributes: true, attributeFilter: ['content', 'media'] });
+  // Busy sites rewrite their <head> constantly; a page nobody can see doesn't need to keep up (it catches up when shown).
+  if (document.head) new MutationObserver(() => { if (!document.hidden) recolorSoon(); })
+    .observe(document.head, { subtree: true, childList: true, attributes: true, attributeFilter: ['content', 'media'] });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) recolorSoon(); });
 
   // Ctrl+click and middle-click open a link in a tab behind this one; Lilt is told which link so it doesn't switch to it.
   const behind = e => {

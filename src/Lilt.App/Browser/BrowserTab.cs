@@ -19,7 +19,7 @@ public sealed class BrowserTab(string url, string title = "", bool pinned = fals
     static readonly Brush error = new SolidColorBrush(ColorHelper.FromArgb(255, 0xE5, 0x48, 0x4D));
     string url = url, title = title;
     ImageSource? icon;
-    bool active, loading, audible, muted, pinned = pinned, failed, shown;
+    bool active, loading, audible, muted, pinned = pinned, failed, shown, asleep;
 
     public string Url { get => url; set => Set(ref url, value, nameof(Url), nameof(DisplayTitle), nameof(Glyph)); }
     public string Title { get => title; set => Set(ref title, value, nameof(Title), nameof(DisplayTitle)); }
@@ -30,6 +30,9 @@ public sealed class BrowserTab(string url, string title = "", bool pinned = fals
     public bool IsAudible { get => audible; set => Set(ref audible, value, nameof(AudioVisibility), nameof(AudioGlyph)); }
     public bool IsMuted { get => muted; set => Set(ref muted, value, nameof(AudioVisibility), nameof(AudioGlyph)); }
     public bool IsPinned { get => pinned; set => Set(ref pinned, value, nameof(LabelVisibility), nameof(CloseVisibility)); }
+    // Asleep: its page was closed to free memory; it reloads when shown. Drawn faded.
+    public bool IsAsleep { get => asleep; set => Set(ref asleep, value, nameof(IsAsleep), nameof(ContentOpacity)); }
+    public double ContentOpacity => asleep ? 0.5 : 1;
     public bool HasError { get => failed; set => Set(ref failed, value, nameof(Glyph), nameof(GlyphBrush), nameof(StateBorder), nameof(IconVisibility), nameof(GlyphVisibility)); }
 
     public string DisplayTitle => !string.IsNullOrWhiteSpace(title) ? title : IsHome ? "Home" : UrlPolicy.DisplayHost(url);

@@ -96,6 +96,7 @@ public static class Commands
         ["workspace"] = ["Ctrl+Shift+E"],
         ["panel"] = ["F4"],
         ["toPanel"] = [],
+        ["sleepTabs"] = [],
     };
 
     public static readonly HashSet<string> Reserved = ["newTab", "reopenTab", "closeTab", "nextTab", "prevTab", "address", "palette"];
@@ -109,6 +110,7 @@ public static class Commands
         ["media"] = "Show or hide the media player", ["visualizer"] = "Show or hide the visualizer", ["pip"] = "Picture in picture",
         ["bookmarks"] = "Manage bookmarks", ["screenshot"] = "Screenshot of the whole page", ["workspace"] = "Next workspace",
         ["panel"] = "Show or hide the panel", ["toPanel"] = "Move this tab to the panel",
+        ["sleepTabs"] = "Put background tabs to sleep",
     };
 }
 

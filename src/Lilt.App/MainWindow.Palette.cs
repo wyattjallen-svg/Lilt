@@ -22,6 +22,7 @@ public sealed partial class MainWindow
         ["bookmark"] = "\uE734", ["sidebar"] = "\uE8A0", ["menu"] = "\uE712", ["customize"] = "\uE790", ["palette"] = "\uE945",
         ["split"] = "\uE8A9", ["media"] = "\uE8D6", ["visualizer"] = "\uE9D9", ["pip"] = "\uE8A7",
         ["bookmarks"] = "\uE8F1", ["screenshot"] = "\uE722", ["workspace"] = "\uE8B7",
+        ["panel"] = "\uE89F", ["toPanel"] = "\uE89F", ["sleepTabs"] = "\uE708",
     };
 
     void ShowPalette()
@@ -184,6 +185,25 @@ public sealed partial class MainWindow
         yield return Toggle("Toolbar takes the site's color", t.Toolbar.SiteColor > 0, x => x with { Toolbar = x.Toolbar with { SiteColor = x.Toolbar.SiteColor > 0 ? 0 : 0.45 } });
         yield return Toggle("Sidebar takes the site's color", t.Sidebar.SiteColor > 0, x => x with { Sidebar = x.Sidebar with { SiteColor = x.Sidebar.SiteColor > 0 ? 0 : 0.2 } });
         yield return new("Empty caches now", "Storage: you stay signed in", "\uE74D", () => EmptyCaches_Click(this, new RoutedEventArgs()));
+        yield return new("Wipe everything and start fresh…", "Asks for a code first", "\uE894", () => _ = WipeAsync());
+        yield return new("What's using memory", "Customize → Power", "\uE950", () =>
+        {
+            ShowCustomize("power");
+            _ = FillMemoryListAsync();
+        });
+        yield return new("Mute other tabs", "Sound", "\uE74F", () =>
+        {
+            foreach (var x in AllTabs) if (x != active && x.Core is { } c) c.IsMuted = true;
+        });
+        yield return new("Unmute every tab", "Sound", "\uE767", () =>
+        {
+            foreach (var x in AllTabs) if (x.Core is { } c) c.IsMuted = false;
+        });
+        yield return Toggle("Open last time's tabs on start", t.Pages.Restore, x => x with { Pages = x.Pages with { Restore = !x.Pages.Restore } });
+        yield return Toggle("Sleep tabs sooner when memory runs low", t.Power.SleepWhenLowMemory, x => x with { Power = x.Power with { SleepWhenLowMemory = !x.Power.SleepWhenLowMemory } });
+        foreach (var minutes in new[] { 15, 30, 60, 120, 0 })
+            yield return new(minutes == 0 ? "Never put tabs to sleep" : $"Put unused tabs to sleep after {minutes} minutes", t.Power.SleepMinutes == minutes ? "Current" : "Sleeping tabs", "\uE708",
+                () => Queue(Current with { Power = Current.Power with { SleepMinutes = minutes } }));
         if (active is { IsHome: false } kt && Uri.TryCreate(kt.Url, UriKind.Absolute, out var ku) && UrlPolicy.IsWeb(ku))
             yield return new(KeptHere ? "Let this site be tidied up" : "Never tidy up this site", UrlPolicy.DisplayHost(kt.Url), "\uE72E", ToggleKeepHere);
         yield return Toggle("Tidy up sites I stop using", t.Storage.ForgetAfterDays > 0,

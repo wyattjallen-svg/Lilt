@@ -237,6 +237,7 @@
                     <Slider x:Name="SplitGapSlider" Header="Gap between panes" Minimum="0" Maximum="24" StepFrequency="1" ValueChanged="Customize_Changed" />
                     <TextBlock Text="Pages" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
                     <ComboBox x:Name="SearchCombo" Header="Search with" HorizontalAlignment="Stretch" SelectionChanged="Customize_Changed" />
+                    <CheckBox x:Name="RestoreCheck" Content="Open the tabs from last time when Lilt starts" Click="Customize_Changed" />
                     <CheckBox x:Name="PeekCheck" Content="Shift+click a link to peek at it" Click="Customize_Changed" />
                     <CheckBox x:Name="GesturesCheck" Content="Mouse gestures (hold the right button and draw)" Click="Customize_Changed"
                               ToolTipService.ToolTip="Left: back · Right: forward · Up, down: reload · Down, right: close tab · Down: new tab" />
@@ -286,6 +287,7 @@
                       <ComboBoxItem Content="Wave" Tag="wave" />
                     </ComboBox>
                     <Slider x:Name="BarsSlider" Header="Bars" Minimum="8" Maximum="64" StepFrequency="1" ValueChanged="Customize_Changed" />
+                    <Slider x:Name="FpsSlider" Header="Frames per second (lower saves power)" Minimum="10" Maximum="60" StepFrequency="5" ValueChanged="Customize_Changed" />
                     <Slider x:Name="VisualizerWidthSlider" Header="Width" Minimum="160" Maximum="640" StepFrequency="4" ValueChanged="Customize_Changed" />
                     <Slider x:Name="VisualizerHeightSlider" Header="Height" Minimum="32" Maximum="240" StepFrequency="2" ValueChanged="Customize_Changed" />
                     <Slider x:Name="VisualizerOpacitySlider" Header="Opacity (%)" Minimum="20" Maximum="100" StepFrequency="1" ValueChanged="Customize_Changed" />
@@ -341,7 +343,10 @@
                     <TextBlock Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}" TextWrapping="Wrap" FontSize="12"
                                Text="Sites ask before using your camera, microphone, location and the like. What you've allowed or blocked:" />
                     <StackPanel x:Name="PermissionList" Spacing="2" />
-                  </StackPanel>
+                    <TextBlock Text="Start over" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
+                    <TextBlock Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}" TextWrapping="Wrap" FontSize="12"
+                               Text="Delete everything Lilt keeps (tabs, bookmarks, history, settings, extensions, cookies and sign-ins) and restart it as a fresh install. You'll be asked to enter a code first." />
+                    <Button Content="Wipe everything and start fresh…" Click="Wipe_Click" />
 
                   <StackPanel x:Name="PowerPage" Spacing="6" Visibility="Collapsed">
                     <TextBlock Text="While you're in another app" Style="{StaticResource SectionHeader}" />
@@ -352,6 +357,12 @@
                     <ToggleSwitch x:Name="OccludedSwitch" Header="Hide pages fully behind other windows" Toggled="Customize_Changed" />
                     <ToggleSwitch x:Name="LeanSwitch" Header="Lean mode: less memory, after restart" Toggled="Customize_Changed" />
                     <Slider x:Name="SuspendSlider" Header="Suspend unused tabs after (minutes, 0 = never)" Minimum="0" Maximum="60" StepFrequency="1" ValueChanged="Customize_Changed" />
+                    <TextBlock Text="Sleeping tabs" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
+                    <Slider x:Name="SleepSlider" Header="Put tabs I haven't looked at to sleep after (minutes, 0 = never)" Minimum="0" Maximum="240" StepFrequency="5" ValueChanged="Customize_Changed" />
+                    <CheckBox x:Name="LowMemoryCheck" Content="Sooner when my PC is short of memory" Click="Customize_Changed" />
+                    <TextBlock Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}" TextWrapping="Wrap" FontSize="12"
+                               Text="A sleeping tab's page is closed, so it uses no memory or power at all; the tab stays (faded) and reloads when you open it. Pinned tabs and tabs playing sound never sleep." />
+                    <Button Content="Put background tabs to sleep now" Click="SleepTabs_Click" />
                     <TextBlock x:Name="PowerStatus" Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}" TextWrapping="Wrap" />
                     <TextBlock Text="Memory" Style="{StaticResource SectionHeader}" Margin="2,10,0,0" />
                     <Grid ColumnSpacing="6">
@@ -366,6 +377,8 @@
                       <TextBlock x:Name="MemoryText" Grid.Column="1" Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}"
                                  TextWrapping="Wrap" Text="Not measured" />
                     </Grid>
+                    <Button Content="What's using memory" Click="MemoryList_Click" ToolTipService.ToolTip="Each of the engine's processes, which tabs it runs, and how much memory it holds" />
+                    <StackPanel x:Name="MemoryList" Spacing="2" />
                   </StackPanel>
                 </Grid>
               </ScrollViewer>
@@ -405,6 +418,9 @@
               <MenuFlyoutItem x:Name="MenuReopen" Text="Reopen closed tab" KeyboardAcceleratorTextOverride="Ctrl+Shift+T" Click="ReopenTab_Click">
                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE7A7;" /></MenuFlyoutItem.Icon>
               </MenuFlyoutItem>
+              <MenuFlyoutSubItem x:Name="RecentMenu" Text="Recently closed">
+                <MenuFlyoutSubItem.Icon><FontIcon Glyph="&#xE81C;" /></MenuFlyoutSubItem.Icon>
+              </MenuFlyoutSubItem>
               <MenuFlyoutItem x:Name="MenuSplit" Text="Split view" KeyboardAcceleratorTextOverride="Ctrl+Shift+S" Click="SplitButton_Click">
                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8A9;" /></MenuFlyoutItem.Icon>
               </MenuFlyoutItem>
@@ -746,7 +762,7 @@
               <DataTemplate x:DataType="browser:BrowserTab">
                 <Border BorderBrush="{x:Bind StateBorder, Mode=OneWay}" BorderThickness="1" CornerRadius="6" Padding="6,0,2,0" Background="Transparent"
                         PointerPressed="Tab_PointerPressed" RightTapped="Tab_RightTapped" ToolTipService.ToolTip="{x:Bind Url, Mode=OneWay}">
-                  <Grid ColumnSpacing="8" MinHeight="30">
+                  <Grid ColumnSpacing="8" MinHeight="30" Opacity="{x:Bind ContentOpacity, Mode=OneWay}">
                     <Grid.ColumnDefinitions>
                       <ColumnDefinition Width="Auto" />
                       <ColumnDefinition Width="*" />
