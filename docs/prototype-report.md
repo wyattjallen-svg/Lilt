@@ -1,16 +1,21 @@
-# Release report (v0.5, with v0.4's numbers)
+# Release report (v0.6, with v0.4's numbers)
 
-**v0.5** (after your first playtest): password exports no longer become bookmarks; address-bar completion and suggestions; your search engine; Ctrl/middle-click open behind; bookmark editing with undo; tidier address bar and notices. CI now runs 28 feature checks, all passing, including:
+**v0.6** (after your second playtest): see-through websites, a bookmark manager, workspaces, mouse gestures, site permissions, tracker levels, whole-page screenshots, the window lift, your own presets, Midnight and Paper, Aurora and Waves, and the home "None" background fix. CI now runs 37 feature checks, all passing ([run](https://github.com/wyattjallen-svg/Lilt/actions/runs/39534250757)). The new ones:
 
 | Check | Result |
 |---|---|
-| A Chrome password export imports no bookmarks, and bookmarks left by importing it before are found (2 of 3) and offered for removal | Pass |
-| Typing "exa" completes "example.com" from history and lists it with tabs and bookmarks | Pass |
-| A real middle-click on a link opens it in a tab behind the current one | Pass |
-| A search from the address bar uses the chosen engine (Google in the test) | Pass |
+| See-through websites: example.com's root keeps 72% of its color, its body goes clear | Pass |
+| The bookmark manager opens with the bookmarks | Pass |
+| A whole-page screenshot is saved | Pass |
+| Workspaces keep their own tabs (Work: 1 of 2 tabs; back in Main the page is still there) and are saved with the session | Pass |
+| The window lifts (motion.windowDrag) | Pass |
+| A real right-button drag to the left goes back | Pass |
+| A site asking for your location shows the permission bar | Pass |
+| Protected content: Widevine and Clear Key available; PlayReady not on CI's server VM (info) | Pass |
 
-Resource use is unchanged from v0.4 (below): history is one small file written at most every 5 seconds while you browse, and suggestions are only computed while you type.
+Resource use is unchanged from v0.4 (below): workspaces you aren't in keep their pages suspended once idle, the window lift runs on the compositor, and see-through pages are styled once per page load.
 
+**v0.5** (after your first playtest): password exports no longer become bookmarks; address-bar completion and suggestions; your search engine; Ctrl/middle-click open behind; bookmark editing with undo; tidier address bar and notices.
 
 Scope: v0.4 adds the now-playing player, the visualizer, picture in picture with an in-window pop-out, split view, peek, the command palette, shortcuts from the theme and a quieter efficiency mode, on top of v0.3 (design language, everything movable and removable, efficiency mode) and v0.2 (tabs, sessions, bookmarks and import, home tab, glass, uBlock Origin Lite, Chrome Web Store extensions). Architecture sections 4.5, 6.7, 6.8, 8.0 and 15 describe the new parts.
 
@@ -60,7 +65,19 @@ Reading these:
 
 ## Testing this build
 
-Unzip `Lilt-v0.4.0-win-x64.zip` and run `Lilt.exe`. Tabs, bookmarks and settings from earlier builds carry over; your `theme.json` gains the new blocks with their defaults.
+Unzip `Lilt-v0.6.0-win-x64.zip` and run `Lilt.exe`. Tabs, bookmarks and settings from earlier builds carry over; your `theme.json` gains the new settings with their defaults.
+
+**New in v0.6**
+- [ ] Customize → Home → Background: None. Pick a preset (Customize → Look), then another: the background stays None.
+- [ ] Customize → Look → See-through websites on (with Mica or Acrylic). Browse a few sites; move "Page color kept". Right-click a tab → "Keep this site solid".
+- [ ] Ctrl+Shift+O: search, sort, select several, Move to → New folder…, Undo from the notice, drag to reorder in "Your order", Delete.
+- [ ] Click "Tabs" above the tab list → New workspace…; open tabs there; switch back and forth (Ctrl+Shift+E); right-click a tab → Move to workspace; play music in one and switch away. Restart: everything is where you left it.
+- [ ] Hold the right button and draw left, right, down, down-then-right on a page. A plain right-click still opens the menu.
+- [ ] A site that wants your camera or location (a video call site): the bar asks; Customize → Privacy lists the answer with "Ask again".
+- [ ] Drag the window by its title bar: the content lifts slightly. Customize → Look → Motion turns it off.
+- [ ] Ctrl+Shift+X on a long page: Pictures\Lilt has the whole page, and it's on the clipboard.
+- [ ] Netflix (or another streaming service) plays.
+- [ ] Customize → Look → Save as preset…; it appears with the others (right-click to delete). Try Midnight and Paper, and the Aurora and Waves backgrounds.
 
 **Media**
 - [ ] Play music on YouTube Music or Spotify, switch to another tab: the player shows title, artist and artwork; play/pause, previous/next, seek (click the bar) and mute work; the arrow goes back to the tab. Drag it somewhere else; restart Lilt and it's still there.
@@ -85,7 +102,8 @@ Unzip `Lilt-v0.4.0-win-x64.zip` and run `Lilt.exe`. Tabs, bookmarks and settings
 - The visualizer hears Lilt's sound through Windows 11's loopback; on Windows 10 (not supported) or with no audio device it uses the tab's sound, which DRM-protected services (Spotify, Apple Music) don't allow.
 - Peek opens links in a temporary view; "Open as tab" loads the page again.
 - Glass rendering and the Task Manager leaf can't be checked on CI's VM; screenshots there show the solid fallback.
-- Extensions' popups don't know the current tab (WebView2 limit). Permission prompts (camera, location…) are still denied with a notice.
+- Extensions' popups don't know the current tab (WebView2 limit).
+- See-through websites work page by page: sites that paint their background in many small pieces, or with images, stay mostly solid.
 
 ## Dependency audit
 
