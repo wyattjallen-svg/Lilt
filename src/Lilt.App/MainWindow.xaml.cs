@@ -268,7 +268,7 @@ public sealed partial class MainWindow : Window
         allTabs = AllTabs.Count(),
         panel = panelOpen ? panelTabs.Count : -1,
         panelUrl = panelTab?.Url,
-        docked = (VisualizerWidget.Parent == PanelHost ? "visualizer " : "") + (MediaWidget.Parent == PanelHost ? "player" : ""),
+        docked = (PanelHost.Children.Contains(VisualizerWidget) ? "visualizer " : "") + (PanelHost.Children.Contains(MediaWidget) ? "player" : ""),
         siteColor = active?.SiteColor?.ToString(),
         tint = (ToolbarTint.Background as SolidColorBrush)?.Color.ToString(),
         active = active is null ? -1 : tabs.IndexOf(active),

@@ -53,7 +53,7 @@ public sealed partial class MainWindow
     {
         foreach (var (element, widget) in new (FrameworkElement, string)[] { (MediaWidget, "player"), (VisualizerWidget, "visualizer"), (PipFrame, "pip") })
         {
-            if (element.Visibility != Visibility.Visible || element.Parent != WidgetLayer && widget != "pip") continue;
+            if (element.Visibility != Visibility.Visible || PanelHost.Children.Contains(element)) continue;
             var b = Box(widget);
             Canvas.SetLeft(element, b.X);
             Canvas.SetTop(element, b.Y);
@@ -79,7 +79,7 @@ public sealed partial class MainWindow
     {
         if (dragging is not null || sender is not FrameworkElement { Tag: string tag } element) return;
         // Docked in the panel, the panel places it.
-        if (tag is "player" or "visualizer" && element.Parent != WidgetLayer) return;
+        if (tag is "player" or "visualizer" && PanelHost.Children.Contains(element)) return;
         if (!e.GetCurrentPoint(element).Properties.IsLeftButtonPressed) return;
         StartDrag(tag, element, e);
         dragFrom = Box(Owner(tag));

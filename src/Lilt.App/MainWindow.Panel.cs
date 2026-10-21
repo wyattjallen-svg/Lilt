@@ -110,12 +110,13 @@ public sealed partial class MainWindow
     }
 
     // A docked widget fills the panel's width; floating, it goes back over the page where it was.
+    // (FrameworkElement.Parent isn't reliable before the window shows, so the containers are asked directly.)
     void Dock(FrameworkElement widget, Grid? host)
     {
         Panel target = host ?? (Panel)WidgetLayer;
-        if (widget.Parent != target)
+        if (!target.Children.Contains(widget))
         {
-            (widget.Parent as Panel)?.Children.Remove(widget);
+            (host is null ? (Panel)PanelHost : WidgetLayer).Children.Remove(widget);
             target.Children.Add(widget);
         }
         if (host is null)
@@ -178,8 +179,8 @@ public sealed partial class MainWindow
     // Moving the page keeps it running: music doesn't stop, sign-ins and scroll stay.
     void Reparent(BrowserTab tab, Panel to)
     {
-        if (tab.View is not { } view || view.Parent == to) return;
-        (view.Parent as Panel)?.Children.Remove(view);
+        if (tab.View is not { } view || to.Children.Contains(view)) return;
+        (to == PageHost ? (Panel)PanelPages : PageHost).Children.Remove(view);
         Fill(view);
         to.Children.Insert(0, view);
     }

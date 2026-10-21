@@ -126,7 +126,8 @@ public sealed partial class MainWindow
         engine.Detach(tab.Core);
         if (tab.View is { } view)
         {
-            (view.Parent as Panel)?.Children.Remove(view);
+            PageHost.Children.Remove(view);
+            PanelPages.Children.Remove(view);
             view.Close();
         }
         tab.View = null;
