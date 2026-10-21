@@ -47,6 +47,10 @@ public sealed partial class MainWindow
                 if (i <= session.Active || pick is null) pick = tab;
                 if (i == session.Split) partner = tab;
             }
+            foreach (var saved in session.Panel ?? [])
+                if (UrlPolicy.IsNavigable(saved.Url)) panelTabs.Add(new BrowserTab(saved.Url, saved.Title));
+            panelTab = panelTabs.ElementAtOrDefault(session.PanelShown) ?? panelTabs.FirstOrDefault();
+            panelOpen = session.PanelOpen;
         }
         // The workspace you were in comes back; the others wait, unloaded, until you switch to them.
         workspace = pick?.Workspace ?? "";
@@ -85,7 +89,7 @@ public sealed partial class MainWindow
         view.Resources["BrushForThemeBackgroundColor"] = new SolidColorBrush(Colors.Transparent);
         tab.View = view;
         SetPageBackground(tab);
-        PageHost.Children.Insert(0, view);
+        (panelTabs.Contains(tab) ? PanelPages : PageHost).Children.Insert(0, view);
         LayoutPages();
         // In split view, clicking into the other pane makes its tab the one the toolbar acts on.
         view.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, _) =>
@@ -210,7 +214,8 @@ public sealed partial class MainWindow
     {
         if (!tabs.Contains(tab))
         {
-            if (WorkspaceOf(tab) is { } w) SwitchWorkspace(w, tab);
+            if (panelTabs.Contains(tab)) ShowPanelTab(tab);
+            else if (WorkspaceOf(tab) is { } w) SwitchWorkspace(w, tab);
             return;
         }
         if (tab == floating)
@@ -288,6 +293,11 @@ public sealed partial class MainWindow
 
     void CloseTab(BrowserTab tab)
     {
+        if (panelTabs.Contains(tab))
+        {
+            RemoveFromPanel(tab);
+            return;
+        }
         var i = tabs.IndexOf(tab);
         if (i < 0) return;
         if (!tab.IsHome)
@@ -370,8 +380,10 @@ public sealed partial class MainWindow
                 .Where(t => UrlPolicy.IsNavigable(t.Url)).Select(t => (Tab: t, Workspace: w))).ToList();
             var order = list.Select(x => x.Tab).ToList();
             var partner = active is null ? null : Partner(active);
+            var panel = panelTabs.Where(t => UrlPolicy.IsNavigable(t.Url)).ToList();
             new Session(list.Select(x => new SessionTab(x.Tab.Url, x.Tab.Title, x.Tab.IsPinned, x.Workspace)).ToList(), Math.Max(0, active is null ? 0 : order.IndexOf(active)),
-                partner is null ? -1 : order.IndexOf(partner), workspaces).Save(paths.Session);
+                partner is null ? -1 : order.IndexOf(partner), workspaces, panel.Select(t => new SessionTab(t.Url, t.Title)).ToList(),
+                panelTab is null ? 0 : Math.Max(0, panel.IndexOf(panelTab)), panelOpen).Save(paths.Session);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -465,6 +477,7 @@ public sealed partial class MainWindow
             });
         }
         else if (tab != active) Add("Open in split view", "\uE8A9", () => SplitWith(tab));
+        Add("Move to the panel", "\uE89F", () => MoveToPanel(tab));
         if (tab.Media is { Video: true }) Add(tab == floating ? "Put the video back" : "Pop out the video", "\uE8A7", () => _ = PipAsync(tab));
         if (bookmarks.Contains(tab.Url)) Add("Remove bookmark", "", () =>
         {

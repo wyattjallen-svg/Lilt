@@ -993,4 +993,106 @@ Test("every bundled preset loads without issues", () =>
     Equal(Rgba.Parse("#000000"), ThemeParser.LoadFile(RepoFile($"{themes}/midnight.json")).Theme.Colors.Background);
 });
 
+Test("v0.7: panel, storage and site color settings, panel tabs in the session", () =>
+{
+    var json = """
+    {"schemaVersion":1,
+     "toolbar":{"siteColor":0.8,"items":["back","address","panel"]},
+     "sidebar":{"siteColor":0},
+     "panel":{"edge":"left","width":420,"sections":["visualizer","web"]},
+     "storage":{"cacheLimit":200,"forgetAfterDays":30,"keep":["bank.example.com"],"signOut":true}}
+    """;
+    var r = ThemeParser.Parse(json);
+    Equal(0, r.Issues.Count);
+    var t = r.Theme;
+    Equal(0.8, t.Toolbar.SiteColor);
+    Equal(0.0, t.Sidebar.SiteColor);
+    Equal(DockEdge.Left, t.Panel.Edge);
+    Equal(420.0, t.Panel.Width);
+    True(t.Panel.Sections.Items.SequenceEqual(["visualizer", "web"]));
+    Equal(200, t.Storage.CacheLimit);
+    Equal(30, t.Storage.ForgetAfterDays);
+    True(t.Storage.Keep.Has("bank.example.com") && t.Storage.SignOut);
+    Equal(t, ThemeParser.Parse(ThemeWriter.ToJson(t)).Theme);
+    var top = ThemeParser.Parse("{\"schemaVersion\":1,\"panel\":{\"edge\":\"top\"},\"storage\":{\"cacheLimit\":10}}");
+    Equal(DockEdge.Right, top.Theme.Panel.Edge);
+    Equal(50, top.Theme.Storage.CacheLimit);
+    Equal(1, top.Issues.Count);
+
+    var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json");
+    try
+    {
+        new Session([new("https://a.example/", "A")], 0, Panel: [new("https://open.spotify.com/", "Spotify"), new("https://www.youtube.com/", "YouTube")], PanelShown: 5, PanelOpen: true).Save(path);
+        var s = Session.Load(path)!;
+        Equal(2, s.Panel!.Count);
+        Equal(1, s.PanelShown);
+        True(s.PanelOpen);
+        new Session([new("https://a.example/", "A")], 0).Save(path);
+        Equal(0, Session.Load(path)!.Panel!.Count);
+    }
+    finally
+    {
+        File.Delete(path);
+    }
+});
+
+Test("storage cleanup: sites, which ones are forgotten, folder sizes", () =>
+{
+    Equal("spotify.com", SiteData.Site("open.spotify.com"));
+    Equal("spotify.com", SiteData.Site(".spotify.com"));
+    Equal("bbc.co.uk", SiteData.Site("news.bbc.co.uk"));
+    Equal("example.com", SiteData.Site("www.example.com"));
+    Equal("github.io", SiteData.Site("me.github.io"));
+    Equal("127.0.0.1", SiteData.Site("127.0.0.1"));
+    var day = 86400000L;
+    var now = 1000 * day;
+    var visits = new[] { ("www.youtube.com", now - 2 * day), ("old.example", now - 200 * day), ("accounts.google.com", now - 5 * day) };
+    var cookies = new[] { ".youtube.com", "old.example", ".google.com", ".doubleclick.net", ".kept.example" };
+    var stale = SiteData.Stale(cookies, visits, ["www.kept.example"], now, 90);
+    True(stale.SequenceEqual(["old.example", "doubleclick.net"]));
+    // History that doesn't go back far enough (just cleared, or turned off) never forgets sites it hasn't seen.
+    True(SiteData.Stale(cookies, [("www.youtube.com", now - day)], [], now, 90).Count == 0);
+    True(SiteData.Stale(cookies, visits, [], now, 0).Count == 0);
+
+    var dir = Directory.CreateTempSubdirectory().FullName;
+    try
+    {
+        void Put(string rel, int bytes)
+        {
+            var f = Path.Combine(dir, rel);
+            Directory.CreateDirectory(Path.GetDirectoryName(f)!);
+            File.WriteAllBytes(f, new byte[bytes]);
+        }
+        Put("EBWebView/Default/Cache/Cache_Data/data_1", 1000);
+        Put("EBWebView/Default/Code Cache/js/a", 500);
+        Put("EBWebView/Default/Service Worker/CacheStorage/x/y", 300);
+        Put("EBWebView/Default/IndexedDB/https_a.example_0.indexeddb.leveldb/1.log", 200);
+        Put("EBWebView/Default/Network/Cookies", 50);
+        Put("EBWebView/Default/Preferences", 10);
+        var u = StorageUse.Measure(dir);
+        Equal(1500L, u.Cache);
+        Equal(300L, u.Offline);
+        Equal(250L, u.SiteData);
+        Equal(2060L, u.Total);
+        Equal("2 MB", StorageUse.Size(2 << 20));
+    }
+    finally
+    {
+        Directory.Delete(dir, true);
+    }
+});
+
+Test("site tint keeps the theme's text readable", () =>
+{
+    var surface = Rgba.Parse("#171A1E");
+    var text = Rgba.Parse("#F3F4F1");
+    var dark = SiteTint.For(Rgba.Parse("#0F0F0F"), surface, text, 0.45);
+    Equal(115, (int)dark.A);
+    var white = SiteTint.For(Rgba.Parse("#FFFFFF"), surface, text, 0.9);
+    True(white.A < 0.9 * 255 && white.A > 0);
+    var mixed = new Rgba((byte)(23 + (255 - 23) * white.A / 255.0), (byte)(26 + (255 - 26) * white.A / 255.0), (byte)(30 + (255 - 30) * white.A / 255.0));
+    True(SiteTint.Contrast(mixed, text) >= 4.4);
+    Equal(0, (int)SiteTint.For(Rgba.Parse("#FF0000"), surface, text, 0).A);
+});
+
 return Summary();

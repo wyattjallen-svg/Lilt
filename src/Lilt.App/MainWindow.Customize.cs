@@ -26,6 +26,7 @@ public sealed partial class MainWindow
         ["bookmark"] = "Bookmark star", ["downloads"] = "Downloads", ["extensions"] = "Extensions", ["customize"] = "Customize",
         ["sidebar"] = "Sidebar button", ["menu"] = "Menu", ["media"] = "Now playing (while something plays)", ["split"] = "Split view",
         ["palette"] = "Command palette", ["tabs"] = "Tabs", ["bookmarks"] = "Bookmarks", ["layout"] = "Dock and pin buttons",
+        ["panel"] = "Panel button", ["web"] = "Sites you keep in the panel", ["visualizer"] = "Visualizer", ["player"] = "Now playing",
         ["logo"] = "Logo", ["clock"] = "Clock and date", ["search"] = "Search box", ["tiles"] = "Bookmark tiles", ["hint"] = "Shortcut hint", ["gear"] = "Customize button",
     };
     DispatcherQueueTimer? applyTimer, themeSaveTimer;
@@ -48,7 +49,11 @@ public sealed partial class MainWindow
         PowerPage.Visibility = page == "power" ? Visibility.Visible : Visibility.Collapsed;
         PrivacyPage.Visibility = page == "privacy" ? Visibility.Visible : Visibility.Collapsed;
         if (page == "keys") BuildKeys();
-        if (page == "privacy") FillPermissions();
+        if (page == "privacy")
+        {
+            FillPermissions();
+            FillStorage();
+        }
     }
 
     void SyncCustomize()
@@ -104,6 +109,15 @@ public sealed partial class MainWindow
         TabWidthSlider.Value = t.Sidebar.TabWidth;
         CloseButtonsCheck.IsChecked = t.Sidebar.CloseButtons;
         AddressWidthSlider.Value = t.Toolbar.AddressWidth;
+        ToolbarSiteColorSlider.Value = Math.Round(t.Toolbar.SiteColor * 100);
+        SidebarSiteColorSlider.Value = Math.Round(t.Sidebar.SiteColor * 100);
+        Select(PanelEdgeCombo, Camel(t.Panel.Edge.ToString()));
+        PanelWidthSlider.Value = t.Panel.Width;
+        CacheLimitSlider.Value = t.Storage.CacheLimit;
+        ForgetSlider.Value = t.Storage.ForgetAfterDays;
+        SignOutCheck.IsChecked = t.Storage.SignOut;
+        SignOutCheck.IsEnabled = t.Storage.ForgetAfterDays > 0;
+        if (KeepBox.FocusState == FocusState.Unfocused) KeepBox.Text = string.Join("\r", t.Storage.Keep.Items);
         // The known engines, plus your own address when theme.json has one.
         SearchCombo.Items.Clear();
         foreach (var (key, engine) in Lilt.Core.Navigation.SearchEngines.Known) SearchCombo.Items.Add(new ComboBoxItem { Content = engine.Name, Tag = key });
@@ -130,6 +144,7 @@ public sealed partial class MainWindow
         BuildPresets();
         BuildArrange(ToolbarArrange, ToolbarSpec.All, t.Toolbar.Items, ids => Current with { Toolbar = Current.Toolbar with { Items = ids } });
         BuildArrange(SidebarArrange, SidebarSpec.All, t.Sidebar.Sections, ids => Current with { Sidebar = Current.Sidebar with { Sections = ids } });
+        BuildArrange(PanelArrange, PanelSpec.All, t.Panel.Sections, ids => Current with { Panel = Current.Panel with { Sections = ids } });
         BuildArrange(HomeArrange, HomeSpec.All, t.Home.Items, ids => Current with { Home = Current.Home with { Items = ids } });
         syncing = false;
 
@@ -201,8 +216,17 @@ public sealed partial class MainWindow
             Colors = t.Colors with { Surface = t.Colors.Surface.WithAlpha((byte)Math.Round(ChromeOpacitySlider.Value * 2.55)) },
             Shape = t.Shape with { Radius = radius, ControlRadius = Math.Round(radius * 0.75) },
             Typography = t.Typography with { Size = FontSizeSlider.Value, Family = family },
-            Toolbar = t.Toolbar with { Height = ToolbarHeightSlider.Value, AddressWidth = AddressWidthSlider.Value },
-            Sidebar = t.Sidebar with { Width = SidebarWidthSlider.Value, TabWidth = TabWidthSlider.Value, CloseButtons = CloseButtonsCheck.IsChecked == true },
+            Toolbar = t.Toolbar with { Height = ToolbarHeightSlider.Value, AddressWidth = AddressWidthSlider.Value, SiteColor = ToolbarSiteColorSlider.Value / 100 },
+            Sidebar = t.Sidebar with
+            {
+                Width = SidebarWidthSlider.Value, TabWidth = TabWidthSlider.Value, CloseButtons = CloseButtonsCheck.IsChecked == true,
+                SiteColor = SidebarSiteColorSlider.Value / 100,
+            },
+            Panel = t.Panel with { Edge = Pick(PanelEdgeCombo, t.Panel.Edge), Width = PanelWidthSlider.Value },
+            Storage = t.Storage with
+            {
+                CacheLimit = (int)CacheLimitSlider.Value, ForgetAfterDays = (int)ForgetSlider.Value, SignOut = SignOutCheck.IsChecked == true,
+            },
             Motion = new MotionSpec(AnimationsCheck.IsChecked == true, (int)DurationSlider.Value, WindowDragCheck.IsChecked == true),
             Density = DensityCombo.SelectedItem is ComboBoxItem { Tag: string d } && Enum.TryParse<Density>(d, true, out var density) ? density : t.Density,
             Home = t.Home with { Glass = HomeGlassCheck.IsChecked == true, Dim = HomeDimSlider.Value / 100 },
@@ -250,6 +274,13 @@ public sealed partial class MainWindow
         var hosts = Hosts(MusicSitesBox.Text);
         if (hosts.SequenceEqual(Current.Media.MusicSites.Items)) return;
         Queue(Current with { Media = Current.Media with { MusicSites = new Ids(hosts) } });
+    }
+
+    void Keep_LostFocus(object sender, RoutedEventArgs e)
+    {
+        var hosts = Hosts(KeepBox.Text);
+        if (hosts.SequenceEqual(Current.Storage.Keep.Items)) return;
+        Queue(Current with { Storage = Current.Storage with { Keep = new Ids(hosts) } });
     }
 
     void GlassOff_LostFocus(object sender, RoutedEventArgs e)
@@ -557,6 +588,8 @@ public sealed partial class MainWindow
             Media = cur.Media,
             Split = cur.Split,
             Shortcuts = cur.Shortcuts,
+            Panel = cur.Panel,
+            Storage = cur.Storage,
         }, theme);
         SyncCustomize();
         SaveTheme();

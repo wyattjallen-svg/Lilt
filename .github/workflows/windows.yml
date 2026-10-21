@@ -384,6 +384,28 @@ jobs:
           $drm = @(Get-Content smoke-media-probe.txt -ErrorAction SilentlyContinue | Where-Object { $_ -match 'probe page \{' } | ForEach-Object { (($_ -split 'probe page ', 2)[1] | ConvertFrom-Json).drm })
           Check 'Protected content (DRM) key systems (info)' $true "$(if ($drm) { ($drm[0].PSObject.Properties | ForEach-Object { "$($_.Name -replace 'com\.microsoft\.|com\.|org\.w3\.', ''): $($_.Value)" }) -join '; ' } else { 'no probe' })"
 
+          # v0.7: the playing tab moves into the panel and keeps playing, the visualizer docks under it, the toolbar takes a
+          # page's theme-color, emptying caches keeps cookies (sign-ins), and the panel is saved with the session.
+          $sdir = Join-Path $env:RUNNER_TEMP 'lilt-v07'
+          New-Item -ItemType Directory "$sdir/newtab" -Force | Out-Null
+          Copy-Item tools/media-test.html "$sdir/newtab/media-test.html"
+          $script = 'wait 4000; toPanel; wait 3000; state; mark panel; visualizer; wait 2500; state; mark docked; wait 500; go example.com; wait 4000; ' +
+            "eval (document.head.insertAdjacentHTML('beforeend', '<meta name=theme-color content=#3366cc>'), document.cookie = 'lilt=1', 1); wait 2000; state; mark color; wait 500; " +
+            'tidy caches; wait 1000; eval document.cookie; state; panel; wait 1500; state; mark hidden'
+          $sdir = Smoke 'v07' @('--url', 'https://newtab.lilt.example/media-test.html', '--browser-args', '"--autoplay-policy=no-user-gesture-required"', '--run', "`"$script`"") {
+            param($p); $p.Refresh(); [void][Lilt.Input]::SetForegroundWindow($p.MainWindowHandle); Follow 'v07'
+          } -settle 1
+          $sdir = @($sdir)[-1]
+          $s = States 'v07'
+          $sk = if (Test-Path smoke-v07.keys.txt) { @(Get-Content smoke-v07.keys.txt) } else { @() }
+          Check 'A playing tab moves into the panel and keeps playing' ($s.Count -gt 0 -and $s[0].panel -eq 1 -and $s[0].tabs -eq 1 -and $s[0].media.Playing -and $s[0].panelUrl -like '*media-test*') "$(if ($s.Count) { "panel $($s[0].panel), tabs $($s[0].tabs), playing $($s[0].media.Playing), $($s[0].panelUrl)" })"
+          Check 'The visualizer docks under the panel' ($s.Count -gt 1 -and $s[1].docked -like '*visualizer*' -and $s[1].visualizer) "$(if ($s.Count -gt 1) { "docked '$($s[1].docked)', visualizer $($s[1].visualizer)" })"
+          Check 'The toolbar takes the page''s theme-color' ($s.Count -gt 2 -and $s[2].siteColor -eq '#3366CC' -and $s[2].tint -and $s[2].tint -notlike '#00*') "$(if ($s.Count -gt 2) { "site $($s[2].siteColor), tint $($s[2].tint)" })"
+          Check 'Emptying caches keeps cookies (you stay signed in)' ([bool]($sk -match ' eval lilt=1') -and [bool]($sk -match ' storage cache ')) (($sk -match ' (storage|eval) ') -join ' / ')
+          Check 'Hiding the panel keeps it playing and lets the visualizer float' ($s.Count -gt 4 -and $s[4].panel -eq -1 -and $s[4].docked -eq '' -and $s[4].media.Playing) "$(if ($s.Count -gt 4) { "panel $($s[4].panel), docked '$($s[4].docked)', playing $($s[4].media.Playing)" })"
+          $ss = if (Test-Path "$sdir/session.json") { Get-Content "$sdir/session.json" -Raw | ConvertFrom-Json } else { $null }
+          Check 'The panel is saved with the session' ($ss -and @($ss.panel).Count -eq 1 -and @($ss.panel)[0].url -like '*media-test*') "$(if ($ss) { ($ss.panel | ForEach-Object url) -join ', ' })"
+
           [void](Smoke 'proton-pass' @('--install-extension', 'ghmbeldphafepmbegfdlkpapadhbakde') -settle 4)
           $pp = Extensions 'proton-pass'
           Check 'Proton Pass installs from the Chrome Web Store' ([bool]($pp -match 'Proton')) ($pp -join '; ')

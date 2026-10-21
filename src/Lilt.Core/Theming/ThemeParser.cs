@@ -18,13 +18,13 @@ public static class ThemeParser
 
     public static IReadOnlyDictionary<string, string[]> KnownKeys { get; } = new Dictionary<string, string[]>
     {
-        [""] = ["$schema", "schemaVersion", "name", "base", "backdrop", "colors", "typography", "shape", "density", "toolbar", "sidebar", "motion", "pages", "home", "power", "media", "split", "shortcuts"],
+        [""] = ["$schema", "schemaVersion", "name", "base", "backdrop", "colors", "typography", "shape", "density", "toolbar", "sidebar", "motion", "pages", "home", "power", "media", "split", "shortcuts", "panel", "storage"],
         ["backdrop"] = ["material", "tint", "tintOpacity", "luminosityOpacity"],
         ["colors"] = ["background", "surface", "surfaceRaised", "border", "text", "textMuted", "accent", "onAccent", "hover", "pressed", "page"],
         ["typography"] = ["family", "size", "weight"],
         ["shape"] = ["radius", "controlRadius", "borderWidth"],
-        ["toolbar"] = ["height", "items", "addressWidth"],
-        ["sidebar"] = ["edge", "width", "height", "autoHide", "revealEdge", "hideDelay", "sections", "tabWidth", "closeButtons"],
+        ["toolbar"] = ["height", "items", "addressWidth", "siteColor"],
+        ["sidebar"] = ["edge", "width", "height", "autoHide", "revealEdge", "hideDelay", "sections", "tabWidth", "closeButtons", "siteColor"],
         ["motion"] = ["animations", "duration", "windowDrag"],
         ["pages"] = ["colorScheme", "peek", "search", "history", "glass", "glassOpacity", "glassOff", "forceDark", "tracking", "gestures", "scrollbars"],
         // clock/search/tiles are the v0.2 switches, still read when "items" is absent.
@@ -35,6 +35,8 @@ public static class ThemeParser
         ["media.visualizer"] = ["show", "x", "y", "width", "height", "opacity"],
         ["media.pip"] = ["show", "x", "y", "width", "height", "opacity"],
         ["split"] = ["orientation", "ratio", "gap"],
+        ["panel"] = ["edge", "width", "sections"],
+        ["storage"] = ["cacheLimit", "forgetAfterDays", "keep", "signOut"],
         ["shortcuts"] = Commands.Defaults.Keys.ToArray(),
     };
 
@@ -126,7 +128,7 @@ public static class ThemeParser
 
             var tb = r.Section(root, "toolbar");
             var toolbar = new ToolbarSpec(r.Num(tb, "height", 32, 64, d.Toolbar.Height), r.List(tb, "items", ToolbarSpec.All, d.Toolbar.Items),
-                r.Num(tb, "addressWidth", 300, 2400, d.Toolbar.AddressWidth));
+                r.Num(tb, "addressWidth", 300, 2400, d.Toolbar.AddressWidth), r.Num(tb, "siteColor", 0, 1, d.Toolbar.SiteColor));
 
             var sb = r.Section(root, "sidebar");
             var ds = d.Sidebar;
@@ -139,7 +141,8 @@ public static class ThemeParser
                 r.Int(sb, "hideDelay", 0, 5000, ds.HideDelay),
                 r.List(sb, "sections", SidebarSpec.All, ds.Sections),
                 r.Num(sb, "tabWidth", 100, 400, ds.TabWidth),
-                r.Bool(sb, "closeButtons", ds.CloseButtons));
+                r.Bool(sb, "closeButtons", ds.CloseButtons),
+                r.Num(sb, "siteColor", 0, 1, ds.SiteColor));
 
             var mo = r.Section(root, "motion");
             var motion = new MotionSpec(
@@ -194,6 +197,20 @@ public static class ThemeParser
                 r.Num(sp, "ratio", 0.15, 0.85, d.Split.Ratio),
                 r.Num(sp, "gap", 0, 24, d.Split.Gap));
 
+            var pn = r.Section(root, "panel");
+            var panelEdge = r.Enum(pn, "edge", d.Panel.Edge);
+            if (!panelEdge.IsVertical())
+            {
+                issues.Add(new("panel.edge", "the panel goes on the left or the right; using right"));
+                panelEdge = DockEdge.Right;
+            }
+            var panel = new PanelSpec(panelEdge, r.Num(pn, "width", 200, 1200, d.Panel.Width), r.List(pn, "sections", PanelSpec.All, d.Panel.Sections));
+
+            var st = r.Section(root, "storage");
+            var cacheLimit = r.Int(st, "cacheLimit", 0, 8192, d.Storage.CacheLimit);
+            var storage = new StorageSpec(cacheLimit is > 0 and < 50 ? 50 : cacheLimit, r.Int(st, "forgetAfterDays", 0, 3650, d.Storage.ForgetAfterDays),
+                r.Hosts(st, "keep", d.Storage.Keep), r.Bool(st, "signOut", d.Storage.SignOut));
+
             var sc = r.Section(root, "shortcuts");
             var shortcuts = new ShortcutMap(Commands.Defaults.Keys.ToDictionary(k => k, k => r.Gestures(sc, k, d.Shortcuts.For(k))));
 
@@ -230,7 +247,9 @@ public static class ThemeParser
                 power,
                 media,
                 split,
-                shortcuts);
+                shortcuts,
+                panel,
+                storage);
 
             return new ThemeLoadResult(theme, issues, false);
         }

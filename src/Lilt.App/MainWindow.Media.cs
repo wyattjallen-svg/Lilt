@@ -51,7 +51,7 @@ public sealed partial class MainWindow
         UpdateMedia();
     }
 
-    bool OnScreen(BrowserTab tab) => tab == active || tab == floating || (active is not null && Partner(active) == tab);
+    bool OnScreen(BrowserTab tab) => tab == active || tab == floating || (active is not null && Partner(active) == tab) || PanelShows(tab);
 
     bool PlayerWanted()
     {
@@ -61,8 +61,9 @@ public sealed partial class MainWindow
         {
             WidgetShow.Never => false,
             WidgetShow.Always => info is not null,
-            // While the playing tab is out of sight: you can see (and control) the page itself otherwise.
-            _ => info is not null && !OnScreen(mediaTab!),
+            // While the playing tab is out of sight: you can see (and control) the page itself otherwise. Docked in the
+            // panel, it's part of the layout you chose, so it shows whenever something plays.
+            _ => info is not null && (!OnScreen(mediaTab!) || Docked("player")),
         };
     }
 

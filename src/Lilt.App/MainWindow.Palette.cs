@@ -122,7 +122,7 @@ public sealed partial class MainWindow
         foreach (var name in workspaces.Where(n => n != workspace))
             yield return new($"Workspace: {Workspace.Display(name)}", "Switch workspace", "\uE8B7", () => SwitchWorkspace(name), Listed: true);
         foreach (var tab in AllTabs)
-            yield return new(tab.DisplayTitle, tab == active ? "This tab" : tabs.Contains(tab) ? "Switch to tab" : $"Tab in {Workspace.Display(tab.Workspace)}", "", () => Activate(tab), Listed: true);
+            yield return new(tab.DisplayTitle, tab == active ? "This tab" : tabs.Contains(tab) ? "Switch to tab" : panelTabs.Contains(tab) ? "In the panel" : $"Tab in {Workspace.Display(tab.Workspace)}", "", () => Activate(tab), Listed: true);
         if (active is { } a && Partner(a) is not null)
         {
             yield return new("Swap split panes", "Split view", "", SwapSplit, Listed: true);
@@ -176,6 +176,18 @@ public sealed partial class MainWindow
             yield return new($"Block trackers: {level.ToString().ToLowerInvariant()}", t.Pages.Tracking == level ? "Current" : "Privacy", "\uE72E",
                 () => Queue(Current with { Pages = Current.Pages with { Tracking = level } }));
         yield return new("New workspace", "Workspaces", "\uE710", () => _ = NewWorkspaceAsync(null));
+        yield return new("Open an address in the panel", "Panel", "\uE89F", () => _ = AskPanelAddressAsync());
+        yield return new(t.Panel.Edge == DockEdge.Left ? "Move the panel to the right" : "Move the panel to the left", "Panel", "\uE8AB",
+            () => Queue(Current with { Panel = Current.Panel with { Edge = Current.Panel.Edge == DockEdge.Left ? DockEdge.Right : DockEdge.Left } }));
+        yield return Toggle("Visualizer docked in the panel", t.Panel.Sections.Has("visualizer"), x => x with { Panel = x.Panel with { Sections = ToggleId(x.Panel.Sections, "visualizer") } });
+        yield return Toggle("Player docked in the panel", t.Panel.Sections.Has("player"), x => x with { Panel = x.Panel with { Sections = ToggleId(x.Panel.Sections, "player") } });
+        yield return Toggle("Toolbar takes the site's color", t.Toolbar.SiteColor > 0, x => x with { Toolbar = x.Toolbar with { SiteColor = x.Toolbar.SiteColor > 0 ? 0 : 0.45 } });
+        yield return Toggle("Sidebar takes the site's color", t.Sidebar.SiteColor > 0, x => x with { Sidebar = x.Sidebar with { SiteColor = x.Sidebar.SiteColor > 0 ? 0 : 0.2 } });
+        yield return new("Empty caches now", "Storage: you stay signed in", "\uE74D", () => EmptyCaches_Click(this, new RoutedEventArgs()));
+        if (active is { IsHome: false } kt && Uri.TryCreate(kt.Url, UriKind.Absolute, out var ku) && UrlPolicy.IsWeb(ku))
+            yield return new(KeptHere ? "Let this site be tidied up" : "Never tidy up this site", UrlPolicy.DisplayHost(kt.Url), "\uE72E", ToggleKeepHere);
+        yield return Toggle("Tidy up sites I stop using", t.Storage.ForgetAfterDays > 0,
+            x => x with { Storage = x.Storage with { ForgetAfterDays = x.Storage.ForgetAfterDays > 0 ? 0 : 90 } });
         if (active is { } mt && workspaces.Count > 1)
             foreach (var name in workspaces.Where(n => n != workspace))
                 yield return new($"Move this tab to {Workspace.Display(name)}", "Workspaces", "\uE8B7", () => MoveToWorkspace(mt, name));

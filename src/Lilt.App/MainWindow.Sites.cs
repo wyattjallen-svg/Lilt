@@ -89,7 +89,12 @@ public sealed partial class MainWindow
 
     void OnGesture(CoreWebView2 sender, string path)
     {
-        if (!tabs.Any(t => t.Core == sender) || !gestureCommands.TryGetValue(path, out var command)) return;
+        if (!gestureCommands.TryGetValue(path, out var command)) return;
+        if (!tabs.Any(t => t.Core == sender))
+        {
+            PanelCommand(sender, command);
+            return;
+        }
         if (sender != core && tabs.FirstOrDefault(t => t.Core == sender) is { } tab) Activate(tab);
         RunCommand(command, "gesture");
     }

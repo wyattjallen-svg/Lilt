@@ -26,10 +26,12 @@
   "shape": { "radius": 10, "controlRadius": 8, "borderWidth": 1 },
   "density": "standard",
 
+  // siteColor (here and in "sidebar"): how strongly it takes on the color of the site you're on, 0 to 1.
   "toolbar": {
     "height": 40,
     "addressWidth": 900,
-    "items": ["back", "forward", "reload", "home", "address", "bookmark", "media", "downloads", "extensions", "customize", "sidebar", "menu"]
+    "siteColor": 0.45,
+    "items": ["back", "forward", "reload", "home", "address", "bookmark", "media", "panel", "downloads", "extensions", "customize", "sidebar", "menu"]
   },
   "sidebar": {
     "edge": "left",
@@ -41,7 +43,8 @@
     "sections": ["tabs", "bookmarks", "layout"],
     // In a tab strip (sidebar at the top or bottom), each tab is this wide. closeButtons: an × on every tab.
     "tabWidth": 200,
-    "closeButtons": true
+    "closeButtons": true,
+    "siteColor": 0.2
   },
   "motion": { "animations": true, "duration": 160, "windowDrag": true },
   // colorScheme: theme follows "base"; auto follows Windows; or force light/dark for websites.
@@ -64,6 +67,12 @@
       "bandcamp.com", "www.pandora.com", "music.amazon.com", "www.mixcloud.com", "tunein.com", "radio.garden"]
   },
   "split": { "orientation": "horizontal", "ratio": 0.5, "gap": 6 },
+  // The panel beside the page (F4): drag a tab in to keep it there. sections, top to bottom: "web" (the tabs you put
+  // there), "visualizer", "player"; leave the visualizer or player out to keep it floating over the page.
+  "panel": { "edge": "right", "width": 380, "sections": ["web", "visualizer", "player"] },
+  // cacheLimit: MB of cached files (0 = the engine decides; after a restart). forgetAfterDays: sites you haven't opened
+  // in that long lose what they stored and their readable cookies; sign-ins stay unless signOut is true. keep: never touched.
+  "storage": { "cacheLimit": 300, "forgetAfterDays": 90, "signOut": false, "keep": [] },
   // Change any shortcut: "command": "Ctrl+Shift+K", a list, or "" for none. Commands left out keep their defaults.
   "shortcuts": {}
 }

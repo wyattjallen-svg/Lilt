@@ -44,16 +44,17 @@ public sealed record Ids(IReadOnlyList<string> Items)
 }
 
 // Every toolbar element; "address" stretches, the rest sit to its left or right in list order.
-// AddressWidth: the address bar's widest width.
-public sealed record ToolbarSpec(double Height, Ids Items, double AddressWidth = 900)
+// AddressWidth: the address bar's widest width. SiteColor: how strongly the toolbar takes on the site's own color (0 = never).
+public sealed record ToolbarSpec(double Height, Ids Items, double AddressWidth = 900, double SiteColor = 0.45)
 {
-    public static readonly string[] All = ["back", "forward", "reload", "home", "address", "bookmark", "media", "split", "downloads", "extensions", "palette", "customize", "sidebar", "menu"];
-    public static readonly string[] Defaults = ["back", "forward", "reload", "home", "address", "bookmark", "media", "downloads", "extensions", "customize", "sidebar", "menu"];
+    public static readonly string[] All = ["back", "forward", "reload", "home", "address", "bookmark", "media", "split", "panel", "downloads", "extensions", "palette", "customize", "sidebar", "menu"];
+    public static readonly string[] Defaults = ["back", "forward", "reload", "home", "address", "bookmark", "media", "panel", "downloads", "extensions", "customize", "sidebar", "menu"];
 }
 
 // TabWidth: a tab's width in a tab strip (sidebar along the top or bottom). CloseButtons: an × on every tab.
+// SiteColor: how strongly the sidebar takes on the site's own color (0 = never).
 public sealed record SidebarSpec(DockEdge Edge, double Width, double Height, bool AutoHide, double RevealEdge, int HideDelay, Ids Sections,
-    double TabWidth = 200, bool CloseButtons = true)
+    double TabWidth = 200, bool CloseButtons = true, double SiteColor = 0.2)
 {
     public static readonly string[] All = ["tabs", "bookmarks", "layout"];
 }
@@ -124,6 +125,21 @@ public sealed record MediaSpec(WidgetSpec Player, WidgetSpec Visualizer, WidgetS
     ];
 }
 
+// The panel beside the page: tabs you keep there (music, chat, a reference), and the visualizer and player docked
+// under them if you like. Edge: left or right. Sections, top to bottom: "web", "visualizer", "player"; leave one out to
+// keep it floating (the visualizer and player) or hidden (web).
+public sealed record PanelSpec(DockEdge Edge, double Width, Ids Sections)
+{
+    public static readonly string[] All = ["web", "visualizer", "player"];
+}
+
+// What sites keep on your PC, trimmed without signing you out. CacheLimit: MB of cached files the engine may keep
+// (0 = its own limit; applies after a restart); sites' offline copies are emptied once they pass it too.
+// ForgetAfterDays: sites you haven't opened in that many days lose what they stored and their readable cookies (0 = never);
+// their sign-in cookies (the ones pages can't read) stay unless SignOut is on. Sites in Keep, bookmarked sites and sites
+// open in a tab are never touched.
+public sealed record StorageSpec(int CacheLimit, int ForgetAfterDays, Ids Keep, bool SignOut = false);
+
 public enum SplitOrientation { Horizontal, Vertical }
 
 // Split view: two tabs side by side (horizontal) or stacked (vertical). Ratio is the first pane's share.
@@ -146,7 +162,9 @@ public sealed record Theme(
     PowerSpec Power,
     MediaSpec Media,
     SplitSpec Split,
-    ShortcutMap Shortcuts)
+    ShortcutMap Shortcuts,
+    PanelSpec Panel,
+    StorageSpec Storage)
 {
     // "Lilt Minimal": deep charcoal, slate surfaces, warm white text, sage accent.
     public static Theme Default { get; } = new(
@@ -181,5 +199,7 @@ public sealed record Theme(
             Pip: new WidgetSpec(WidgetShow.Auto, X: 0.6, Y: 0.55, Width: 400, Height: 0, Opacity: 1),
             Bars: 32, VisualizerStyle.Bars, VisualizerSource.Auto, MediaKeys: true, AutoPictureInPicture: false, new Ids(MediaSpec.DefaultMusicSites)),
         new SplitSpec(SplitOrientation.Horizontal, Ratio: 0.5, Gap: 6),
-        ShortcutMap.Default);
+        ShortcutMap.Default,
+        new PanelSpec(DockEdge.Right, Width: 380, new Ids(PanelSpec.All)),
+        new StorageSpec(CacheLimit: 300, ForgetAfterDays: 90, new Ids()));
 }

@@ -5,7 +5,9 @@ public sealed record SessionTab(string Url, string Title, bool Pinned = false, s
 
 // Open tabs, saved on every change and restored on the next start. Active is the shown tab's index; Split is the
 // index of the tab beside it in split view, or -1. Workspaces lists their names in order (tabs name theirs).
-public sealed record Session(IReadOnlyList<SessionTab> Tabs, int Active, int Split = -1, IReadOnlyList<string>? Workspaces = null)
+// Panel: the tabs kept in the panel beside the page (PanelShown is the one showing; PanelOpen whether the panel is).
+public sealed record Session(IReadOnlyList<SessionTab> Tabs, int Active, int Split = -1, IReadOnlyList<string>? Workspaces = null,
+    IReadOnlyList<SessionTab>? Panel = null, int PanelShown = 0, bool PanelOpen = false)
 {
     public static Session? Load(string path)
     {
@@ -19,6 +21,8 @@ public sealed record Session(IReadOnlyList<SessionTab> Tabs, int Active, int Spl
             Active = active,
             Split = s.Split >= 0 && s.Split < s.Tabs.Count && s.Split != active && tabs[s.Split].Workspace == tabs[active].Workspace ? s.Split : -1,
             Workspaces = names,
+            Panel = s.Panel ?? [],
+            PanelShown = Math.Clamp(s.PanelShown, 0, Math.Max(0, (s.Panel?.Count ?? 1) - 1)),
         };
     }
 

@@ -14,7 +14,7 @@ public sealed partial class MainWindow
     readonly Dictionary<string, List<BrowserTab>> stashed = [];
     string workspace = "";
 
-    IEnumerable<BrowserTab> AllTabs => tabs.Concat(stashed.Values.SelectMany(l => l));
+    IEnumerable<BrowserTab> AllTabs => tabs.Concat(stashed.Values.SelectMany(l => l)).Concat(panelTabs);
 
     string? WorkspaceOf(BrowserTab tab) => tabs.Contains(tab) ? workspace : stashed.FirstOrDefault(p => p.Value.Contains(tab)).Key;
 
@@ -63,15 +63,7 @@ public sealed partial class MainWindow
     {
         if (name == workspace || !tabs.Contains(tab)) return;
         if (!workspaces.Contains(name)) workspaces.Add(name);
-        if (floating == tab) DockFloating(activate: false);
-        if (InSplit(tab)) split = null;
-        if (tabs.Count == 1) AddTab(BrowserEngine.NewTabUri.AbsoluteUri);
-        else if (tab == active)
-        {
-            var i = tabs.IndexOf(tab);
-            Activate(tabs[i + 1 < tabs.Count ? i + 1 : i - 1]);
-        }
-        tabs.Remove(tab);
+        TakeOut(tab);
         Stash(tab, name);
         LayoutPages();
         UpdateWorkspaceButton();
@@ -134,7 +126,7 @@ public sealed partial class MainWindow
         engine.Detach(tab.Core);
         if (tab.View is { } view)
         {
-            PageHost.Children.Remove(view);
+            (view.Parent as Panel)?.Children.Remove(view);
             view.Close();
         }
         tab.View = null;

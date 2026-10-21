@@ -58,6 +58,8 @@ public sealed class BrowserTab(string url, string title = "", bool pinned = fals
     // What the page last reported about its media, and when (positions move on from there while playing).
     internal MediaInfo? Media { get; set; }
     internal long MediaAt { get; set; }
+    // The site's own color as the page reports it, for the toolbar's tint (null: none or not reported yet).
+    internal Lilt.Core.Theming.Rgba? SiteColor { get; set; }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 

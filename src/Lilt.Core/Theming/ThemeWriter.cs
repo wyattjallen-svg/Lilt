@@ -31,11 +31,11 @@ public static class ThemeWriter
             ["typography"] = Obj(("family", t.Typography.Family), ("size", t.Typography.Size), ("weight", t.Typography.Weight)),
             ["shape"] = Obj(("radius", t.Shape.Radius), ("controlRadius", t.Shape.ControlRadius), ("borderWidth", t.Shape.BorderWidth)),
             ["density"] = Camel(t.Density),
-            ["toolbar"] = With(Obj(("height", t.Toolbar.Height), ("addressWidth", t.Toolbar.AddressWidth)), "items", t.Toolbar.Items),
+            ["toolbar"] = With(Obj(("height", t.Toolbar.Height), ("addressWidth", t.Toolbar.AddressWidth), ("siteColor", t.Toolbar.SiteColor)), "items", t.Toolbar.Items),
             ["sidebar"] = With(Obj(
                 ("edge", Camel(t.Sidebar.Edge)), ("width", t.Sidebar.Width), ("height", t.Sidebar.Height),
                 ("autoHide", t.Sidebar.AutoHide), ("revealEdge", t.Sidebar.RevealEdge), ("hideDelay", t.Sidebar.HideDelay),
-                ("tabWidth", t.Sidebar.TabWidth), ("closeButtons", t.Sidebar.CloseButtons)), "sections", t.Sidebar.Sections),
+                ("tabWidth", t.Sidebar.TabWidth), ("closeButtons", t.Sidebar.CloseButtons), ("siteColor", t.Sidebar.SiteColor)), "sections", t.Sidebar.Sections),
             ["motion"] = Obj(("animations", t.Motion.Animations), ("duration", t.Motion.Duration), ("windowDrag", t.Motion.WindowDrag)),
             ["pages"] = With(Obj(("colorScheme", Camel(t.Pages.ColorScheme)), ("peek", t.Pages.Peek), ("search", t.Pages.Search), ("history", t.Pages.History),
                 ("glass", t.Pages.Glass), ("glassOpacity", t.Pages.GlassOpacity), ("forceDark", t.Pages.ForceDark), ("tracking", Camel(t.Pages.Tracking)),
@@ -45,6 +45,8 @@ public static class ThemeWriter
                 ("hideWhenOccluded", t.Power.HideWhenOccluded), ("lean", t.Power.Lean)),
             ["media"] = Media(t.Media),
             ["split"] = Obj(("orientation", Camel(t.Split.Orientation)), ("ratio", t.Split.Ratio), ("gap", t.Split.Gap)),
+            ["panel"] = With(Obj(("edge", Camel(t.Panel.Edge)), ("width", t.Panel.Width)), "sections", t.Panel.Sections),
+            ["storage"] = With(Obj(("cacheLimit", t.Storage.CacheLimit), ("forgetAfterDays", t.Storage.ForgetAfterDays), ("signOut", t.Storage.SignOut)), "keep", t.Storage.Keep),
             ["shortcuts"] = Shortcuts(t.Shortcuts),
         };
         return Header + root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n";

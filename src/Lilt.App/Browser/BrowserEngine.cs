@@ -23,7 +23,8 @@ sealed record EngineOptions(
     bool MediaKeys,
     bool Lean,
     bool ForceDark = false,
-    bool ClassicScrollbars = false);
+    bool ClassicScrollbars = false,
+    int CacheLimitMb = 0);
 
 enum NoticeKind { Info, Success, Warning, Error }
 
@@ -81,6 +82,8 @@ sealed class BrowserEngine
     public event Action<CoreWebView2, string>? PeekRequested;
     public event Action<CoreWebView2, byte[]>? VisualizerData;
     public event Action<CoreWebView2, string>? Gesture;
+    // The site's own color ("#rrggbb", or "" for none), for the toolbar's tint.
+    public event Action<CoreWebView2, string>? SiteColor;
     // Set by the window: asks you whether a site may use something (camera, location...). Null means you closed the
     // question without answering.
     public Func<string, CoreWebView2PermissionKind, Task<(bool Allow, bool Remember)?>>? AskPermission { get; set; }
@@ -117,6 +120,8 @@ sealed class BrowserEngine
         if (o.Lean) args.AddRange(["--enable-low-end-device-mode", "--process-per-site"]);
         // Chromium's automatic dark mode for sites that have no dark look of their own.
         if (o.ForceDark) features.Add("WebContentsForceDark");
+        // storage.cacheLimit: Chromium's cap on its cache of downloaded files.
+        if (o.CacheLimitMb > 0) args.Add($"--disk-cache-size={o.CacheLimitMb * 1048576L}");
         foreach (var part in (o.BrowserArgs ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries))
         {
             if (part.StartsWith("--enable-features=", StringComparison.Ordinal)) features.AddRange(part["--enable-features=".Length..].Split(',', StringSplitOptions.RemoveEmptyEntries));
@@ -193,7 +198,7 @@ sealed class BrowserEngine
         // Single-page sites change content without a new document; see-through pages look again.
         core.SourceChanged += (sender, e) =>
         {
-            if (!e.IsNewDocument && glassAlpha > 0) _ = EvaluateAsync(core, "__lilt.reglass()");
+            if (!e.IsNewDocument) _ = EvaluateAsync(core, glassAlpha > 0 ? "__lilt.reglass(), __lilt.recolor()" : "__lilt.recolor()");
         };
     }
 
@@ -229,6 +234,9 @@ sealed class BrowserEngine
                 break;
             case "gesture" when m.TryGetProperty("g", out var g) && g.GetString() is { Length: > 0 and <= 4 } path:
                 Gesture?.Invoke(core, path);
+                break;
+            case "color" when m.TryGetProperty("c", out var sc) && sc.GetString() is { Length: 0 or 7 } color:
+                SiteColor?.Invoke(core, color);
                 break;
             case "behind" when m.TryGetProperty("url", out var b) && b.GetString() is { } link:
                 behindLink = (link, System.Environment.TickCount64);

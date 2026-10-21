@@ -108,6 +108,40 @@
   // Pages finish building after the helper arrives; look again when they're done.
   addEventListener('load', () => { if (glassAlpha) { glass(); setTimeout(glass, 1500); } });
 
+  // The site's own color, for Lilt's toolbar: its theme-color for the current light or dark mode, else the background
+  // along the top of the page. Sent only when it changes.
+  let sentColor = null, colorTimer = 0;
+  const colorCtx = new OffscreenCanvas(1, 1).getContext('2d');
+  const cssColor = v => {
+    if (!v) return null;
+    colorCtx.fillStyle = '#010203';
+    colorCtx.fillStyle = v.trim();
+    const f = colorCtx.fillStyle;
+    if (f === '#010203' && v.trim().toLowerCase() !== '#010203') return null;
+    return f[0] === '#' ? { r: parseInt(f.slice(1, 3), 16), g: parseInt(f.slice(3, 5), 16), b: parseInt(f.slice(5, 7), 16), a: 1 } : rgb(f);
+  };
+  const siteColor = () => {
+    const meta = [...document.querySelectorAll('meta[name="theme-color" i]')].find(m => !m.media || matchMedia(m.media).matches);
+    let c = meta && cssColor(meta.content);
+    if (!c || c.a < 0.5) {
+      c = null;
+      for (let el = document.elementFromPoint(innerWidth / 2, 1); el && !c; el = el.parentElement) {
+        const b = rgb(getComputedStyle(el).backgroundColor);
+        if (b && b.a > 0.5) c = b;
+      }
+    }
+    const hex = c ? '#' + [c.r, c.g, c.b].map(v => Math.round(v).toString(16).padStart(2, '0')).join('') : '';
+    if (hex !== sentColor) {
+      sentColor = hex;
+      post({ t: 'color', c: hex });
+    }
+    return hex;
+  };
+  const recolorSoon = () => { clearTimeout(colorTimer); colorTimer = setTimeout(siteColor, 250); };
+  addEventListener('load', recolorSoon);
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', recolorSoon);
+  if (document.head) new MutationObserver(recolorSoon).observe(document.head, { subtree: true, childList: true, attributes: true, attributeFilter: ['content', 'media'] });
+
   // Ctrl+click and middle-click open a link in a tab behind this one; Lilt is told which link so it doesn't switch to it.
   const behind = e => {
     const a = e.target instanceof Element ? e.target.closest('a[href]') : null;
@@ -226,6 +260,7 @@
       return 'ok';
     },
     reglass() { return glassAlpha ? glass() : 'off'; },
+    recolor() { sentColor = null; recolorSoon(); return 'ok'; },
     report() { last = ''; report(); },
     media(cmd, arg) {
       const m = pick();
@@ -278,6 +313,7 @@
     },
   };
   report();
+  recolorSoon();
   // Media that started before Lilt's helper arrived (autoplay during page load) fired its events already.
   setTimeout(report, 1000);
   send('ready');

@@ -82,6 +82,7 @@ public sealed partial class MainWindow
             else Cell(SplitFocus, 0, 3, at, 1);
         }
         PipFrame.Visibility = floating is not null && !pagesHidden ? Visibility.Visible : Visibility.Collapsed;
+        ShowPanelPage();
         PlaceWidgets();
         UpdateMedia();
     }

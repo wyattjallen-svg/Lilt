@@ -53,7 +53,7 @@ public sealed partial class MainWindow
     {
         foreach (var (element, widget) in new (FrameworkElement, string)[] { (MediaWidget, "player"), (VisualizerWidget, "visualizer"), (PipFrame, "pip") })
         {
-            if (element.Visibility != Visibility.Visible) continue;
+            if (element.Visibility != Visibility.Visible || element.Parent != WidgetLayer && widget != "pip") continue;
             var b = Box(widget);
             Canvas.SetLeft(element, b.X);
             Canvas.SetTop(element, b.Y);
@@ -78,6 +78,8 @@ public sealed partial class MainWindow
     void Widget_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
         if (dragging is not null || sender is not FrameworkElement { Tag: string tag } element) return;
+        // Docked in the panel, the panel places it.
+        if (tag is "player" or "visualizer" && element.Parent != WidgetLayer) return;
         if (!e.GetCurrentPoint(element).Properties.IsLeftButtonPressed) return;
         StartDrag(tag, element, e);
         dragFrom = Box(Owner(tag));
@@ -111,6 +113,11 @@ public sealed partial class MainWindow
             SplitDragTo(e.GetCurrentPoint(PageHost).Position);
             return;
         }
+        if (dragging == "panel")
+        {
+            PanelDragTo(e.GetCurrentPoint(PanelHost).Position);
+            return;
+        }
         double dx = p.X - dragStart.X, dy = p.Y - dragStart.Y, width = WidgetLayer.ActualWidth, height = WidgetLayer.ActualHeight;
         var f = dragFrom;
         if (dragging == "pipsize")
@@ -132,6 +139,12 @@ public sealed partial class MainWindow
         {
             dragging = null;
             EndSplitDrag();
+            return;
+        }
+        if (tag == "panel")
+        {
+            dragging = null;
+            EndPanelDrag();
             return;
         }
         var widget = Owner(tag);

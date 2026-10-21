@@ -195,6 +195,7 @@
               "bookmark",
               "media",
               "split",
+              "panel",
               "downloads",
               "extensions",
               "palette",
@@ -211,6 +212,12 @@
           "minimum": 300,
           "maximum": 2400,
           "description": "The address bar's widest width."
+        },
+        "siteColor": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "How strongly the toolbar takes on the color of the site you're on (0 = never)."
         }
       }
     },
@@ -274,6 +281,12 @@
         "closeButtons": {
           "type": "boolean",
           "description": "Show an \u00d7 on every tab (middle-click and Ctrl+W still close tabs without it)."
+        },
+        "siteColor": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "How strongly the sidebar takes on the color of the site you're on (0 = never)."
         }
       }
     },
@@ -930,6 +943,94 @@
               }
             }
           ]
+        },
+        "panel": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "toPanel": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "panel": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The panel beside the page: tabs you keep there (music, chat, a reference), with the visualizer and player docked under them if you like.",
+      "properties": {
+        "edge": {
+          "enum": [
+            "left",
+            "right"
+          ],
+          "description": "Which side of the page."
+        },
+        "width": {
+          "type": "number",
+          "minimum": 200,
+          "maximum": 1200
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "web",
+              "visualizer",
+              "player"
+            ]
+          },
+          "uniqueItems": true,
+          "description": "Top to bottom. Leave the visualizer or player out to keep it floating over the page."
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "What sites keep on your PC, trimmed without signing you out.",
+      "properties": {
+        "cacheLimit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8192,
+          "description": "MB of cached files the engine may keep (0 = its own limit). Sites' offline copies are emptied once they pass it too. Applies after a restart."
+        },
+        "forgetAfterDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3650,
+          "description": "Sites you haven't opened in this many days lose what they stored and their readable cookies (0 = never). Their sign-in cookies stay unless signOut is on. Bookmarked sites, kept sites and open tabs are never touched."
+        },
+        "keep": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true,
+          "description": "Sites never forgotten (like \"bank.example.com\")."
+        },
+        "signOut": {
+          "type": "boolean",
+          "description": "Also remove sign-in cookies of sites you haven't opened in forgetAfterDays, which signs you out of them."
         }
       }
     }

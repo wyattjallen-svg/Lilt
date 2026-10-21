@@ -59,7 +59,7 @@ public sealed partial class MainWindow : Window
         // Media keys and lean mode are browser switches, fixed for the engine's lifetime.
         engine = new BrowserEngine(new EngineOptions(paths.WebView2, paths.PrepareNewTab(), paths.PrepareUserContent(), paths.Extensions,
             options.InPrivate, options.UserAgent, options.BrowserArgs, !options.NoExtensions, themes.Current.Media.MediaKeys, themes.Current.Power.Lean,
-            themes.Current.Pages.ForceDark, themes.Current.Pages.Scrollbars == Scrollbars.Classic), queue);
+            themes.Current.Pages.ForceDark, themes.Current.Pages.Scrollbars == Scrollbars.Classic, themes.Current.Storage.CacheLimit), queue);
         var typography = themes.Current.Typography;
         Application.Current.Resources["ContentControlThemeFontFamily"] = new FontFamily(typography.Family);
         Application.Current.Resources["ControlContentThemeFontSize"] = typography.Size;
@@ -80,7 +80,9 @@ public sealed partial class MainWindow : Window
         InitMedia();
         InitHistory();
         InitTabs();
+        InitPanel();
         InitPower();
+        InitStorage();
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(Toolbar);
@@ -104,6 +106,7 @@ public sealed partial class MainWindow : Window
         {
             if (sender == peekCore) RunCommand(command is "escape" or "closeTab" ? "closePeek" : command, "peek");
             else if (tabs.Any(t => t.Core == sender)) RunCommand(command, "page");
+            else PanelCommand(sender, command);
         };
         engine.PeekRequested += (sender, url) =>
         {
@@ -112,6 +115,7 @@ public sealed partial class MainWindow : Window
         };
         engine.Trace += message => report.Key("trace", message);
         engine.Gesture += OnGesture;
+        engine.SiteColor += OnSiteColor;
         engine.AskPermission = AskPermissionAsync;
         engine.OpenTabForPage = OpenTabForPageAsync;
         engine.OpenUrlInTab = url => AddTab(url);
@@ -188,6 +192,7 @@ public sealed partial class MainWindow : Window
 
         first.Navigate(tab.Url);
         started = true;
+        ShowPanelPage();
         if (active is { View: null, Loading: null } other) Load(other);
         if (active is not null && Partner(active) is { View: null, Loading: null } partner) Load(partner);
         if (tab.IsHome && tab == active) AddressBox.Focus(FocusState.Programmatic);
@@ -238,6 +243,8 @@ public sealed partial class MainWindow : Window
                     case "workspace" when arg.Length > 0: SwitchWorkspace(Workspace.Clean(arg)); break;
                     case "move": if (active is not null) MoveToWorkspace(active, Workspace.Clean(arg)); break;
                     case "lift": windowMotion?.Lift(arg != "off"); break;
+                    // Storage tidy-up now ("tidy caches": also empty the caches, as the button does).
+                    case "tidy": await TidyStorageAsync(arg == "caches"); break;
                     case "mark": break;
                     default: RunCommand(verb, "run"); break;
                 }
@@ -259,6 +266,11 @@ public sealed partial class MainWindow : Window
         manager = ManagerShown ? managerItems.Count : -1,
         permission = PermissionBar.IsOpen ? PermissionBar.Message : null,
         allTabs = AllTabs.Count(),
+        panel = panelOpen ? panelTabs.Count : -1,
+        panelUrl = panelTab?.Url,
+        docked = (VisualizerWidget.Parent == PanelHost ? "visualizer " : "") + (MediaWidget.Parent == PanelHost ? "player" : ""),
+        siteColor = active?.SiteColor?.ToString(),
+        tint = (ToolbarTint.Background as SolidColorBrush)?.Color.ToString(),
         active = active is null ? -1 : tabs.IndexOf(active),
         split = active is not null && Partner(active) is { } p ? tabs.IndexOf(p) : -1,
         floating = floating is null ? -1 : tabs.IndexOf(floating),
@@ -342,6 +354,7 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(ReloadButton, loading ? "Stop" : "Reload");
         var uri = Uri.TryCreate(tab?.Url, UriKind.Absolute, out var u) ? u : null;
         if (AddressBox.FocusState == FocusState.Unfocused) AddressBox.Text = Display(uri);
+        ApplySiteTint();
         InsecureChip.Visibility = uri is not null && UrlPolicy.IsInsecure(uri) ? Visibility.Visible : Visibility.Collapsed;
         UpdateStar();
     }
@@ -422,6 +435,7 @@ public sealed partial class MainWindow : Window
             (MediaButton, "Now playing", "media"), (SplitButton, "Split view", "split"), (PaletteButton, "Command palette", "palette"),
             (CustomizeButton, "Customize", "customize"), (SidebarButton, "Sidebar", "sidebar"), (MenuButton, "Menu", "menu"),
             (MediaPip, "Picture in picture", "pip"), (MediaVisualizer, "Visualizer", "visualizer"), (NewTabButton, "New tab", "newTab"),
+            (PanelButton, "Panel", "panel"),
         })
             ToolTipService.SetToolTip(button, Shortcut(command) is { Length: > 0 } keys ? $"{label} ({keys})" : label);
         foreach (var (item, command) in new (MenuFlyoutItem, string)[]
@@ -467,6 +481,8 @@ public sealed partial class MainWindow : Window
             case "bookmarks": ShowManager(); break;
             case "screenshot": Screenshot(); break;
             case "workspace": NextWorkspace(); break;
+            case "panel": TogglePanel(); break;
+            case "toPanel": if (active is not null) MoveToPanel(active); break;
             case "reopenTab": ReopenTab(); break;
             case "closeTab": if (active is not null) CloseTab(active); break;
             case "nextTab": CycleTab(1); break;
@@ -485,6 +501,7 @@ public sealed partial class MainWindow : Window
         AppWindow.SetPresenter(on ? AppWindowPresenterKind.FullScreen : AppWindowPresenterKind.Overlapped);
         Toolbar.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
         LayoutSidebar();
+        LayoutPanel();
         if (!on) UpdateDragRegions();
     }
 
@@ -550,7 +567,7 @@ public sealed partial class MainWindow : Window
         var map = new Dictionary<string, FrameworkElement>
         {
             ["back"] = BackButton, ["forward"] = ForwardButton, ["reload"] = ReloadButton, ["home"] = HomeButton,
-            ["bookmark"] = StarButton, ["media"] = MediaButton, ["split"] = SplitButton, ["downloads"] = DownloadsButton,
+            ["bookmark"] = StarButton, ["media"] = MediaButton, ["split"] = SplitButton, ["panel"] = PanelButton, ["downloads"] = DownloadsButton,
             ["extensions"] = ExtensionsButton, ["palette"] = PaletteButton, ["customize"] = CustomizeButton, ["sidebar"] = SidebarButton, ["menu"] = MenuButton,
         };
         LeftPanel.Children.Clear();
@@ -589,7 +606,7 @@ public sealed partial class MainWindow : Window
         engine.SetPageColorScheme(t.Pages.ColorScheme, t.Base);
         ApplyShortcuts(t.Shortcuts);
         if (previous is not null && (previous.Power.Lean != t.Power.Lean || previous.Media.MediaKeys != t.Media.MediaKeys
-            || previous.Pages.ForceDark != t.Pages.ForceDark || previous.Pages.Scrollbars != t.Pages.Scrollbars))
+            || previous.Pages.ForceDark != t.Pages.ForceDark || previous.Pages.Scrollbars != t.Pages.Scrollbars || previous.Storage.CacheLimit != t.Storage.CacheLimit))
             ShowNotice(new("Restart Lilt to apply this change.", NoticeKind.Info, "Restart now", Restart));
         if (BrowserTab.CloseButtons != t.Sidebar.CloseButtons)
         {
@@ -643,6 +660,8 @@ public sealed partial class MainWindow : Window
         if (previous is null || previous.Sidebar.Edge != t.Sidebar.Edge) sidebar.Edge = t.Sidebar.Edge;
         if (previous is not null && previous.Sidebar.AutoHide != t.Sidebar.AutoHide) sidebar.SetAutoHide(t.Sidebar.AutoHide);
         LayoutSidebar();
+        LayoutPanel();
+        ApplySiteTint();
 
         ThemeName.Text = $"{t.Name} · {(t.Base == ThemeBase.Light ? "light" : "dark")}";
         WriteHomeData();
@@ -661,9 +680,9 @@ public sealed partial class MainWindow : Window
 
     Control[] ChromeButtons() =>
     [
-        BackButton, ForwardButton, ReloadButton, HomeButton, StarButton, MediaButton, SplitButton, PaletteButton, DownloadsButton, ExtensionsButton,
+        BackButton, ForwardButton, ReloadButton, HomeButton, StarButton, MediaButton, SplitButton, PanelButton, PaletteButton, DownloadsButton, ExtensionsButton,
         CustomizeButton, SidebarButton, MenuButton,
-        NewTabButton, BookmarkImportButton, EdgeLeft, EdgeRight, EdgeTop, EdgeBottom, PinToggle,
+        NewTabButton, BookmarkImportButton, EdgeLeft, EdgeRight, EdgeTop, EdgeBottom, PanelToggle, PinToggle,
         ReloadThemeButton, EditThemeButton, DataFolderButton, UserContentButton, MeasureButton,
     ];
 
