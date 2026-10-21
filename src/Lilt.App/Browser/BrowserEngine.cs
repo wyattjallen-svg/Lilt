@@ -191,7 +191,7 @@ sealed class BrowserEngine
         };
         core.DOMContentLoaded += (sender, e) => _ = AddPageHelperAsync(core);
         // Single-page sites change content without a new document; see-through pages look again.
-        core.SourceChanged += (_, e) =>
+        core.SourceChanged += (sender, e) =>
         {
             if (!e.IsNewDocument && glassAlpha > 0) _ = EvaluateAsync(core, "__lilt.reglass()");
         };

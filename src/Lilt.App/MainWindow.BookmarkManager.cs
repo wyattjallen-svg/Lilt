@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Lilt.App.Browser;
 using Lilt.Core.Bookmarks;
 using Lilt.Core.Navigation;
 using Microsoft.UI.Xaml;
