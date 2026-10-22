@@ -156,6 +156,8 @@ public enum SplitOrientation { Horizontal, Vertical }
 // Split view: two tabs side by side (horizontal) or stacked (vertical). Ratio is the first pane's share.
 public sealed record SplitSpec(SplitOrientation Orientation, double Ratio, double Gap);
 
+// Scale: the interface size. Everything Lilt draws (text, buttons, bars, the sidebar, the panel, widgets, menus, dialogs)
+// grows or shrinks together, from 0.75 to 1.5; pages keep their own zoom (Ctrl + and -).
 public sealed record Theme(
     int SchemaVersion,
     string Name,
@@ -175,7 +177,8 @@ public sealed record Theme(
     SplitSpec Split,
     ShortcutMap Shortcuts,
     PanelSpec Panel,
-    StorageSpec Storage)
+    StorageSpec Storage,
+    double Scale = 1)
 {
     // "Lilt Minimal": deep charcoal, slate surfaces, warm white text, sage accent.
     public static Theme Default { get; } = new(

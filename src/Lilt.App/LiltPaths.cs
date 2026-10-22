@@ -108,6 +108,7 @@ sealed record LiltPaths(string Root)
         "c3b3ba570962834ee00ea6821504a0cc559a6c89af5cc17a289c4fd843b07718",
         "a35ba193afdc14a18de30c5c11440519e1e00499173e30dc8ed5e023005dce76",
         "524cdd2a4162e02737834b62641af1d1fa91205454e473c7e72bc6c5d1dce28b",
+        "b5f5fa4d8d7216d7c16e8e38c1513f393c878c200913275d80177886b4022663",
     ];
 
     static bool IsOldDefault(string path)

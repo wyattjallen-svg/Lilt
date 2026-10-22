@@ -194,6 +194,38 @@ Test("metrics follow toolbar height and density", () =>
     Equal(24.0, small.ControlHeight);
 });
 
+Test("interface size and text size scale every metric together, and text never outgrows its box", () =>
+{
+    var m = ShellMetrics.From(Theme.Default);
+    Equal(1.0, m.Scale);
+    Equal(1.0, m.Text);
+    Equal(13.0, m.Body);
+    Equal(30.0, m.RowHeight);
+    Equal(40.0, m.ToolbarHeight);
+    var big = ShellMetrics.From(Theme.Default with { Scale = 1.25 });
+    Equal(50.0, big.ToolbarHeight);
+    Equal(38.0, big.ControlHeight);
+    Equal(7.5, big.Unit);
+    Equal(16.2, big.Body);
+    Equal(15.0, big.Font(12));
+    Equal(375.0, big.Px(300));
+    True(big.TallCaption);
+    var small = ShellMetrics.From(Theme.Default with { Scale = 0.75 });
+    Equal(30.0, small.ToolbarHeight);
+    Equal(22.0, small.RowHeight);
+    Equal(9.8, small.Body);
+    var text = ShellMetrics.From(Theme.Default with { Typography = Theme.Default.Typography with { Size = 18 } });
+    Equal(1.0, text.Scale);
+    True(text.ControlHeight >= 18 * 1.85 - 0.5 && text.ToolbarHeight >= text.ControlHeight + 4);
+    True(text.RowHeight >= 18 * 2.3 - 0.5);
+    Equal(1.5, ShellMetrics.From(Theme.Default with { Scale = 3 }).Scale);
+    var t = ThemeParser.Parse("{\"schemaVersion\":1,\"scale\":1.25}");
+    Equal(0, t.Issues.Count);
+    Equal(1.25, t.Theme.Scale);
+    Equal(t.Theme, ThemeParser.Parse(ThemeWriter.ToJson(t.Theme)).Theme);
+    True(ThemeParser.Parse("{\"schemaVersion\":1,\"scale\":4}").Issues.Count > 0);
+});
+
 Test("pinned sidebar starts open and toggles", () =>
 {
     var s = new SidebarState(DockEdge.Left, autoHide: false);

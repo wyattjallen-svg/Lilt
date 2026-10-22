@@ -18,7 +18,7 @@ public static class ThemeParser
 
     public static IReadOnlyDictionary<string, string[]> KnownKeys { get; } = new Dictionary<string, string[]>
     {
-        [""] = ["$schema", "schemaVersion", "name", "base", "backdrop", "colors", "typography", "shape", "density", "toolbar", "sidebar", "motion", "pages", "home", "power", "media", "split", "shortcuts", "panel", "storage"],
+        [""] = ["$schema", "schemaVersion", "name", "base", "backdrop", "colors", "typography", "shape", "density", "toolbar", "sidebar", "motion", "pages", "home", "power", "media", "split", "shortcuts", "panel", "storage", "scale"],
         ["backdrop"] = ["material", "tint", "tintOpacity", "luminosityOpacity"],
         ["colors"] = ["background", "surface", "surfaceRaised", "border", "text", "textMuted", "accent", "onAccent", "hover", "pressed", "page"],
         ["typography"] = ["family", "size", "weight"],
@@ -254,7 +254,8 @@ public static class ThemeParser
                 split,
                 shortcuts,
                 panel,
-                storage);
+                storage,
+                r.Num(top, "scale", 0.75, 1.5, d.Scale));
 
             return new ThemeLoadResult(theme, issues, false);
         }

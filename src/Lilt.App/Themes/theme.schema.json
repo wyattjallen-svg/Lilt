@@ -173,6 +173,12 @@
       ],
       "description": "Spacing scale: 4, 6 or 8 px units."
     },
+    "scale": {
+      "type": "number",
+      "minimum": 0.75,
+      "maximum": 1.5,
+      "description": "Interface size: text, buttons, bars, the sidebar, the panel, widgets, menus and dialogs grow or shrink together (1 = 100%). Pages keep their own zoom."
+    },
     "toolbar": {
       "type": "object",
       "additionalProperties": false,
@@ -1019,13 +1025,65 @@
               }
             }
           ]
+        },
+        "biggerUi": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "smallerUi": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "resetUi": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "logs": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
         }
       }
     },
     "panel": {
       "type": "object",
       "additionalProperties": false,
-      "description": "The panel beside the page: tabs you keep there (music, chat, a reference), with the visualizer and player docked under them if you like.",
+      "description": "The panel beside the page: videos you keep playing there, with the visualizer and player docked under them if you like.",
       "properties": {
         "edge": {
           "enum": [

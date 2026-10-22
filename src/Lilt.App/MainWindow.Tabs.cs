@@ -127,7 +127,7 @@ public sealed partial class MainWindow
             }
             if (e.IsSuccess) RecordVisit(c.Source, c.DocumentTitle);
             // A video in the panel stays video-only when its page reloads or moves on.
-            if (e.IsSuccess && panelTabs.Contains(tab)) _ = VideoOnlyAsync(tab, true);
+            if (e.IsSuccess && panelTabs.Contains(tab)) KeepVideoOnly(tab);
             if (!firstNavigation) return;
             firstNavigation = false;
             report.FirstNavigation(c.Source, e.IsSuccess, e.WebErrorStatus.ToString());

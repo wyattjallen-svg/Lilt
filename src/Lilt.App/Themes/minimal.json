@@ -25,6 +25,8 @@
   "typography": { "family": "Segoe UI Variable Text", "size": 13, "weight": 400 },
   "shape": { "radius": 10, "controlRadius": 8, "borderWidth": 1 },
   "density": "standard",
+  // Interface size, 0.75 to 1.5: text, buttons, bars, panels and widgets together. Pages keep their own zoom (Ctrl + and -).
+  "scale": 1,
 
   // siteColor (here and in "sidebar"): how strongly it takes on the color of the site you're on, 0 to 1.
   "toolbar": {

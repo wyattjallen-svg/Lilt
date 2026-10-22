@@ -215,6 +215,8 @@ public sealed partial class MainWindow
         await VideoOnlyAsync(tab, true);
     }
 
+    void KeepVideoOnly(BrowserTab tab) => _ = VideoOnlyAsync(tab, true);
+
     async Task VideoOnlyAsync(BrowserTab tab, bool on)
     {
         if (tab.Core is not { } c) return;

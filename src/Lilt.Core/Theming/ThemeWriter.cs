@@ -31,6 +31,7 @@ public static class ThemeWriter
             ["typography"] = Obj(("family", t.Typography.Family), ("size", t.Typography.Size), ("weight", t.Typography.Weight)),
             ["shape"] = Obj(("radius", t.Shape.Radius), ("controlRadius", t.Shape.ControlRadius), ("borderWidth", t.Shape.BorderWidth)),
             ["density"] = Camel(t.Density),
+            ["scale"] = t.Scale,
             ["toolbar"] = With(Obj(("height", t.Toolbar.Height), ("addressWidth", t.Toolbar.AddressWidth), ("siteColor", t.Toolbar.SiteColor)), "items", t.Toolbar.Items),
             ["sidebar"] = With(Obj(
                 ("edge", Camel(t.Sidebar.Edge)), ("width", t.Sidebar.Width), ("height", t.Sidebar.Height),

@@ -97,6 +97,11 @@ public static class Commands
         ["panel"] = ["F4"],
         ["toPanel"] = [],
         ["sleepTabs"] = [],
+        // Interface size has no keys by default: Ctrl+Alt is AltGr on many keyboards, which types characters.
+        ["biggerUi"] = [],
+        ["smallerUi"] = [],
+        ["resetUi"] = [],
+        ["logs"] = [],
     };
 
     public static readonly HashSet<string> Reserved = ["newTab", "reopenTab", "closeTab", "nextTab", "prevTab", "address", "palette"];
@@ -109,8 +114,9 @@ public static class Commands
         ["menu"] = "Open the menu", ["customize"] = "Customize", ["palette"] = "Command palette", ["split"] = "Split view",
         ["media"] = "Show or hide the media player", ["visualizer"] = "Show or hide the visualizer", ["pip"] = "Picture in picture",
         ["bookmarks"] = "Manage bookmarks", ["screenshot"] = "Screenshot of the whole page", ["workspace"] = "Next workspace",
-        ["panel"] = "Show or hide the panel", ["toPanel"] = "Move this tab to the panel",
-        ["sleepTabs"] = "Put background tabs to sleep",
+        ["panel"] = "Show or hide the panel", ["toPanel"] = "Move this tab's video to the panel",
+        ["sleepTabs"] = "Put background tabs to sleep", ["biggerUi"] = "Make Lilt bigger", ["smallerUi"] = "Make Lilt smaller",
+        ["resetUi"] = "Lilt at 100%", ["logs"] = "Logs and crashes",
     };
 }
 
