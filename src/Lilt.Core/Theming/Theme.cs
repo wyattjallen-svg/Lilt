@@ -75,14 +75,17 @@ public enum Scrollbars { Overlay, Classic }
 // Scrollbars and ForceDark apply after a restart. Gestures: hold the right button and draw (← back, → forward,
 // ↑↓ reload, ↓→ close tab, ↓ new tab). Restore: start with the tabs from last time (off: a fresh home tab each start).
 // SmoothScrolling: animated scrolling in pages (off: instant, a little lighter; after a restart).
+// UniversalFont: Font for the text of every page (icons keep theirs); the toolbar and panel keep the theme's font.
 public sealed record PagesSpec(PageColorScheme ColorScheme, bool Peek, string Search = "duckduckgo", bool History = true,
     bool Glass = false, double GlassOpacity = 0.72, Ids? GlassOff = null, bool ForceDark = false, TrackingLevel Tracking = TrackingLevel.Balanced,
-    bool Gestures = true, Scrollbars Scrollbars = Scrollbars.Overlay, bool Restore = true, bool SmoothScrolling = true)
+    bool Gestures = true, Scrollbars Scrollbars = Scrollbars.Overlay, bool Restore = true, bool SmoothScrolling = true,
+    bool UniversalFont = false, string Font = "Segoe UI Variable")
 {
     public Ids GlassOffSites => GlassOff ?? new Ids();
     public bool Equals(PagesSpec? o) => o is not null && ColorScheme == o.ColorScheme && Peek == o.Peek && Search == o.Search && History == o.History
         && Glass == o.Glass && GlassOpacity == o.GlassOpacity && GlassOffSites.Equals(o.GlassOffSites) && ForceDark == o.ForceDark
-        && Tracking == o.Tracking && Gestures == o.Gestures && Scrollbars == o.Scrollbars && Restore == o.Restore && SmoothScrolling == o.SmoothScrolling;
+        && Tracking == o.Tracking && Gestures == o.Gestures && Scrollbars == o.Scrollbars && Restore == o.Restore && SmoothScrolling == o.SmoothScrolling
+        && UniversalFont == o.UniversalFont && Font == o.Font;
     public override int GetHashCode() => HashCode.Combine(ColorScheme, Search, Glass, GlassOpacity);
 }
 

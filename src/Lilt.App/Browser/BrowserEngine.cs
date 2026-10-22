@@ -60,6 +60,7 @@ sealed class BrowserEngine
     bool peekEnabled = true, gesturesEnabled = true;
     double glassAlpha;
     string[] glassOff = [];
+    string fontFamily = "";
 
     public BrowserEngine(EngineOptions options, DispatcherQueue queue)
     {
@@ -311,11 +312,11 @@ sealed class BrowserEngine
 
     // Peek, gestures and see-through pages (glass: 0 for off, else how much of a page's color stays; glassOff lists
     // sites left solid). Sent to every open page when anything changes.
-    public void Configure(bool peek, bool gestures, double glass, IEnumerable<string> off)
+    public void Configure(bool peek, bool gestures, double glass, IEnumerable<string> off, string font = "")
     {
         var offList = off.ToArray();
-        if (peek == peekEnabled && gestures == gesturesEnabled && glass == glassAlpha && offList.SequenceEqual(glassOff)) return;
-        (peekEnabled, gesturesEnabled, glassAlpha, glassOff) = (peek, gestures, glass, offList);
+        if (peek == peekEnabled && gestures == gesturesEnabled && glass == glassAlpha && font == fontFamily && offList.SequenceEqual(glassOff)) return;
+        (peekEnabled, gesturesEnabled, glassAlpha, glassOff, fontFamily) = (peek, gestures, glass, offList, font);
         foreach (var core in contexts.Keys.ToArray()) _ = EvaluateAsync(core, ConfigureScript(core));
     }
 
@@ -324,7 +325,7 @@ sealed class BrowserEngine
         && !glassOff.Any(h => u.Host == h || u.Host.EndsWith("." + h, StringComparison.Ordinal));
 
     string ConfigureScript(CoreWebView2 core) => string.Create(System.Globalization.CultureInfo.InvariantCulture,
-        $"__lilt.configure({{ peek: {(peekEnabled ? "true" : "false")}, gestures: {(gesturesEnabled ? "true" : "false")}, glass: {(GlassFor(core.Source) ? glassAlpha : 0)} }})");
+        $"__lilt.configure({{ peek: {(peekEnabled ? "true" : "false")}, gestures: {(gesturesEnabled ? "true" : "false")}, glass: {(GlassFor(core.Source) ? glassAlpha : 0)}, font: {JsonSerializer.Serialize(fontFamily)} }})");
 
     public void SetTracking(TrackingLevel level)
     {

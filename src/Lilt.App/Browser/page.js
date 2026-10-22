@@ -39,6 +39,19 @@
     post({ t: 'peek', url: a.href.slice(0, 4096) });
   }, true);
   let peek = true;
+  // Universal font (pages.font): one style element, icon fonts left alone. The name is cleaned before it goes into CSS.
+  let font = '';
+  const setFont = f => {
+    const name = String(f || '').replace(/[^\p{L}\p{N} -]/gu, '').trim().slice(0, 60);
+    if (name === font) return;
+    font = name;
+    let el = document.getElementById('lilt-font');
+    if (!name) { if (el) el.remove(); return; }
+    if (!el) el = document.createElement('style');
+    el.id = 'lilt-font';
+    el.textContent = `:root :not(i):not(svg):not(svg *):not([class*="icon" i]):not([class*="fa-" i]):not([class*="material" i]){font-family:"${name}",system-ui,sans-serif !important}`;
+    if (!el.isConnected) (document.head || document.documentElement).appendChild(el);
+  };
 
   // Mouse gestures: hold the right button and draw. Left of the page's own uses of that button: nothing starts when
   // the page handled the press itself, on canvases, video, embeds, frames and text fields, or with the pointer locked.
@@ -156,7 +169,9 @@
   // Media: the element that's playing, or the one that played last.
   let current = null, last = '';
   const media = () => [...document.querySelectorAll('video, audio')];
-  const pick = () => media().find(m => !m.paused && !m.ended && m.readyState > 1)
+  // Several elements can play at once (a site's ad or preview next to the player): the longest is the track.
+  const length = m => isFinite(m.duration) ? m.duration : 1e9;
+  const pick = () => media().filter(m => !m.paused && !m.ended && m.readyState > 1).sort((a, b) => length(b) - length(a))[0]
     || (current && current.isConnected ? current : null)
     || media().find(m => m.currentTime > 0) || null;
   const report = () => {
@@ -259,6 +274,7 @@
       peek = !!o.peek;
       gestures = !!o.gestures;
       const a = Math.max(0, Math.min(1, Number(o.glass) || 0));
+      setFont(o.font);
       if (a !== glassAlpha) { glassAlpha = a; return glass(); }
       return 'ok';
     },

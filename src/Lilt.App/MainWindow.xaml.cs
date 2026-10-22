@@ -640,7 +640,8 @@ public sealed partial class MainWindow : Window
         ApplyBackdrop(highContrast ? new BackdropSpec(Backdrop.None) : t.Backdrop, t.Base, colors.Background);
         ApplyCaptionColors(colors);
         // See-through websites need a window material to show.
-        engine.Configure(t.Pages.Peek, t.Pages.Gestures, t.Pages.Glass && SystemBackdrop is not null ? t.Pages.GlassOpacity : 0, t.Pages.GlassOffSites.Items);
+        engine.Configure(t.Pages.Peek, t.Pages.Gestures, t.Pages.Glass && SystemBackdrop is not null ? t.Pages.GlassOpacity : 0, t.Pages.GlassOffSites.Items,
+            t.Pages.UniversalFont ? t.Pages.Font : "");
         engine.SetTracking(t.Pages.Tracking);
         foreach (var tab in AllTabs) SetPageBackground(tab);
         engine.SetPageColorScheme(t.Pages.ColorScheme, t.Base);

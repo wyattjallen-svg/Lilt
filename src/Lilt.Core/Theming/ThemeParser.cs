@@ -26,7 +26,7 @@ public static class ThemeParser
         ["toolbar"] = ["height", "items", "addressWidth", "siteColor"],
         ["sidebar"] = ["edge", "width", "height", "autoHide", "revealEdge", "hideDelay", "sections", "tabWidth", "closeButtons", "siteColor"],
         ["motion"] = ["animations", "duration", "windowDrag"],
-        ["pages"] = ["colorScheme", "peek", "search", "history", "glass", "glassOpacity", "glassOff", "forceDark", "tracking", "gestures", "scrollbars", "restore", "smoothScrolling"],
+        ["pages"] = ["colorScheme", "peek", "search", "history", "glass", "glassOpacity", "glassOff", "forceDark", "tracking", "gestures", "scrollbars", "restore", "smoothScrolling", "universalFont", "font"],
         // clock/search/tiles are the v0.2 switches, still read when "items" is absent.
         ["home"] = ["items", "glass", "background", "dim", "clock", "search", "tiles"],
         ["power"] = ["efficiency", "suspendMinutes", "hideWhenCovered", "hideWhenOccluded", "lean", "sleepMinutes", "sleepWhenLowMemory", "solidWhenAway"],
@@ -160,7 +160,8 @@ public static class ThemeParser
             var pages = new PagesSpec(r.Enum(pg, "colorScheme", d.Pages.ColorScheme), r.Bool(pg, "peek", d.Pages.Peek), search, r.Bool(pg, "history", d.Pages.History),
                 r.Bool(pg, "glass", d.Pages.Glass), r.Num(pg, "glassOpacity", 0.2, 1, d.Pages.GlassOpacity), r.Hosts(pg, "glassOff", d.Pages.GlassOffSites),
                 r.Bool(pg, "forceDark", d.Pages.ForceDark), r.Enum(pg, "tracking", d.Pages.Tracking), r.Bool(pg, "gestures", d.Pages.Gestures),
-                r.Enum(pg, "scrollbars", d.Pages.Scrollbars), r.Bool(pg, "restore", d.Pages.Restore), r.Bool(pg, "smoothScrolling", d.Pages.SmoothScrolling));
+                r.Enum(pg, "scrollbars", d.Pages.Scrollbars), r.Bool(pg, "restore", d.Pages.Restore), r.Bool(pg, "smoothScrolling", d.Pages.SmoothScrolling),
+                r.Bool(pg, "universalFont", d.Pages.UniversalFont), FontName(r.Str(pg, "font", 60, d.Pages.Font)));
 
             var hm = r.Section(root, "home");
             var homeItems = d.Home.Items;
@@ -458,4 +459,7 @@ public static class ThemeParser
     static string Join(string path, string key) => path.Length == 0 ? key : $"{path}.{key}";
 
     static string Camel(string s) => s.Length == 0 ? s : char.ToLowerInvariant(s[0]) + s[1..];
+
+    // A font family name, kept to letters, digits, spaces and hyphens (it goes into page CSS).
+    static string FontName(string s) => new string(s.Where(c => char.IsLetterOrDigit(c) || c is ' ' or '-').ToArray()).Trim();
 }

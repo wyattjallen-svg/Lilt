@@ -118,6 +118,20 @@ public sealed partial class MainWindow
             PanelDragTo(e.GetCurrentPoint(PanelHost).Position);
             return;
         }
+        if (dragging == "vizheight")
+        {
+            VizHeightDragTo(p.Y - dragStart.Y);
+            return;
+        }
+        if (dragging is "player" or "visualizer")
+        {
+            var over = OverDock(e);
+            if (over != dockOver)
+            {
+                dockOver = over;
+                ShowDropZone(over);
+            }
+        }
         double dx = p.X - dragStart.X, dy = p.Y - dragStart.Y, width = WidgetLayer.ActualWidth, height = WidgetLayer.ActualHeight;
         var f = dragFrom;
         if (dragging == "pipsize")
@@ -147,8 +161,22 @@ public sealed partial class MainWindow
             EndPanelDrag();
             return;
         }
+        if (tag == "vizheight")
+        {
+            dragging = null;
+            EndVizHeightDrag();
+            return;
+        }
         var widget = Owner(tag);
         dragging = null;
+        if (dockOver)
+        {
+            dockOver = false;
+            ShowDropZone(false);
+            live = null;
+            DockWidget(widget);
+            return;
+        }
         // A click that didn't move anything leaves the theme alone.
         if (live is not { } r || r == dragFrom)
         {

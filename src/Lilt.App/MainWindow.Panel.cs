@@ -13,31 +13,21 @@ using Windows.ApplicationModel.DataTransfer;
 
 namespace Lilt.App;
 
-// The panel beside the page (theme "panel"): any tab can live there (drag it in, or right-click → Move to the panel),
-// one shown at a time, and keeps playing while you browse, switch workspaces or hide the panel. The visualizer and the
-// player can dock under it (panel.sections). Its tabs belong to no workspace and are saved with the session.
+// The panel beside the page (theme "panel"): sites from the tab menu (right-click → Move to the panel), one shown at a
+// time, and they keep playing while you browse, switch workspaces or hide the panel. Pages aren't dragged in; the player
+// and the visualizer are, by dragging them over the panel (or dock them from its menu). panel.sections sets the rows.
 public sealed partial class MainWindow
 {
     readonly ObservableCollection<BrowserTab> panelTabs = [];
-    BrowserTab? panelTab, draggedTab;
-    bool panelOpen;
-    double? dragPanelWidth;
+    BrowserTab? panelTab;
+    bool panelOpen, dockOver;
+    double? dragPanelWidth, vizHeight;
+    double vizStart;
 
     void InitPanel()
     {
         PanelSiteList.ItemsSource = panelTabs;
         panelTabs.CollectionChanged += (_, _) => ScheduleSave();
-        TabList.DragItemsStarting += (_, e) =>
-        {
-            draggedTab = e.Items.FirstOrDefault() as BrowserTab;
-            e.Data.RequestedOperation = DataPackageOperation.Move;
-            if (draggedTab is not null) ShowDropZone(true);
-        };
-        TabList.DragItemsCompleted += (_, _) =>
-        {
-            draggedTab = null;
-            ShowDropZone(false);
-        };
     }
 
     bool PanelShowsPages => panelOpen && !fullScreen && theme.Panel.Sections.Has("web");
@@ -84,6 +74,7 @@ public sealed partial class MainWindow
         // Rows top to bottom from panel.sections: the sites and their pages, the visualizer, the player.
         PanelHost.RowDefinitions.Clear();
         var web = spec.Sections.Has("web");
+        var vizRow = -1;
         foreach (var id in spec.Sections.Items)
         {
             var row = PanelHost.RowDefinitions.Count;
@@ -98,6 +89,7 @@ public sealed partial class MainWindow
             }
             PanelHost.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var widget = id == "visualizer" ? VisualizerWidget : MediaWidget;
+            if (id == "visualizer") vizRow = row;
             Dock(widget, open ? PanelHost : null);
             Grid.SetRow(widget, row);
         }
@@ -106,6 +98,10 @@ public sealed partial class MainWindow
         if (!spec.Sections.Has("player")) Dock(MediaWidget, null);
         PanelHeader.Visibility = PanelPages.Visibility = web ? Visibility.Visible : Visibility.Collapsed;
         PanelEmpty.Visibility = web && panelTabs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        // The visualizer's height grip sits on its bottom edge, clear of the panel's own edge grip.
+        PanelVizGrip.Visibility = open && vizRow >= 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (vizRow >= 0) Grid.SetRow(PanelVizGrip, vizRow);
+        PanelVizGrip.Margin = spec.Edge == DockEdge.Left ? new Thickness(0, 0, 12, 0) : new Thickness(12, 0, 0, 0);
         Grid.SetRowSpan(PanelGrip, PanelHost.RowDefinitions.Count);
         ShowPanelPage();
         PlaceWidgets();
@@ -260,7 +256,7 @@ public sealed partial class MainWindow
         return true;
     }
 
-    // While a tab is dragged: a target over the open panel (its page would take the drop itself), or at the page's edge.
+    // While the player or the visualizer is dragged: the panel's side (or its edge, while the panel is closed) lights up.
     void ShowDropZone(bool on)
     {
         var open = panelOpen && !fullScreen;
@@ -270,22 +266,49 @@ public sealed partial class MainWindow
         PanelDropZone.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    void Panel_DragOver(object sender, DragEventArgs e)
+    // Whether a widget dragged to this pointer position would dock in the panel.
+    bool OverDock(PointerRoutedEventArgs e)
     {
-        if (draggedTab is null) return;
-        e.AcceptedOperation = DataPackageOperation.Move;
-        e.DragUIOverride.Caption = "Keep in the panel";
-        e.Handled = true;
+        var left = theme.Panel.Edge == DockEdge.Left;
+        if (panelOpen && !fullScreen)
+        {
+            var p = e.GetCurrentPoint(PanelHost).Position;
+            return p.X >= 0 && p.X <= PanelHost.ActualWidth && p.Y >= 0 && p.Y <= PanelHost.ActualHeight;
+        }
+        var x = e.GetCurrentPoint(ContentArea).Position.X;
+        return left ? x <= 160 : x >= ContentArea.ActualWidth - 160;
     }
 
-    void Panel_Drop(object sender, DragEventArgs e)
+    // Puts a widget in the panel's rows (at the bottom) and shows it there, whatever its own setting says.
+    void DockWidget(string widget)
     {
-        if (draggedTab is not { } tab) return;
-        e.Handled = true;
-        draggedTab = null;
-        ShowDropZone(false);
-        // After the list has finished its own drag.
-        DispatcherQueue.TryEnqueue(() => MoveToPanel(tab));
+        if (widget == "visualizer") visualizerToggle = true;
+        else playerToggle = true;
+        panelOpen = true;
+        var ids = Current.Panel.Sections;
+        Queue(Current with { Panel = Current.Panel with { Sections = ids.Has(widget) ? ids : new Ids(ids.Items.Append(widget).ToArray()) } });
+        LayoutPanel();
+    }
+
+    // The visualizer's bottom edge, dragged: its height in the panel and on the page.
+    void VizGrip_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (dragging is not null) return;
+        vizStart = VisualizerWidget.ActualHeight;
+        StartDrag("vizheight", PanelVizGrip, e);
+    }
+
+    void VizHeightDragTo(double dy)
+    {
+        vizHeight = Math.Clamp(vizStart + dy, 40, 400);
+        VisualizerWidget.Height = vizHeight.Value;
+    }
+
+    void EndVizHeightDrag()
+    {
+        if (vizHeight is not { } h) return;
+        vizHeight = null;
+        Queue(Current with { Media = Current.Media with { Visualizer = Current.Media.Visualizer with { Height = Math.Round(h) } } });
     }
 
     void PanelGrip_PointerPressed(object sender, PointerRoutedEventArgs e)

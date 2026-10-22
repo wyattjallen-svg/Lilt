@@ -348,6 +348,7 @@
                     <TextBlock Style="{StaticResource BodyText}" Foreground="{StaticResource LiltTextMutedBrush}" TextWrapping="Wrap" FontSize="12"
                                Text="Delete everything Lilt keeps (tabs, bookmarks, history, settings, extensions, cookies and sign-ins) and restart it as a fresh install. You'll be asked to enter a code first." />
                     <Button Content="Wipe everything and start fresh…" Click="Wipe_Click" />
+                  </StackPanel>
 
                   <StackPanel x:Name="PowerPage" Spacing="6" Visibility="Collapsed">
                     <TextBlock Text="While you're in another app" Style="{StaticResource SectionHeader}" />
@@ -518,8 +519,8 @@
 
       <!-- The panel beside the page (see MainWindow.Panel.cs): tabs kept there, and the visualizer and player docked under
            them. Its rows follow panel.sections; PanelGrip on its inner edge resizes it. -->
-      <Grid x:Name="PanelHost" Grid.Row="1" Grid.Column="1" Canvas.ZIndex="1" Visibility="Collapsed" AllowDrop="True" RowSpacing="6"
-            DragOver="Panel_DragOver" Drop="Panel_Drop" Background="{StaticResource LiltSurfaceBrush}" BorderBrush="{StaticResource LiltBorderBrush}"
+      <Grid x:Name="PanelHost" Grid.Row="1" Grid.Column="1" Canvas.ZIndex="1" Visibility="Collapsed" RowSpacing="6"
+            Background="{StaticResource LiltSurfaceBrush}" BorderBrush="{StaticResource LiltBorderBrush}"
             AutomationProperties.Name="Panel">
         <Grid x:Name="PanelHeader" Padding="6,4,4,0" ColumnSpacing="2">
           <Grid.ColumnDefinitions>
@@ -577,20 +578,24 @@
         <StackPanel x:Name="PanelEmpty" VerticalAlignment="Center" Margin="20" Spacing="10">
           <FontIcon Glyph="&#xE89F;" FontSize="28" Foreground="{StaticResource LiltTextMutedBrush}" />
           <TextBlock TextWrapping="Wrap" TextAlignment="Center" Foreground="{StaticResource LiltTextMutedBrush}"
-                     Text="Drag a tab here, or right-click a tab and choose Move to the panel. It stays here, playing, while you browse." />
+                     Text="Right-click a tab and choose Move to the panel. It stays here, playing, while you browse. Drag the player or the visualizer here to dock it." />
           <Button Content="Put this tab here" HorizontalAlignment="Center" Click="PanelPutHere_Click" />
         </StackPanel>
+        <Border x:Name="PanelVizGrip" Height="10" VerticalAlignment="Bottom" Canvas.ZIndex="2" Background="Transparent" Visibility="Collapsed"
+                PointerPressed="VizGrip_PointerPressed" ToolTipService.ToolTip="Drag to resize the visualizer" AutomationProperties.Name="Visualizer height">
+          <Border Width="40" Height="4" CornerRadius="2" Background="{StaticResource LiltBorderBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" />
+        </Border>
         <Border x:Name="PanelGrip" Width="10" Canvas.ZIndex="2" Background="Transparent" PointerPressed="PanelGrip_PointerPressed"
                 ToolTipService.ToolTip="Drag to resize the panel" AutomationProperties.Name="Panel edge">
           <Border Width="4" Height="40" CornerRadius="2" Background="{StaticResource LiltBorderBrush}" VerticalAlignment="Center" />
         </Border>
       </Grid>
 
-      <!-- Shown while a tab is dragged and the panel is closed. -->
-      <Border x:Name="PanelDropZone" Grid.Row="1" Grid.Column="1" Canvas.ZIndex="4" Visibility="Collapsed" Width="160" Margin="10" AllowDrop="True"
-              DragOver="Panel_DragOver" Drop="Panel_Drop" CornerRadius="12" BorderThickness="2" BorderBrush="{StaticResource LiltAccentBrush}"
+      <!-- Shown while the player or the visualizer is dragged over the panel. -->
+      <Border x:Name="PanelDropZone" Grid.Row="1" Grid.Column="1" Canvas.ZIndex="4" Visibility="Collapsed" Width="160" Margin="10" IsHitTestVisible="False"
+              CornerRadius="12" BorderThickness="2" BorderBrush="{StaticResource LiltAccentBrush}"
               Background="{StaticResource LiltOverlayBrush}">
-        <TextBlock Text="Drop here to keep it in the panel" TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center" Margin="14" />
+        <TextBlock Text="Drop to dock it in the panel" TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center" Margin="14" />
       </Border>
 
       <!-- Floating widgets: drag them anywhere over the page. Positions are saved as fractions of this area. -->

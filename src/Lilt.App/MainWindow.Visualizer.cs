@@ -19,6 +19,8 @@ public sealed partial class MainWindow
     LoopbackCapture? loopback;
     Spectrum? spectrum;
     bool loopbackFailed;
+    // Loopback heard nothing for a while (a quiet start, or no sound Windows can loop back): the page is used until this time.
+    long loopbackRetryAt;
     CoreWebView2? captureCore;
     float[] levels = [];
     long lastLevels, quietSince, loopbackSince, heardAt;
@@ -77,7 +79,7 @@ public sealed partial class MainWindow
     async void StartSound()
     {
         var m = theme.Media;
-        if (m.Source != VisualizerSource.Page && !loopbackFailed)
+        if (m.Source != VisualizerSource.Page && !loopbackFailed && Environment.TickCount64 >= loopbackRetryAt)
         {
             if (loopback is not null && spectrum?.Bars.Count == m.Bars) return;
             loopback?.Dispose();
@@ -90,6 +92,12 @@ public sealed partial class MainWindow
                     lock (s) s.AddPcm16(pcm, 2);
                 });
                 loopbackSince = Environment.TickCount64;
+                loopbackRetryAt = 0;
+                if (captureCore is { } page)
+                {
+                    _ = engine.EvaluateAsync(page, "__lilt.capture(false)");
+                    captureCore = null;
+                }
                 report.Key("visualizer", "system sound");
                 return;
             }
@@ -167,10 +175,10 @@ public sealed partial class MainWindow
         if (peak > 0.02) heardAt = now;
         // Loopback that has heard nothing at all while a tab plays (no audio device, or sound Windows can't loop back):
         // listen to the playing tab instead. Once it has heard something it's working, and quiet passages are just quiet.
-        if (loopback is not null && m.Source == VisualizerSource.Auto && now - loopbackSince > 2500 && heardAt == 0
+        if (loopback is not null && m.Source == VisualizerSource.Auto && now - loopbackSince > 4000 && heardAt == 0
             && AllTabs.Any(t => t.Media is { Playing: true } && !t.IsMuted))
         {
-            loopbackFailed = true;
+            loopbackRetryAt = now + 15000;
             loopback.Dispose();
             loopback = null;
             spectrum = null;
@@ -200,6 +208,10 @@ public sealed partial class MainWindow
                 Canvas.SetTop(r, m.Style == VisualizerStyle.Mirror ? (h - bh) / 2 : h - bh);
             }
         }
+
+        // Back on system sound after the page has been used for a while (StartSound retries the loopback).
+        if (loopback is null && loopbackRetryAt > 0 && now >= loopbackRetryAt && m.Source == VisualizerSource.Auto)
+            StartSound();
 
         // Nothing audible and the bars have settled: stop drawing until sound starts again (UpdateVisualizer restarts it).
         if (peak > 0.02 || AllTabs.Any(t => t.IsAudible)) quietSince = 0;

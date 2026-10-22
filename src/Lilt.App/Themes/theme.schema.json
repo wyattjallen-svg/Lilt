@@ -388,6 +388,15 @@
         "smoothScrolling": {
           "type": "boolean",
           "description": "Animated scrolling in pages. Off is instant and a little lighter. After a restart."
+        },
+        "universalFont": {
+          "type": "boolean",
+          "description": "Show every page's text in the font below (icons keep theirs). Changes apply to open pages at once."
+        },
+        "font": {
+          "type": "string",
+          "maxLength": 60,
+          "description": "The font family for universalFont, e.g. \"Georgia\" or \"Atkinson Hyperlegible\". Letters, digits, spaces and hyphens only."
         }
       }
     },

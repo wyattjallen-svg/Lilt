@@ -200,6 +200,7 @@ public sealed partial class MainWindow
             foreach (var x in AllTabs) if (x.Core is { } c) c.IsMuted = false;
         });
         yield return Toggle("Smooth scrolling", t.Pages.SmoothScrolling, x => x with { Pages = x.Pages with { SmoothScrolling = !x.Pages.SmoothScrolling } });
+        yield return Toggle("Universal font for pages", t.Pages.UniversalFont, x => x with { Pages = x.Pages with { UniversalFont = !x.Pages.UniversalFont } });
         yield return Toggle("Solid window material while I'm away", t.Power.SolidWhenAway, x => x with { Power = x.Power with { SolidWhenAway = !x.Power.SolidWhenAway } });
         yield return Toggle("Open last time's tabs on start", t.Pages.Restore, x => x with { Pages = x.Pages with { Restore = !x.Pages.Restore } });
         yield return Toggle("Sleep tabs sooner when memory runs low", t.Power.SleepWhenLowMemory, x => x with { Power = x.Power with { SleepWhenLowMemory = !x.Power.SleepWhenLowMemory } });
