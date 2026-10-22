@@ -11,4 +11,5 @@ What Lilt does to keep you safe, and where to look:
 - Chrome extensions are installed only after their CRX3 signature checks out against the extension ID.
 - Theme files, bookmarks, history and sessions are parsed defensively; bad values fall back to defaults.
 - Font names, page CSS and page script values are cleaned or JSON-encoded before they reach a page.
-- Passwords are never stored by Lilt itself; sign-in data stays in WebView2's profile on your PC.
+- Lilt keeps no password list of its own. Passwords you let the browser save live in WebView2's profile on your PC, and the
+  Wipe option deletes that profile.
