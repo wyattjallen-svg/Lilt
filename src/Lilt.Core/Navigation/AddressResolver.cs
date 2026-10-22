@@ -26,13 +26,13 @@ public static partial class AddressResolver
         if (SchemePrefix().IsMatch(text) && !HostWithPort().IsMatch(text))
         {
             if (!Uri.TryCreate(text, UriKind.Absolute, out var uri)) return new(AddressKind.Rejected, Reason: "That isn't a valid address.");
-            if (UrlPolicy.IsNavigable(uri) || UrlPolicy.IsExtensionPage(uri)) return new(AddressKind.Navigate, uri);
+            if (UrlPolicy.IsNavigable(uri) || UrlPolicy.IsExtensionPage(uri)) return new(AddressKind.Navigate, UrlPolicy.StripTracking(uri));
             return new(AddressKind.Rejected, Reason: $"Lilt only opens web addresses (http and https), not {uri.Scheme}: links.");
         }
 
         var host = HostPart(text);
         if (IsLocalHost(host) && Uri.TryCreate("http://" + text, UriKind.Absolute, out var local)) return new(AddressKind.Navigate, local);
-        if (IsDomain(host) && Uri.TryCreate("https://" + text, UriKind.Absolute, out var web)) return new(AddressKind.Navigate, web);
+        if (IsDomain(host) && Uri.TryCreate("https://" + text, UriKind.Absolute, out var web)) return new(AddressKind.Navigate, UrlPolicy.StripTracking(web));
         return Search(text, searchTemplate);
     }
 

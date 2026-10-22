@@ -1149,4 +1149,35 @@ Test("v0.8: sleep rules and new settings", () =>
     Equal(t.Theme, ThemeParser.Parse(ThemeWriter.ToJson(t.Theme)).Theme);
 });
 
+Test("corrupt JSON is kept as .corrupt, and an atomic write leaves no temp file", () =>
+{
+    var dir = Path.Combine(Path.GetTempPath(), "lilt-files-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(dir);
+    try
+    {
+        var file = Path.Combine(dir, "bookmarks.json");
+        File.WriteAllText(file, "{ not json");
+        Equal(null, Files.ReadJson<string[]>(file));
+        True(File.Exists(file + ".corrupt"));
+        Files.WriteJson(file, new[] { "a", "b" });
+        Equal(2, Files.ReadJson<string[]>(file)!.Length);
+        True(!File.Exists(file + ".tmp"));
+        Equal(null, Files.ReadJson<string[]>(Path.Combine(dir, "missing.json")));
+    }
+    finally
+    {
+        Directory.Delete(dir, true);
+    }
+});
+
+Test("tracking parameters are removed from addresses Lilt opens", () =>
+{
+    Equal("https://x.com/a?q=1", UrlPolicy.StripTracking(new Uri("https://x.com/a?utm_source=a&q=1&fbclid=z")).ToString());
+    Equal("https://x.com/a", UrlPolicy.StripTracking(new Uri("https://x.com/a?utm_medium=b")).ToString());
+    var same = new Uri("https://x.com/a?q=1&page=2");
+    Equal(same, UrlPolicy.StripTracking(same));
+    Equal("https://x.com/a?v=9", AddressResolver.Resolve("https://x.com/a?v=9&gclid=3").Uri!.ToString());
+    Equal("https://x.com/a", AddressResolver.Resolve("x.com/a?utm_campaign=c").Uri!.ToString());
+});
+
 return Summary();
