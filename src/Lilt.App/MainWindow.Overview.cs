@@ -16,7 +16,8 @@ public sealed partial class MainWindow
     {
         var all = tabs.ToList();
         BrowserTab? chosen = null;
-        var grid = new WrapPanel { Orientation = Orientation.Horizontal, MaximumRowsOrColumns = 4 };
+        var grid = new StackPanel { Spacing = 8 };
+        StackPanel row = new() { Orientation = Orientation.Horizontal, Spacing = 8 };
         var dialog = new ContentDialog
         {
             XamlRoot = Root.XamlRoot,
@@ -25,9 +26,14 @@ public sealed partial class MainWindow
             CloseButtonText = "Close",
             RequestedTheme = Root.RequestedTheme,
         };
-        foreach (var tab in all)
+        for (var i = 0; i < all.Count; i++)
         {
-            var t = tab;
+            var t = all[i];
+            if (i > 0 && i % 4 == 0)
+            {
+                grid.Children.Add(row);
+                row = new() { Orientation = Orientation.Horizontal, Spacing = 8 };
+            }
             var stack = new StackPanel { Spacing = 6 };
             stack.Children.Add(new Image { Source = t.Icon, Width = 20, Height = 20, HorizontalAlignment = HorizontalAlignment.Left });
             stack.Children.Add(new TextBlock { Text = t.DisplayTitle, TextTrimming = TextTrimming.CharacterEllipsis, MaxLines = 2, TextWrapping = TextWrapping.Wrap });
@@ -48,8 +54,9 @@ public sealed partial class MainWindow
                 dialog.Hide();
             };
             ToolTipService.SetToolTip(card, t.Tip);
-            grid.Children.Add(card);
+            row.Children.Add(card);
         }
+        if (row.Children.Count > 0) grid.Children.Add(row);
         await dialog.ShowAsync();
         if (chosen is not null && tabs.Contains(chosen)) Activate(chosen);
     }
