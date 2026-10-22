@@ -516,7 +516,7 @@ public sealed partial class MainWindow
             });
         }
         else if (tab != active) Add("Open in split view", "\uE8A9", () => SplitWith(tab));
-        Add("Move to the panel", "\uE89F", () => MoveToPanel(tab));
+        if (tab == floating) Add("Move the video to the panel", "\uE89F", () => MoveToPanel(tab));
         if (tab.Media is { Video: true }) Add(tab == floating ? "Put the video back" : "Pop out the video", "\uE8A7", () => _ = PipAsync(tab));
         if (bookmarks.Contains(tab.Url)) Add("Remove bookmark", "", () =>
         {

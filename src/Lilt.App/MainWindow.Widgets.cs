@@ -123,7 +123,7 @@ public sealed partial class MainWindow
             VizHeightDragTo(p.Y - dragStart.Y);
             return;
         }
-        if (dragging is "player" or "visualizer")
+        if (dragging is "player" or "visualizer" or "pip")
         {
             var over = OverDock(e);
             if (over != dockOver)
@@ -174,7 +174,8 @@ public sealed partial class MainWindow
             dockOver = false;
             ShowDropZone(false);
             live = null;
-            DockWidget(widget);
+            if (widget == "pip") { if (floating is { } video) MoveToPanel(video); }
+            else DockWidget(widget);
             return;
         }
         // A click that didn't move anything leaves the theme alone.

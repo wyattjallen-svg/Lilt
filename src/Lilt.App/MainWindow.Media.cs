@@ -106,7 +106,15 @@ public sealed partial class MainWindow
             MediaTime.Text = mediaTab?.Media is { Playing: true } ? "Live" : "";
             return;
         }
-        var pos = Math.Min(info.Duration, info.Position + (info.Playing ? (Environment.TickCount64 - tab.MediaAt) / 1000.0 * info.Rate : 0));
+        var pos = info.Position + (info.Playing ? (Environment.TickCount64 - tab.MediaAt) / 1000.0 * info.Rate : 0);
+        // A position past the reported length means that length belonged to another clip: show the time without a bar.
+        if (pos > info.Duration + 1)
+        {
+            MediaProgress.Visibility = Visibility.Collapsed;
+            MediaTime.Text = MediaInfo.Clock(pos);
+            return;
+        }
+        pos = Math.Min(pos, info.Duration);
         MediaProgress.Visibility = Visibility.Visible;
         MediaProgress.Value = pos / info.Duration;
         MediaTime.Text = $"{MediaInfo.Clock(pos)} / {MediaInfo.Clock(info.Duration)}";

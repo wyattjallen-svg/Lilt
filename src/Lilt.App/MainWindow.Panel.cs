@@ -192,6 +192,12 @@ public sealed partial class MainWindow
             return;
         }
         if (!tabs.Contains(tab)) return;
+        // The panel holds the player, the visualizer and a popped-out video, not whole pages.
+        if (tab != floating)
+        {
+            ShowNotice(new("Only a popped-out video goes in the panel. Pop the video out, then drag it here.", NoticeKind.Info));
+            return;
+        }
         TakeOut(tab);
         Reparent(tab, PanelPages);
         panelTabs.Add(tab);
@@ -201,13 +207,6 @@ public sealed partial class MainWindow
         LayoutPages();
         LayoutPanel();
         ScheduleSave();
-    }
-
-    void OpenInPanel(string url)
-    {
-        var tab = new BrowserTab(url);
-        panelTabs.Add(tab);
-        ShowPanelTab(tab);
     }
 
     void ShowPanelTab(BrowserTab tab)
@@ -336,11 +335,6 @@ public sealed partial class MainWindow
     void PanelBack_Click(object sender, RoutedEventArgs e) => panelTab?.Core?.GoBack();
     void PanelReload_Click(object sender, RoutedEventArgs e) => panelTab?.Core?.Reload();
 
-    void PanelPutHere_Click(object sender, RoutedEventArgs e)
-    {
-        if (active is not null) MoveToPanel(active);
-    }
-
     void PanelSite_Click(object sender, ItemClickEventArgs e)
     {
         if (e.ClickedItem is BrowserTab tab) ShowPanelTab(tab);
@@ -379,9 +373,6 @@ public sealed partial class MainWindow
             AddPanelSiteItems(menu, shown);
             menu.Items.Add(new MenuFlyoutSeparator());
         }
-        if (active is { } a) menu.Items.Add(Item("Put the current tab here", "", () => MoveToPanel(a)));
-        menu.Items.Add(Item("Open an address here…", "", () => _ = AskPanelAddressAsync()));
-        menu.Items.Add(new MenuFlyoutSeparator());
         var spec = Current.Panel;
         menu.Items.Add(Item(spec.Edge == DockEdge.Left ? "Move the panel to the right" : "Move the panel to the left", "",
             () => Queue(Current with { Panel = Current.Panel with { Edge = Current.Panel.Edge == DockEdge.Left ? DockEdge.Right : DockEdge.Left } })));
@@ -392,12 +383,4 @@ public sealed partial class MainWindow
     }
 
     static Ids ToggleId(Ids ids, string id) => new(ids.Has(id) ? ids.Items.Where(x => x != id).ToArray() : ids.Items.Append(id).ToArray());
-
-    async Task AskPanelAddressAsync()
-    {
-        var box = new TextBox { PlaceholderText = "open.spotify.com, youtube.com, a chat…", IsSpellCheckEnabled = false, MinWidth = 320 };
-        if (await AskAsync("Open in the panel", box, "Open") != ContentDialogResult.Primary) return;
-        var target = AddressResolver.Resolve(box.Text, Engine.Template);
-        if (target.Uri is { } uri) OpenInPanel(uri.AbsoluteUri);
-    }
 }

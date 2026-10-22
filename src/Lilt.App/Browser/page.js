@@ -171,9 +171,14 @@
   const media = () => [...document.querySelectorAll('video, audio')];
   // Several elements can play at once (a site's ad or preview next to the player): the longest is the track.
   const length = m => isFinite(m.duration) ? m.duration : 1e9;
-  const pick = () => media().filter(m => !m.paused && !m.ended && m.readyState > 1).sort((a, b) => length(b) - length(a))[0]
+  // A track is a long element: a short sound playing beside it (a UI click, an ad) is never the one shown.
+  const pick = () => {
+    const playing = media().filter(m => !m.paused && !m.ended);
+    const tracks = playing.filter(m => m.readyState > 1 && length(m) > 30);
+    return (tracks.length ? tracks : playing.filter(m => m.readyState > 1)).sort((a, b) => length(b) - length(a))[0]
     || (current && current.isConnected ? current : null)
     || media().find(m => m.currentTime > 0) || null;
+  };
   const report = () => {
     const m = pick();
     if (m) current = m;

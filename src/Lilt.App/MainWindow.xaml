@@ -578,8 +578,7 @@
         <StackPanel x:Name="PanelEmpty" VerticalAlignment="Center" Margin="20" Spacing="10">
           <FontIcon Glyph="&#xE89F;" FontSize="28" Foreground="{StaticResource LiltTextMutedBrush}" />
           <TextBlock TextWrapping="Wrap" TextAlignment="Center" Foreground="{StaticResource LiltTextMutedBrush}"
-                     Text="Right-click a tab and choose Move to the panel. It stays here, playing, while you browse. Drag the player or the visualizer here to dock it." />
-          <Button Content="Put this tab here" HorizontalAlignment="Center" Click="PanelPutHere_Click" />
+                     Text="Drag the player or the visualizer here to dock it. A popped-out video can go here too, and it plays on the side while you browse." />
         </StackPanel>
         <Border x:Name="PanelVizGrip" Height="10" VerticalAlignment="Bottom" Canvas.ZIndex="2" Background="Transparent" Visibility="Collapsed"
                 PointerPressed="VizGrip_PointerPressed" ToolTipService.ToolTip="Drag to resize the visualizer" AutomationProperties.Name="Visualizer height">

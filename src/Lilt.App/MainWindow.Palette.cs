@@ -179,7 +179,6 @@ public sealed partial class MainWindow
             yield return new($"Block trackers: {level.ToString().ToLowerInvariant()}", t.Pages.Tracking == level ? "Current" : "Privacy", "\uE72E",
                 () => Queue(Current with { Pages = Current.Pages with { Tracking = level } }));
         yield return new("New workspace", "Workspaces", "\uE710", () => _ = NewWorkspaceAsync(null));
-        yield return new("Open an address in the panel", "Panel", "\uE89F", () => _ = AskPanelAddressAsync());
         yield return new(t.Panel.Edge == DockEdge.Left ? "Move the panel to the right" : "Move the panel to the left", "Panel", "\uE8AB",
             () => Queue(Current with { Panel = Current.Panel with { Edge = Current.Panel.Edge == DockEdge.Left ? DockEdge.Right : DockEdge.Left } }));
         yield return Toggle("Visualizer docked in the panel", t.Panel.Sections.Has("visualizer"), x => x with { Panel = x.Panel with { Sections = ToggleId(x.Panel.Sections, "visualizer") } });
