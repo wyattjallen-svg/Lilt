@@ -6,11 +6,12 @@ using Windows.Foundation;
 
 namespace Lilt.App;
 
-// Floating widgets over the page: the player, the visualizer and the popped-out video's frame. Drag one anywhere (the
-// pop-out also resizes from its corner); where it lands is saved to the theme as a fraction of the page area.
+// Floating widgets over the page: the player, the visualizer and the popped-out video's frame. Drag one anywhere, or resize
+// it from its corner (the pop-out keeps its video's shape; the player's contents grow with it); where it lands is saved
+// to the theme as a fraction of the page area, and its size at 100% interface size.
 public sealed partial class MainWindow
 {
-    const double PipBar = 30;
+    double PipBar => metrics.Px(30);
     string? dragging;
     Point dragStart;
     Rect dragFrom;
@@ -23,20 +24,27 @@ public sealed partial class MainWindow
         _ => theme.Media.Pip,
     };
 
-    static string Owner(string tag) => tag == "pipsize" ? "pip" : tag;
+    static string Owner(string tag) => tag switch
+    {
+        "pipsize" => "pip",
+        "playersize" => "player",
+        "vizsize" => "visualizer",
+        _ => tag,
+    };
 
     // Where a widget goes: its saved place, kept inside the page area.
     Rect Box(string widget)
     {
         if (live is { } r && dragging is { } d && Owner(d) == widget) return r;
         var s = Spec(widget);
+        var sc = metrics.Scale;
         double width = WidgetLayer.ActualWidth, height = WidgetLayer.ActualHeight;
-        var w = Math.Min(s.Width, width);
+        var w = Math.Min(Math.Round(s.Width * sc), width);
         var h = widget switch
         {
-            "player" => s.Height > 0 ? s.Height : MediaWidget.ActualHeight > 0 ? MediaWidget.ActualHeight : 110,
+            "player" => s.Height > 0 ? Math.Round(s.Height * sc) : MediaWidget.ActualHeight > 0 ? MediaWidget.ActualHeight : Math.Round(110 * sc),
             "pip" => (s.Height > 0 ? s.Height * w / s.Width : w * 9 / 16) + PipBar,
-            _ => s.Height,
+            _ => Math.Round(s.Height * sc),
         };
         h = Math.Min(h, height);
         return new Rect(Inside(s.X * width, w, width), Inside(s.Y * height, h, height), w, h);
@@ -61,6 +69,8 @@ public sealed partial class MainWindow
             element.Height = widget == "player" && Spec(widget).Height <= 0 ? double.NaN : b.Height;
             if (widget != "pip") element.Opacity = Spec(widget).Opacity;
         }
+        PipFrame.RowDefinitions[0].Height = new GridLength(PipBar);
+        ScalePlayer();
         // The popped-out page sits exactly in the frame's empty area (the page host and the widget layer share a cell).
         if (floating?.View is { } view)
         {
@@ -78,8 +88,8 @@ public sealed partial class MainWindow
     void Widget_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
         if (dragging is not null || sender is not FrameworkElement { Tag: string tag } element) return;
-        // Docked in the panel, the panel places it.
-        if (tag is "player" or "visualizer" && PanelHost.Children.Contains(element)) return;
+        // Docked in the panel, the panel places and sizes it.
+        if (Owner(tag) is "player" or "visualizer" && PanelHost.Children.Contains(Owner(tag) == "player" ? MediaWidget : VisualizerWidget)) return;
         if (!e.GetCurrentPoint(element).Properties.IsLeftButtonPressed) return;
         StartDrag(tag, element, e);
         dragFrom = Box(Owner(tag));
@@ -138,8 +148,15 @@ public sealed partial class MainWindow
         {
             // Resizing keeps the video's shape.
             var aspect = (f.Height - PipBar) / f.Width;
-            var w = Math.Clamp(f.Width + Math.Max(dx, dy / aspect), 200, Math.Max(200, Math.Min(900, Math.Min(width - f.X, (height - f.Y - PipBar) / aspect))));
+            var w = Math.Clamp(f.Width + Math.Max(dx, dy / aspect), metrics.Px(200), Math.Max(metrics.Px(200), Math.Min(metrics.Px(900), Math.Min(width - f.X, (height - f.Y - PipBar) / aspect))));
             live = new Rect(f.X, f.Y, w, w * aspect + PipBar);
+        }
+        else if (dragging is "playersize" or "vizsize")
+        {
+            var sc = metrics.Scale;
+            var w = Math.Clamp(f.Width + dx, 200 * sc, Math.Max(200 * sc, Math.Min(900 * sc, width - f.X)));
+            var h = dragging == "vizsize" ? Math.Clamp(f.Height + dy, 40 * sc, Math.Max(40 * sc, Math.Min(400 * sc, height - f.Y))) : f.Height;
+            live = new Rect(f.X, f.Y, w, h);
         }
         else live = new Rect(Inside(f.X + dx, f.Width, width), Inside(f.Y + dy, f.Height, height), f.Width, f.Height);
         PlaceWidgets();
@@ -188,7 +205,10 @@ public sealed partial class MainWindow
         double width = WidgetLayer.ActualWidth, height = WidgetLayer.ActualHeight;
         if (width <= 0 || height <= 0) return;
         var s = Spec(widget) with { X = Math.Round(r.X / width, 4), Y = Math.Round(r.Y / height, 4) };
-        if (tag == "pipsize") s = s with { Width = Math.Round(r.Width), Height = s.Height > 0 ? Math.Round(r.Height - PipBar) : 0 };
+        var sc = metrics.Scale;
+        if (tag == "pipsize") s = s with { Width = Math.Round(r.Width / sc), Height = s.Height > 0 ? Math.Round((r.Height - PipBar) / sc) : 0 };
+        else if (tag == "playersize") s = s with { Width = Math.Round(r.Width / sc) };
+        else if (tag == "vizsize") s = s with { Width = Math.Round(r.Width / sc), Height = Math.Round(r.Height / sc) };
         var m = Current.Media;
         Queue(Current with
         {

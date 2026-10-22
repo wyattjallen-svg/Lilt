@@ -201,6 +201,7 @@ public sealed partial class MainWindow
             };
             SuggestList.Children.Add(row);
         }
+        ScaleNow(SuggestList);
         var at = AddressBox.TransformToVisual(ContentArea).TransformPoint(default);
         SuggestPanel.Width = Math.Min(Math.Max(320, AddressBox.ActualWidth), Math.Max(200, ContentArea.ActualWidth - 8));
         SuggestPanel.Margin = new Thickness(Math.Clamp(at.X, 4, Math.Max(4, ContentArea.ActualWidth - SuggestPanel.Width - 4)), Math.Max(4, at.Y + AddressBox.ActualHeight + 4), 0, 0);

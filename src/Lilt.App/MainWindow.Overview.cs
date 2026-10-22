@@ -57,6 +57,7 @@ public sealed partial class MainWindow
             row.Children.Add(card);
         }
         if (row.Children.Count > 0) grid.Children.Add(row);
+        ScaleNow(dialog.Content);
         await dialog.ShowAsync();
         if (chosen is not null && tabs.Contains(chosen)) Activate(chosen);
     }

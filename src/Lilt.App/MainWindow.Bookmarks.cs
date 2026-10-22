@@ -177,6 +177,7 @@ public sealed partial class MainWindow
     // One dialog at a time; a second request while one is open is ignored.
     async Task<ContentDialogResult> AskAsync(string title, object content, string primary)
     {
+        ScaleNow(content);
         var dialog = new ContentDialog
         {
             XamlRoot = Root.XamlRoot,

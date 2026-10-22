@@ -445,6 +445,24 @@ jobs:
           $ll = if (Test-Path smoke-v10.log) { @(Get-Content smoke-v10.log) } else { @() }
           Check 'Lilt logs its start' ([bool]($ll -match '"level":"info".*started')) "$($ll.Count) lines"
 
+          # v0.10: interface size. At 125% the toolbar, sidebar, player (and what's in it), Customize and the palette all grow
+          # together; at 80% they shrink together.
+          foreach ($size in @(@{ name = 'scale'; value = '1.25' }, @{ name = 'scale-small'; value = '0.8' })) {
+            $sn = $size.name
+            $st = Join-Path $env:RUNNER_TEMP "$sn-theme.json"
+            (Get-Content out/Lilt/Themes/minimal.json -Raw) -replace '"scale": 1,', "`"scale`": $($size.value)," | Set-Content $st
+            New-Item -ItemType Directory "$env:RUNNER_TEMP/lilt-$sn/newtab" -Force | Out-Null
+            Copy-Item tools/media-test.html "$env:RUNNER_TEMP/lilt-$sn/newtab/media-test.html"
+            $script = 'wait 4000; open example.com; wait 3500; state; mark player; customize; wait 1500; mark customize; palette; wait 1200; mark palette'
+            [void](Smoke $sn @('--theme', "`"$st`"", '--url', 'https://newtab.lilt.example/media-test.html', '--browser-args', '"--autoplay-policy=no-user-gesture-required"', '--run', "`"$script`"") {
+              param($p); $p.Refresh(); [void][Lilt.Input]::SetForegroundWindow($p.MainWindowHandle); Follow $sn
+            } -settle 1)
+          }
+          $s = States 'scale'
+          Check 'Interface size 125%: the toolbar and the player grow together' ($s.Count -gt 0 -and $s[0].scale -eq 1.25 -and $s[0].toolbarHeight -ge 48 -and $s[0].player -and $s[0].playerWidth -ge 360) "$(if ($s.Count) { "scale $($s[0].scale), toolbar $($s[0].toolbarHeight), player $($s[0].player) $($s[0].playerWidth)" })"
+          $s = States 'scale-small'
+          Check 'Interface size 80%: the toolbar and the player shrink together' ($s.Count -gt 0 -and $s[0].scale -eq 0.8 -and $s[0].toolbarHeight -le 34 -and $s[0].player -and $s[0].playerWidth -le 250) "$(if ($s.Count) { "scale $($s[0].scale), toolbar $($s[0].toolbarHeight), player $($s[0].player) $($s[0].playerWidth)" })"
+
           [void](Smoke 'proton-pass' @('--install-extension', 'ghmbeldphafepmbegfdlkpapadhbakde') -settle 4)
           $pp = Extensions 'proton-pass'
           Check 'Proton Pass installs from the Chrome Web Store' ([bool]($pp -match 'Proton')) ($pp -join '; ')

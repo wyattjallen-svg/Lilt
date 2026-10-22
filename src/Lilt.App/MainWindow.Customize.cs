@@ -36,7 +36,11 @@ public sealed partial class MainWindow
     Theme Current => pendingTheme ?? theme;
     bool syncing = true, themeLoadFailed;
 
-    void CustomizeFlyout_Opening(object sender, object e) => SyncCustomize();
+    void CustomizeFlyout_Opening(object sender, object e)
+    {
+        SyncCustomize();
+        ScaleNow(CustomizeFlyout);
+    }
 
     void CustomizeTabs_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)
     {
@@ -76,6 +80,7 @@ public sealed partial class MainWindow
         RadiusSlider.Value = t.Shape.Radius;
         ToolbarHeightSlider.Value = t.Toolbar.Height;
         Select(DensityCombo, Camel(t.Density.ToString()));
+        Select(ScaleCombo, Math.Round(t.Scale * 100).ToString(System.Globalization.CultureInfo.InvariantCulture));
         SidebarWidthSlider.Value = t.Sidebar.Width;
         // "None" has its own tag: an empty Tag doesn't reliably come back as "" from XAML, which made None sometimes do nothing.
         var bg = t.Home.Background;
@@ -235,6 +240,8 @@ public sealed partial class MainWindow
             },
             Motion = new MotionSpec(AnimationsCheck.IsChecked == true, (int)DurationSlider.Value, WindowDragCheck.IsChecked == true),
             Density = DensityCombo.SelectedItem is ComboBoxItem { Tag: string d } && Enum.TryParse<Density>(d, true, out var density) ? density : t.Density,
+            Scale = ScaleCombo.SelectedItem is ComboBoxItem { Tag: string pct }
+                && double.TryParse(pct, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var percent) ? percent / 100 : t.Scale,
             Home = t.Home with { Glass = HomeGlassCheck.IsChecked == true, Dim = HomeDimSlider.Value / 100 },
             Pages = t.Pages with
             {

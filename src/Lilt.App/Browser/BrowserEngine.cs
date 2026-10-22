@@ -193,7 +193,8 @@ sealed class BrowserEngine
 
         core.AddWebResourceRequestedFilter($"https://{InternalPages.Host}/*", CoreWebView2WebResourceContext.All);
         core.WebResourceRequested += OnInternalRequest;
-        core.NavigationStarting += OnNavigationStarting;
+        // The captured core, not the event's sender, which can be another projection of the same view.
+        core.NavigationStarting += (_, e) => OnNavigationStarting(core, e);
         core.PermissionRequested += OnPermissionRequested;
         core.LaunchingExternalUriScheme += OnExternalScheme;
         core.NewWindowRequested += OnNewWindowRequested;

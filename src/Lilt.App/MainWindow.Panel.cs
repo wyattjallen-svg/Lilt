@@ -50,8 +50,8 @@ public sealed partial class MainWindow
         var left = spec.Edge == DockEdge.Left;
         var open = panelOpen && !fullScreen;
         var room = ContentArea.ActualWidth;
-        var width = dragPanelWidth ?? spec.Width;
-        if (room > 0) width = Math.Min(width, Math.Max(200, room * 0.75));
+        var width = dragPanelWidth ?? Math.Round(spec.Width * metrics.Scale);
+        if (room > 0) width = Math.Min(width, Math.Max(metrics.Px(200), room * 0.75));
         PanelHost.Width = width;
         PanelHost.HorizontalAlignment = left ? HorizontalAlignment.Left : HorizontalAlignment.Right;
         var bw = theme.Shape.BorderWidth;
@@ -62,6 +62,7 @@ public sealed partial class MainWindow
         // Notices and permission questions stay over the page.
         NoticeBar.Margin = left ? new Thickness(16 + taken, 16, 16, 16) : new Thickness(16, 16, 16 + taken, 16);
         PermissionBar.Margin = left ? new Thickness(12 + taken, 12, 12, 12) : new Thickness(12, 12, 12 + taken, 12);
+        ScalePlayer();
     }
 
     void LayoutPanel()
@@ -102,7 +103,7 @@ public sealed partial class MainWindow
         // The visualizer's height grip sits on its bottom edge, clear of the panel's own edge grip.
         PanelVizGrip.Visibility = open && vizRow >= 0 ? Visibility.Visible : Visibility.Collapsed;
         if (vizRow >= 0) Grid.SetRow(PanelVizGrip, vizRow);
-        PanelVizGrip.Margin = spec.Edge == DockEdge.Left ? new Thickness(0, 0, 12, 0) : new Thickness(12, 0, 0, 0);
+        PanelVizGrip.Margin = spec.Edge == DockEdge.Left ? new Thickness(0, 0, metrics.Px(12), 0) : new Thickness(metrics.Px(12), 0, 0, 0);
         Grid.SetRowSpan(PanelGrip, PanelHost.RowDefinitions.Count);
         ShowPanelPage();
         PlaceWidgets();
@@ -119,14 +120,16 @@ public sealed partial class MainWindow
             (host is null ? (Panel)PanelHost : WidgetLayer).Children.Remove(widget);
             target.Children.Add(widget);
         }
+        // Docked, the panel sizes it, so its own resize corner goes.
+        (widget == MediaWidget ? PlayerGrip : VizGrip).Visibility = host is null ? Visibility.Visible : Visibility.Collapsed;
         if (host is null)
         {
             widget.Margin = default;
             return;
         }
         widget.Width = double.NaN;
-        widget.Height = widget == VisualizerWidget ? theme.Media.Visualizer.Height : double.NaN;
-        widget.Margin = new Thickness(6, 0, 6, 6);
+        widget.Height = widget == VisualizerWidget ? Math.Round(theme.Media.Visualizer.Height * metrics.Scale) : double.NaN;
+        widget.Margin = new Thickness(metrics.Px(6), 0, metrics.Px(6), metrics.Px(6));
         widget.Opacity = 1;
     }
 
@@ -276,8 +279,8 @@ public sealed partial class MainWindow
     {
         var open = panelOpen && !fullScreen;
         PanelDropZone.HorizontalAlignment = theme.Panel.Edge == DockEdge.Left ? HorizontalAlignment.Left : HorizontalAlignment.Right;
-        PanelDropZone.Width = open ? Math.Max(160, PanelHost.ActualWidth) : 160;
-        PanelDropZone.Margin = open ? default : new Thickness(10);
+        PanelDropZone.Width = open ? Math.Max(metrics.Px(160), PanelHost.ActualWidth) : metrics.Px(160);
+        PanelDropZone.Margin = open ? default : new Thickness(metrics.Px(10));
         PanelDropZone.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -291,7 +294,7 @@ public sealed partial class MainWindow
             return p.X >= 0 && p.X <= PanelHost.ActualWidth && p.Y >= 0 && p.Y <= PanelHost.ActualHeight;
         }
         var x = e.GetCurrentPoint(ContentArea).Position.X;
-        return left ? x <= 160 : x >= ContentArea.ActualWidth - 160;
+        return left ? x <= metrics.Px(160) : x >= ContentArea.ActualWidth - metrics.Px(160);
     }
 
     // Puts a widget in the panel's rows (at the bottom) and shows it there, whatever its own setting says.
@@ -315,7 +318,7 @@ public sealed partial class MainWindow
 
     void VizHeightDragTo(double dy)
     {
-        vizHeight = Math.Clamp(vizStart + dy, 40, 400);
+        vizHeight = Math.Clamp(vizStart + dy, metrics.Px(40), metrics.Px(400));
         VisualizerWidget.Height = vizHeight.Value;
     }
 
@@ -323,7 +326,7 @@ public sealed partial class MainWindow
     {
         if (vizHeight is not { } h) return;
         vizHeight = null;
-        Queue(Current with { Media = Current.Media with { Visualizer = Current.Media.Visualizer with { Height = Math.Round(h) } } });
+        Queue(Current with { Media = Current.Media with { Visualizer = Current.Media.Visualizer with { Height = Math.Round(h / metrics.Scale) } } });
     }
 
     void PanelGrip_PointerPressed(object sender, PointerRoutedEventArgs e)
@@ -336,7 +339,7 @@ public sealed partial class MainWindow
     void PanelDragTo(Windows.Foundation.Point p)
     {
         var w = theme.Panel.Edge == DockEdge.Left ? p.X : PanelHost.ActualWidth - p.X;
-        dragPanelWidth = Math.Clamp(w, 200, Math.Max(200, Math.Min(1200, ContentArea.ActualWidth * 0.75)));
+        dragPanelWidth = Math.Clamp(w, metrics.Px(200), Math.Max(metrics.Px(200), Math.Min(metrics.Px(1200), ContentArea.ActualWidth * 0.75)));
         SizePanel();
     }
 
@@ -344,7 +347,7 @@ public sealed partial class MainWindow
     {
         if (dragPanelWidth is not { } w) return;
         dragPanelWidth = null;
-        Queue(Current with { Panel = Current.Panel with { Width = Math.Round(w) } });
+        Queue(Current with { Panel = Current.Panel with { Width = Math.Round(w / metrics.Scale) } });
     }
 
     void PanelToggle_Click(object sender, RoutedEventArgs e) => TogglePanel();

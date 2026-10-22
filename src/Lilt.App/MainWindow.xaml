@@ -151,6 +151,16 @@
                     <ColorPicker x:Name="TokenPicker" IsAlphaEnabled="True" IsMoreButtonVisible="False" IsColorChannelTextInputVisible="False"
                                  IsHexInputVisible="True" ColorSpectrumShape="Ring" ColorChanged="TokenPicker_ColorChanged" />
                     <ComboBox x:Name="FontCombo" Header="Font" HorizontalAlignment="Stretch" IsEditable="True" SelectionChanged="Customize_Changed" TextSubmitted="FontCombo_TextSubmitted" />
+                    <ComboBox x:Name="ScaleCombo" Header="Interface size" HorizontalAlignment="Stretch" SelectionChanged="Customize_Changed"
+                              ToolTipService.ToolTip="Text, buttons, bars, the sidebar, the panel and widgets together. Pages keep their own zoom (Ctrl + and -).">
+                      <ComboBoxItem Content="75%" Tag="75" />
+                      <ComboBoxItem Content="80%" Tag="80" />
+                      <ComboBoxItem Content="90%" Tag="90" />
+                      <ComboBoxItem Content="100%" Tag="100" />
+                      <ComboBoxItem Content="110%" Tag="110" />
+                      <ComboBoxItem Content="125%" Tag="125" />
+                      <ComboBoxItem Content="150%" Tag="150" />
+                    </ComboBox>
                     <Slider x:Name="FontSizeSlider" Header="Text size" Minimum="11" Maximum="18" StepFrequency="1" ValueChanged="Customize_Changed" />
                     <Slider x:Name="RadiusSlider" Header="Corner radius" Minimum="0" Maximum="20" StepFrequency="1" ValueChanged="Customize_Changed" />
                     <Slider x:Name="ToolbarHeightSlider" Header="Toolbar height" Minimum="32" Maximum="64" StepFrequency="2" ValueChanged="Customize_Changed" />
@@ -669,6 +679,10 @@
                            Foreground="{StaticResource LiltAccentBrush}" PointerPressed="MediaProgress_PointerPressed" />
               <TextBlock x:Name="MediaTime" Grid.Column="1" FontSize="11" Foreground="{StaticResource LiltTextMutedBrush}" />
             </Grid>
+            <!-- Floating, the player resizes from this corner; its contents grow with it. -->
+            <Polygon x:Name="PlayerGrip" Grid.Row="2" Grid.Column="2" Tag="playersize" Points="10,0 10,10 0,10" Width="10" Height="10" Stretch="Fill"
+                     HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-6,-6" Fill="{StaticResource LiltBorderBrush}"
+                     PointerPressed="Widget_PointerPressed" ToolTipService.ToolTip="Drag to resize" />
           </Grid>
         </Border>
 
@@ -676,7 +690,12 @@
                 Background="{StaticResource LiltOverlayBrush}" BorderBrush="{StaticResource LiltBorderBrush}"
                 PointerPressed="Widget_PointerPressed" DoubleTapped="Visualizer_DoubleTapped"
                 ToolTipService.ToolTip="Drag to move; double-click to change style" AutomationProperties.Name="Visualizer">
-          <Canvas x:Name="VisualizerCanvas" />
+          <Grid>
+            <Canvas x:Name="VisualizerCanvas" />
+            <Polygon x:Name="VizGrip" Tag="vizsize" Points="10,0 10,10 0,10" Width="10" Height="10" Stretch="Fill" HorizontalAlignment="Right"
+                     VerticalAlignment="Bottom" Margin="0,0,-4,-4" Fill="{StaticResource LiltBorderBrush}" PointerPressed="Widget_PointerPressed"
+                     ToolTipService.ToolTip="Drag to resize" />
+          </Grid>
         </Border>
 
         <!-- A video popped out inside Lilt: this frame's bar and resize grip sit over the playing tab's page, which is
@@ -686,7 +705,7 @@
             <RowDefinition Height="30" />
             <RowDefinition Height="*" />
           </Grid.RowDefinitions>
-          <Border Tag="pip" Padding="8,0,2,0" CornerRadius="8,8,0,0" Background="{StaticResource LiltOverlayBrush}"
+          <Border x:Name="PipHeader" Tag="pip" Padding="8,0,2,0" CornerRadius="8,8,0,0" Background="{StaticResource LiltOverlayBrush}"
                   PointerPressed="Widget_PointerPressed" DoubleTapped="PipBar_DoubleTapped"
                   ToolTipService.ToolTip="Drag to move; double-click to go back to the tab" AutomationProperties.Name="Popped-out video">
             <Grid ColumnSpacing="2">
@@ -722,7 +741,7 @@
               <RowDefinition Height="Auto" />
               <RowDefinition Height="*" />
             </Grid.RowDefinitions>
-            <Grid Padding="10,6" ColumnSpacing="6">
+            <Grid x:Name="PeekBar" Padding="10,6" ColumnSpacing="6">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />

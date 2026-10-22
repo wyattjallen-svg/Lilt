@@ -1311,6 +1311,7 @@ Test("about:logs escapes what it shows, counts each kind and summarizes crashes"
     var text = LogsPage.PlainText(info, entries);
     True(text.StartsWith("Lilt 0.10.0 · engine 141.0") && text.Contains("crash engine: <script>"));
     True(LogsPage.Render(info, [], now).Contains("Nothing logged yet"));
+    True(html.Contains("html{zoom:1}") && LogsPage.Render(info with { Zoom = 1.25 }, [], now).Contains("html{zoom:1.25}"));
 });
 
 return Summary();

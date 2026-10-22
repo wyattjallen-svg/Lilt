@@ -74,6 +74,7 @@ public sealed partial class MainWindow
                 row.Children.Add(reset);
                 PermissionList.Children.Add(row);
             }
+            ScaleNow(PermissionList);
         }
         catch (Exception e)
         {

@@ -81,6 +81,7 @@ public sealed partial class MainWindow
         }
         PaletteList.Items.Clear();
         foreach (var item in found) PaletteList.Items.Add(Row(item));
+        ScaleNow(PaletteList);
         PaletteList.SelectedIndex = PaletteList.Items.Count > 0 ? 0 : -1;
     }
 
@@ -234,6 +235,9 @@ public sealed partial class MainWindow
         foreach (var material in Enum.GetValues<Backdrop>())
             yield return new($"Window material: {material}", t.Backdrop.Material == material ? "Current" : "", "",
                 () => Queue(Current with { Backdrop = Current.Backdrop with { Material = material } }));
+        foreach (var size in interfaceSizes)
+            yield return new($"Interface size: {Math.Round(size * 100)}%", Math.Abs(t.Scale - size) < 0.001 ? "Current" : "", "\uE71E",
+                () => Queue(Current with { Scale = size }));
         foreach (var density in Enum.GetValues<Density>())
             yield return new($"Spacing: {density.ToString().ToLowerInvariant()}", t.Density == density ? "Current" : "", "",
                 () => Queue(Current with { Density = density }));

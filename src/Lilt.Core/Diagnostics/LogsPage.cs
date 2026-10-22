@@ -7,7 +7,7 @@ namespace Lilt.Core.Diagnostics;
 // What about:logs shows besides the entries. Colors are the theme's, as #rrggbb. Token lets the page's own buttons clear
 // the log or open its folder; Nonce allows the page's one style and one script under its content security policy.
 public sealed record LogsPageInfo(string Version, string Engine, string Windows, string Token, string Nonce,
-    string Background, string Surface, string Text, string Muted, string Accent, string Border, bool Light);
+    string Background, string Surface, string Text, string Muted, string Accent, string Border, bool Light, double Zoom = 1);
 
 public static class LogsPage
 {
@@ -55,6 +55,7 @@ public static class LogsPage
             :root{--bg:{{E(info.Background)}};--surface:{{E(info.Surface)}};--text:{{E(info.Text)}};--muted:{{E(info.Muted)}};--accent:{{E(info.Accent)}};--border:{{E(info.Border)}};
             --crash:#e5484d;--error:#f2994a;--warning:#d6b13c;--info:var(--muted)}
             *{box-sizing:border-box}
+            html{zoom:{{Math.Clamp(info.Zoom, 0.75, 1.5).ToString(CultureInfo.InvariantCulture)}}}
             body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif}
             main{max-width:960px;margin:0 auto;padding:40px 28px 64px}
             h1{font:600 28px/1.2 "Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;margin:0 0 4px}

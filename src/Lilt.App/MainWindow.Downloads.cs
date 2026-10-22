@@ -16,8 +16,8 @@ public sealed partial class MainWindow
     void OnDownloadStarted(CoreWebView2DownloadOperation op)
     {
         var body = (Style)Application.Current.Resources["BodyText"];
-        var name = new TextBlock { Style = body, Text = Path.GetFileName(op.ResultFilePath), FontSize = theme.Typography.Size, TextTrimming = TextTrimming.CharacterEllipsis };
-        var status = new TextBlock { Style = body, Foreground = ThemeResources.Get("LiltTextMutedBrush"), FontSize = Math.Max(9, theme.Typography.Size - 1) };
+        var name = new TextBlock { Style = body, Text = Path.GetFileName(op.ResultFilePath), FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis };
+        var status = new TextBlock { Style = body, Foreground = ThemeResources.Get("LiltTextMutedBrush"), FontSize = 12 };
         var icon = new FontIcon { Glyph = "" };
         var action = new Button { Style = (Style)Application.Current.Resources["ChromeButton"], Content = icon, VerticalAlignment = VerticalAlignment.Center };
         StyleButton(action);
@@ -31,6 +31,7 @@ public sealed partial class MainWindow
         Grid.SetColumn(action, 1);
         row.Children.Add(action);
         DownloadList.Children.Insert(0, row);
+        ScaleNow(text);
         NoDownloads.Visibility = Visibility.Collapsed;
         if (!hasDownloads)
         {

@@ -66,7 +66,7 @@ public sealed partial class MainWindow
         var nonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(12));
         var info = new LogsPageInfo(LiltVersion, engineVersion, Environment.OSVersion.Version.ToString(), logsToken, nonce,
             c.Page.Opaque.ToString(), c.SurfaceRaised.Opaque.ToString(), c.Text.Opaque.ToString(), c.TextMuted.Opaque.ToString(), c.Accent.Opaque.ToString(),
-            c.Border.ToString(), theme.Base == Lilt.Core.Theming.ThemeBase.Light);
+            c.Border.ToString(), theme.Base == Lilt.Core.Theming.ThemeBase.Light, theme.Scale);
         return new(200, "text/html; charset=utf-8", LogsPage.Render(info, entries, DateTimeOffset.Now), LogsPage.Csp(nonce));
     }
 

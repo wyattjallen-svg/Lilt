@@ -52,6 +52,8 @@ public sealed partial class MainWindow
             @base = t.Base == ThemeBase.Light ? "light" : "dark",
             font = t.Typography.Family,
             radius = t.Shape.Radius,
+            // Lilt's own pages follow the interface size.
+            scale = t.Scale,
             search = SearchEngines.For(t.Pages.Search).Name,
             // The shortcut hint shows your own keys.
             hint = string.Join(" · ", new[] { ("palette", "find anything"), ("newTab", "new tab"), ("address", "address"), ("bookmark", "bookmark"), ("split", "split view"), ("customize", "customize") }

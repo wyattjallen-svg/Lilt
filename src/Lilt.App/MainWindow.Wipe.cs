@@ -77,6 +77,7 @@ public sealed partial class MainWindow
         });
         panel.Children.Add(entry);
         panel.Children.Add(keypad);
+        ScaleNow(panel);
 
         var dialog = new ContentDialog
         {

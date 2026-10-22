@@ -77,7 +77,7 @@ public sealed partial class MainWindow : Window
             themes.Current.Pages.SmoothScrolling), queue);
         var typography = themes.Current.Typography;
         Application.Current.Resources["ContentControlThemeFontFamily"] = new FontFamily(typography.Family);
-        Application.Current.Resources["ControlContentThemeFontSize"] = typography.Size;
+        Application.Current.Resources["ControlContentThemeFontSize"] = ShellMetrics.From(themes.Current).Body;
         firstRun = !options.InPrivate && !File.Exists(paths.Session) && !File.Exists(paths.Bookmarks);
         bookmarks = new BookmarkStore(paths.Bookmarks);
         bookmarks.Load();
@@ -98,6 +98,7 @@ public sealed partial class MainWindow : Window
         InitPanel();
         InitPower();
         InitStorage();
+        InitScale();
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(Toolbar);
@@ -329,6 +330,9 @@ public sealed partial class MainWindow : Window
         player = MediaWidget.Visibility == Visibility.Visible,
         visualizer = VisualizerWidget.Visibility == Visibility.Visible,
         visualizerSource = vizDrawn,
+        scale = metrics.Scale,
+        toolbarHeight = Math.Round(Toolbar.ActualHeight),
+        playerWidth = Math.Round(MediaWidget.ActualWidth),
         visualizerFrames = vizFrames,
         visualizerPeak = Math.Round(vizPeak, 3),
         media = mediaTab?.Media is { } m ? new { m.Title, m.Artist, m.Playing, m.Video, m.Duration, m.PictureInPicture } : null,
@@ -546,6 +550,10 @@ public sealed partial class MainWindow : Window
             case "panel": TogglePanel(); break;
             case "wipe": _ = WipeAsync(); break;
             case "sleepTabs": SleepBackgroundTabs(); break;
+            case "biggerUi": StepInterfaceSize(1); break;
+            case "smallerUi": StepInterfaceSize(-1); break;
+            case "resetUi": StepInterfaceSize(0); break;
+            case "logs": OpenLogs(); break;
             case "toPanel": if (active is not null) _ = MoveToPanelAsync(active); break;
             case "reopenTab": ReopenTab(); break;
             case "closeTab": if (active is not null) CloseTab(active); break;
@@ -676,6 +684,8 @@ public sealed partial class MainWindow : Window
     {
         theme = t;
         metrics = ShellMetrics.From(t);
+        // Controls made from now on (menus, dialogs) start at the scaled body size; the XAML is scaled in ScaleChrome.
+        Application.Current.Resources["ControlContentThemeFontSize"] = metrics.Body;
         var highContrast = new AccessibilitySettings().HighContrast;
         var colors = highContrast ? ThemeResources.HighContrast() : t.Colors;
         ThemeResources.Apply(Application.Current.Resources, colors);
@@ -698,7 +708,7 @@ public sealed partial class MainWindow : Window
             BrowserTab.CloseButtons = t.Sidebar.CloseButtons;
             foreach (var tab in AllTabs) tab.RefreshCloseButton();
         }
-        AddressHost.MaxWidth = t.Toolbar.AddressWidth;
+        AddressHost.MaxWidth = t.Toolbar.AddressWidth * metrics.Scale;
         windowMotion?.Apply(t.Motion.WindowDrag && AnimationsOn, t.Motion.Duration);
 
         var m = metrics;
@@ -716,20 +726,20 @@ public sealed partial class MainWindow : Window
         AddressBox.MinHeight = 0;
         AddressBox.Height = m.ControlHeight;
         AddressBox.CornerRadius = radius;
-        var pad = Math.Max(0, Math.Floor((m.ControlHeight - t.Typography.Size * 1.33) / 2) - 1);
+        var pad = Math.Max(0, Math.Floor((m.ControlHeight - m.Body * 1.33) / 2) - 1);
         AddressBox.Padding = new Thickness(m.Unit * 1.5, pad, m.Unit, pad);
         AddressBox.FontFamily = BookmarkSearch.FontFamily = family;
-        AddressBox.FontSize = BookmarkSearch.FontSize = t.Typography.Size;
+        AddressBox.FontSize = BookmarkSearch.FontSize = m.Body;
         AddressBox.FontWeight = weight;
         BookmarkSearch.CornerRadius = radius;
         TabList.FontFamily = BookmarkList.FontFamily = family;
-        TabList.FontSize = BookmarkList.FontSize = t.Typography.Size;
+        TabList.FontSize = BookmarkList.FontSize = m.Body;
         foreach (var tb in new[] { ThemeName, ThemeStatus, MemoryText, NoDownloads, InsecureText })
         {
             tb.FontFamily = family;
-            tb.FontSize = t.Typography.Size;
             tb.FontWeight = weight;
         }
+        InsecureText.FontSize = m.Body;
         // Floating panels follow the theme's shape too.
         foreach (var panel in new[] { MediaWidget, VisualizerWidget, PeekPanel })
         {
@@ -738,7 +748,8 @@ public sealed partial class MainWindow : Window
         }
         MediaTitle.FontFamily = MediaArtist.FontFamily = MediaTime.FontFamily = PipTitle.FontFamily = PeekAddress.FontFamily = family;
         TabsTitle.FontFamily = family;
-        TabsTitle.FontSize = Math.Max(9, t.Typography.Size - 2);
+        TabsTitle.FontSize = Math.Max(9, m.Body - 2);
+        ScaleChrome();
         AppWindow.TitleBar.PreferredHeightOption = m.TallCaption ? TitleBarHeightOption.Tall : TitleBarHeightOption.Standard;
 
         // The file is the source of truth for layout, but only fields that changed in it override what you set in the sidebar.
@@ -767,7 +778,7 @@ public sealed partial class MainWindow : Window
     [
         BackButton, ForwardButton, ReloadButton, HomeButton, StarButton, MediaButton, SplitButton, PanelButton, PaletteButton, DownloadsButton, ExtensionsButton,
         CustomizeButton, SidebarButton, MenuButton,
-        NewTabButton, BookmarkImportButton, EdgeLeft, EdgeRight, EdgeTop, EdgeBottom, PanelToggle, PinToggle,
+        NewTabButton, BookmarkImportButton, BookmarkManageButton, EdgeLeft, EdgeRight, EdgeTop, EdgeBottom, PanelToggle, PinToggle,
         PanelBack, PanelReload, PanelMoreButton, PanelCloseButton,
         ReloadThemeButton, EditThemeButton, DataFolderButton, UserContentButton, MeasureButton,
     ];
@@ -918,8 +929,8 @@ public sealed partial class MainWindow : Window
             };
             Sidebar.Background = ThemeResources.Get("LiltSurfaceBrush");
         }
-        Sidebar.Width = vertical ? spec.Width : double.NaN;
-        Sidebar.Height = vertical ? double.NaN : spec.Height;
+        Sidebar.Width = vertical ? Math.Round(spec.Width * metrics.Scale) : double.NaN;
+        Sidebar.Height = vertical ? double.NaN : Math.Round(spec.Height * metrics.Scale);
         Sidebar.HorizontalAlignment = edge switch
         {
             DockEdge.Left => HorizontalAlignment.Left,
@@ -961,7 +972,7 @@ public sealed partial class MainWindow : Window
         TabsHeader.Visibility = TabList.Visibility = showTabs ? Visibility.Visible : Visibility.Collapsed;
         BookmarksPanel.Visibility = showBookmarks ? Visibility.Visible : Visibility.Collapsed;
         SidebarFooter.Visibility = sections.Has("layout") ? Visibility.Visible : Visibility.Collapsed;
-        BookmarkList.MaxHeight = showTabs ? 300 : double.PositiveInfinity;
+        BookmarkList.MaxHeight = showTabs ? metrics.Px(300) : double.PositiveInfinity;
         BookmarksPanel.RowDefinitions[2].Height = showTabs ? GridLength.Auto : new GridLength(1, GridUnitType.Star);
 
         TabsHeader.VerticalAlignment = SidebarFooter.VerticalAlignment = vertical ? VerticalAlignment.Stretch : VerticalAlignment.Center;

@@ -76,7 +76,7 @@ public sealed partial class MainWindow
 
     // System sound (Windows' loopback of Lilt's own audio: every site, DRM included) runs whenever the visualizer shows,
     // unless media.source is page. The playing tab's own sound is listened to beside it only while system sound has been
-    // quiet for a few seconds (no audio device, or sound Windows can't loop back), and each frame draws whichever has sound.
+    // quiet for a moment (no audio device, or sound Windows can't loop back), and each frame draws whichever has sound.
     // Neither ever stops the other, so the visualizer doesn't go blank while switching.
     void StartSound()
     {
@@ -192,10 +192,11 @@ public sealed partial class MainWindow
         double w = VisualizerCanvas.ActualWidth, h = VisualizerCanvas.ActualHeight, peak = 0;
         if (w <= 0 || h <= 0) return;
         foreach (var b in bars) peak = Math.Max(peak, b);
-        // Page sound while system sound has heard nothing for 4 s and a tab plays; back to system sound alone once it hears.
+        // Page sound while system sound has heard nothing for 1.5 s and a tab plays (working system sound is heard within a
+        // fraction of a second); back to system sound alone once it hears.
         if (m.Source == VisualizerSource.Auto && loopback is not null)
         {
-            var systemQuiet = now - Math.Max(systemHeardAt, loopbackSince) > 4000;
+            var systemQuiet = now - Math.Max(systemHeardAt, loopbackSince) > 1500;
             var playing = AllTabs.Any(t => t.Media is { Playing: true } && !t.IsMuted);
             if (systemQuiet && playing && captureCore is null && now >= pageRetryAt)
             {

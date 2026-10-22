@@ -114,6 +114,7 @@ public sealed partial class MainWindow
             }
             MemoryList.Children.Add(row);
         }
+        ScaleNow(MemoryList);
     }
 
     // A frame's address against a tab's, ignoring the #fragment.

@@ -466,9 +466,10 @@ public sealed partial class MainWindow
     // Pinned tabs in a strip are icon-sized; other strip tabs are a fixed width. Row height follows the spacing setting.
     void SizeTab(ListViewItem item, BrowserTab tab)
     {
-        item.Width = verticalTabs ? double.NaN : tab.IsPinned ? 48 : theme.Sidebar.TabWidth;
-        item.MinHeight = metrics.ControlHeight + 4;
+        item.Width = verticalTabs ? double.NaN : tab.IsPinned ? metrics.Px(48) : Math.Round(theme.Sidebar.TabWidth * metrics.Scale);
+        item.MinHeight = metrics.ControlHeight + metrics.Px(4);
         item.Padding = new Thickness(metrics.Unit / 2, 1, metrics.Unit / 2, 1);
+        ScaleNow(item.ContentTemplateRoot);
     }
 
     void TabList_SelectionChanged(object sender, SelectionChangedEventArgs e)
