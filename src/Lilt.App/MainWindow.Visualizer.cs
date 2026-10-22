@@ -117,6 +117,8 @@ public sealed partial class MainWindow
         levels = new float[m.Bars];
         var result = await engine.EvaluateAsync(c, $"__lilt.capture(true, {m.Bars})", userGesture: true);
         report.Key("visualizer", "page sound: " + result);
+        // Not capturing (the page refused or nothing played yet): the next media update tries again.
+        if (result != "on" && captureCore == c) captureCore = null;
     }
 
     void OnVisualizerData(CoreWebView2 sender, byte[] data)
