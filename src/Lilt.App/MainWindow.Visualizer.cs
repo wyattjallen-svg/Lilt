@@ -1,3 +1,4 @@
+using Lilt.App.Browser;
 using Lilt.App.Shell;
 using Lilt.Core;
 using Lilt.Core.Theming;
