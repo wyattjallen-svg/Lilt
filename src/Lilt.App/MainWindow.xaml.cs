@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Lilt.App.Browser;
 using Lilt.App.Shell;
 using Lilt.Core;
@@ -54,6 +55,13 @@ public sealed partial class MainWindow : Window
         report = new StartupReport(options.StartupReportPath);
         paths = LiltPaths.Resolve(options.UserDataDir);
         WipeIfRequested();
+        if (!options.InPrivate)
+        {
+            crashedBefore = File.Exists(paths.Running);
+            try { File.WriteAllText(paths.Running, Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture)); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
         var queue = DispatcherQueue.GetForCurrentThread();
         themes = new ThemeService(paths.PrepareTheme(options.ThemePath), queue);
         var load = themes.Load();
@@ -218,10 +226,22 @@ public sealed partial class MainWindow : Window
         else if (wipeLeft is { Count: 0 }) ShowNotice(new("Everything else was wiped; Lilt starts fresh.", NoticeKind.Success));
         if (wipeLeft is { Count: > 0 } left)
             ShowNotice(new($"Lilt starts fresh, but {string.Join(", ", left)} was still in use and stayed. Wipe again to remove it.", NoticeKind.Warning));
+        if (crashedBefore)
+            ShowNotice(new("Lilt didn't close properly last time. Its error log is in your Lilt folder.", NoticeKind.Warning, "Open the log", () => Open("explorer.exe", paths.Logs)));
         if (options.Run is { } script) await RunScriptAsync(script);
     }
 
-    bool firstRun;
+    bool firstRun, crashedBefore;
+
+    // An error the app recovered from (see App): the log has the details.
+    public void Fault(string message)
+    {
+        try
+        {
+            ShowNotice(new($"Lilt hit an error and carried on ({message}). The details are in the log.", NoticeKind.Error, "Open the log", () => Open("explorer.exe", paths.Logs)));
+        }
+        catch (Exception e) when (e is InvalidOperationException or COMException) { }
+    }
 
     // --run: commands separated by ";". Besides any command name: wait <ms>, open <address>, peek <url>,
     // eval <script in Lilt's page world>, probe (what this PC's engine supports) and state (what's on screen), for tests.
@@ -543,6 +563,10 @@ public sealed partial class MainWindow : Window
     void OnClosed(object sender, WindowEventArgs e)
     {
         closing = true;
+        if (!options.InPrivate)
+            try { File.Delete(paths.Running); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
         StopVisualizer();
         ClosePeek();
         SaveHistory();

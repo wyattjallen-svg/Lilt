@@ -138,6 +138,8 @@ public sealed partial class MainWindow
         yield return new("Edit theme file", "theme.json", "", OpenThemeFile);
         yield return new("Reload theme", "theme.json", "", () => themes.Reload());
         yield return new("Open data folder", "", "", () => Open("explorer.exe", paths.Root));
+        yield return new("Show all tabs", "", "", () => _ = ShowTabOverviewAsync());
+        yield return new("Add this page to the reading list", "", "", AddToReadingList);
         yield return new("Open user styles and scripts folder", "", "", () => Open("explorer.exe", engine.UserContent.Folder));
         yield return new("Put the player and visualizer back", "Media", "", () => ResetWidgets_Click(this, new RoutedEventArgs()));
         foreach (var page in new[] { "look", "layout", "home", "media", "keys", "power", "privacy" })

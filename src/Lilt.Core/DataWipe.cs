@@ -12,7 +12,7 @@ public static class DataWipe
     public const string Marker = "wipe.json";
 
     static readonly string[] items =
-        ["theme.json", "theme.schema.json", "session.json", "bookmarks.json", "history.json", "themes", "newtab", "user", "Extensions", "WebView2", "logs"];
+        ["theme.json", "theme.schema.json", "session.json", "bookmarks.json", "history.json", "themes", "newtab", "user", "Extensions", "WebView2", "logs", "running"];
 
     // What each "keep" choice spares.
     public static readonly IReadOnlyDictionary<string, string[]> KeepGroups = new Dictionary<string, string[]>

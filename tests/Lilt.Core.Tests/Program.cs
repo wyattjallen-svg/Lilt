@@ -382,7 +382,7 @@ Test("url policy", () =>
 
 Test("launch options", () =>
 {
-    var o = LaunchOptions.Parse(["--theme", "t.json", "example.com", "--user-data", @"C:\tmp\lilt", "--startup-report", "r.json"]);
+    var o = LaunchOptions.Parse(["--theme", "t.json", "example.com", "--user-data", @"C:\tmp\lilt", "--startup-report", "r.json"], dev: true);
     Equal("t.json", o.ThemePath);
     Equal("example.com", o.Url);
     Equal(@"C:\tmp\lilt", o.UserDataDir);
@@ -393,7 +393,7 @@ Test("launch options", () =>
     Equal("x.json", p.ThemePath);
     True(!p.InPrivate);
 
-    var q = LaunchOptions.Parse(["--inprivate", "--user-agent", "Mozilla/5.0 test", "--browser-args", "--enable-features=HttpsUpgrades --disable-quic"]);
+    var q = LaunchOptions.Parse(["--inprivate", "--user-agent", "Mozilla/5.0 test", "--browser-args", "--enable-features=HttpsUpgrades --disable-quic"], dev: true);
     True(q.InPrivate);
     Equal("Mozilla/5.0 test", q.UserAgent);
     Equal("--enable-features=HttpsUpgrades --disable-quic", q.BrowserArgs);
@@ -832,10 +832,16 @@ Test("addresses: extension pages open from the address bar, not other schemes", 
     Nav("chrome-extension://pnpnpkpkbopgcebjepaopplahkdnmbfc/dashboard.html", "chrome-extension://pnpnpkpkbopgcebjepaopplahkdnmbfc/dashboard.html");
     Rejected("chrome://settings");
     True(!UrlPolicy.IsNavigable("chrome-extension://pnpnpkpkbopgcebjepaopplahkdnmbfc/popup.html"));
-    var o = LaunchOptions.Parse(["--install-extension", "ghmbeldphafepmbegfdlkpapadhbakde", "--no-extensions"]);
+    var o = LaunchOptions.Parse(["--install-extension", "ghmbeldphafepmbegfdlkpapadhbakde", "--no-extensions"], dev: true);
     Equal("ghmbeldphafepmbegfdlkpapadhbakde", o.InstallExtension);
     True(o.NoExtensions);
-    Equal("split; wait 200", LaunchOptions.Parse(["--run", "split; wait 200", "x.com"]).Run);
+    Equal("split; wait 200", LaunchOptions.Parse(["--run", "split; wait 200", "x.com"], dev: true).Run);
+    // Outside LILT_DEV: developer switches are skipped with their values, and nothing they carry gets through.
+    var locked = LaunchOptions.Parse(["--run", "eval alert(1)", "--browser-args", "--remote-debugging-port=9222", "--user-data", "C:\\x", "x.com"]);
+    Equal(null, locked.Run);
+    Equal(null, locked.BrowserArgs);
+    Equal(null, locked.UserDataDir);
+    Equal("x.com", locked.Url);
 });
 
 Test("password exports never become bookmarks", () =>

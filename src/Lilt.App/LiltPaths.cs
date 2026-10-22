@@ -12,6 +12,9 @@ sealed record LiltPaths(string Root)
     public string Session => Path.Combine(Root, "session.json");
     public string Bookmarks => Path.Combine(Root, "bookmarks.json");
     public string History => Path.Combine(Root, "history.json");
+    // Present while Lilt runs; still there at the next start only if the last run didn't close cleanly.
+    public string Running => Path.Combine(Root, "running");
+    public string Logs => Path.Combine(Root, "logs");
     // Your own theme presets ("Save as preset" in Customize), one theme file each.
     public string Presets => Path.Combine(Root, "themes");
     public string Extensions => Path.Combine(Root, "Extensions");
