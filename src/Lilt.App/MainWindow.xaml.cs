@@ -70,6 +70,8 @@ public sealed partial class MainWindow : Window
         var queue = DispatcherQueue.GetForCurrentThread();
         themes = new ThemeService(paths.PrepareTheme(options.ThemePath), queue);
         var load = themes.Load();
+        // Sizes are needed before the theme is first applied (the first tab is laid out while the window is built).
+        metrics = ShellMetrics.From(themes.Current);
         // Media keys and lean mode are browser switches, fixed for the engine's lifetime.
         engine = new BrowserEngine(new EngineOptions(paths.WebView2, paths.PrepareNewTab(), paths.PrepareUserContent(), paths.Extensions,
             options.InPrivate, options.UserAgent, options.BrowserArgs, !options.NoExtensions, themes.Current.Media.MediaKeys, themes.Current.Power.Lean,

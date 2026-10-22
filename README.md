@@ -4,6 +4,8 @@ A lighter way through the web: a personal, customizable Windows 11 browser built
 
 Think of it as clay: the toolbar, sidebar, home tab, floating player, visualizer, split view and every shortcut are yours to move, hide, resize and restyle, from the Customize panel (Ctrl+Shift+,), the command palette (Ctrl+K) or one `theme.json` file.
 
+v0.10: an interface size for everything Lilt draws (Customize → Look; text, bars, panels and widgets keep their proportions), a player whose contents grow with it, `about:logs` for Lilt's log and crash reports, a visualizer that no longer goes blank, and videos that play in the panel without the rest of their page. v0.9: a universal font for pages, a tab overview, a reading list and crash recovery.
+
 v0.8: sleeping tabs (a tab you haven't looked at for an hour, or sooner when memory runs short, closes its page and uses nothing until you open it), a view of what's using memory, more power settings, a coded "wipe everything and start fresh", and a window that opens where you left it. v0.7: a panel beside the page for any tab (Spotify, YouTube, a chat), with the visualizer and player docked under it; a toolbar and sidebar that take on each site's color; and storage that stays small without signing you out. v0.6: workspaces, a bookmark manager, see-through websites, mouse gestures, site permissions and tracker levels, whole-page screenshots, a window that lifts while you drag it, your own theme presets, and two new themes (Midnight, Paper) and home backgrounds (Aurora, Waves). v0.5 added address-bar completion and history, your search engine, and links opened behind with Ctrl/middle-click.
 
 v0.4: a now-playing player with artwork and controls, a music visualizer fed by Lilt's own sound, picture in picture and in-window video pop-out, split view, link peek (Shift+click), a command palette, remappable shortcuts, and a quieter efficiency mode (pages stop drawing behind other windows; memory handed back while hidden). Plus everything from v0.3: the Lilt design language (Minimal, Glass and Light), tabs with saved sessions and pinning, bookmarks and import, uBlock Origin Lite built in, Proton Pass one click away.
@@ -66,7 +68,7 @@ Everything lives in `%LOCALAPPDATA%\Lilt`:
 | `newtab\` | The home tab. Lilt refreshes its own files on start; put changes in `custom.css` and `custom.js`. A background image you pick is copied here; `icons\` holds favicons for your tiles. |
 | `Extensions\` | Installed extensions (uBlock Origin Lite, anything from the Chrome Web Store). |
 | `WebView2\` | Browser profile (cookies, cache, history, saved passwords). Readable by any program running as you. Kept small by `storage` in the theme: a cache limit, and sites you stop using tidied up without losing sign-ins. |
-| `logs\error.log` | Unexpected errors, local only. |
+| `logs\lilt.log` | Lilt's log: starts, errors, crashes, theme problems. Read it at `about:logs`, which also lists the crashes Windows recorded for Lilt and the web engine's crash reports. Local only, kept under 1 MB. |
 
 ## Measure
 

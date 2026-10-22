@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Lilt.Core.Theming;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -26,8 +27,17 @@ static class Scaler
 
     public static void Apply(object? root, double text, double box, IReadOnlySet<object>? skip = null)
     {
-        if (root is null || skip?.Contains(root) == true) return;
-        if (root is FrameworkElement e) Size(e, text, box);
+        if (root is null || skip?.Contains(root) == true || !(text > 0) || !(box > 0)) return;
+        // A size the element refuses is written down, never a reason for Lilt to stop.
+        if (root is FrameworkElement e)
+            try
+            {
+                Size(e, text, box);
+            }
+            catch (Exception x) when (x is ArgumentException or COMException)
+            {
+                LiltPaths.LogError(x, "scale");
+            }
         foreach (var child in Children(root)) Apply(child, text, box, skip);
     }
 
@@ -77,7 +87,7 @@ static class Scaler
         var was = Design(e);
         if (!double.IsNaN(was[Font]))
         {
-            var size = Math.Round(was[Font] * (e is IconElement ? box : text), 1);
+            var size = Math.Max(1, Math.Round(was[Font] * (e is IconElement ? box : text), 1));
             switch (e)
             {
                 case TextBlock t: t.FontSize = size; break;
@@ -85,7 +95,7 @@ static class Scaler
                 case FontIcon i: i.FontSize = size; break;
             }
         }
-        double S(int i) => Math.Round(was[i] * box);
+        double S(int i) => Math.Max(0, Math.Round(was[i] * box));
         if (!double.IsNaN(was[Width])) e.Width = S(Width);
         if (!double.IsNaN(was[Height])) e.Height = S(Height);
         if (!double.IsNaN(was[MinWidth])) e.MinWidth = S(MinWidth);

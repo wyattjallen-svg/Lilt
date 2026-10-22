@@ -80,7 +80,14 @@ Reading these:
 
 ## Testing this build
 
-Unzip `Lilt-v0.8.0-win-x64.zip` and run `Lilt.exe`. Tabs, bookmarks and settings from earlier builds carry over; your `theme.json` gains the new settings with their defaults.
+Unzip `Lilt-v0.10.0-win-x64.zip` and run `Lilt.exe`. Tabs, bookmarks and settings from earlier builds carry over; your `theme.json` gains the new settings with their defaults.
+
+**New in v0.10**
+- [ ] Customize → Look → Interface size: try 125% and 80%. The toolbar, tabs, sidebar, Customize itself, menus (right-click a tab), the palette (Ctrl+K) and the home page should all change together, with nothing cut off. Move Text size too.
+- [ ] Play music in a tab and switch to another tab: the player floats. Drag its bottom-right corner wider: the art, title and buttons grow. Dock it in the panel and drag the panel's edge: the same.
+- [ ] Turn the visualizer on (Ctrl+Shift+U) while Spotify or YouTube plays: bars within a couple of seconds, and they stay.
+- [ ] Type `about:logs` in the address bar. Try the filters, Copy (paste it somewhere) and Open folder. If Lilt crashes, this is the page to send me.
+- [ ] Pop a YouTube video out (right-click its tab → Pop out the video) and drag its bar onto the panel: only the video shows there, and it keeps playing.
 
 **New in v0.8**
 - [ ] Open a few tabs, leave them for a while (or Customize → Power → "Put background tabs to sleep now"): they fade; Task Manager shows fewer Lilt processes. Click one: it reloads.

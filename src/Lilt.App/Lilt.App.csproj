@@ -6,7 +6,7 @@
     <SupportedOSPlatformVersion>10.0.22000.0</SupportedOSPlatformVersion>
     <RootNamespace>Lilt.App</RootNamespace>
     <AssemblyName>Lilt</AssemblyName>
-    <Version>0.9.0</Version>
+    <Version>0.10.0</Version>
     <Product>Lilt</Product>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
