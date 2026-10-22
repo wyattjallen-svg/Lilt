@@ -50,6 +50,9 @@
       <!-- The active tab is marked with an accent outline (see the tab template) instead of the side pill. -->
       <x:Boolean x:Key="ListViewItemSelectionIndicatorVisualEnabled">False</x:Boolean>
       <SolidColorBrush x:Key="FlyoutPresenterBackground" Color="#141318" />
+      <!-- Flyouts size to what's in them (which follows the interface size); the window still bounds them. -->
+      <x:Double x:Key="FlyoutThemeMaxWidth">1600</x:Double>
+      <x:Double x:Key="FlyoutThemeMaxHeight">1600</x:Double>
       <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#141318" />
 
       <Style x:Key="ChromeButton" TargetType="Button">

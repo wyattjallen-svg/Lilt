@@ -62,7 +62,7 @@ public static class LogsPage
             .meta,.summary{color:var(--muted);margin:0}
             .summary{margin-top:14px;font-size:15px;color:var(--text)}
             .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:22px 0 14px}
-            .bar .gap{flex:1}
+            .actions{display:flex;gap:8px;align-items:center;margin-left:auto}
             button{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:5px 12px;cursor:pointer}
             button:hover{border-color:var(--accent)}
             .chip[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--bg)}
@@ -93,10 +93,10 @@ public static class LogsPage
         foreach (var (level, id, name) in levels)
             b.Append($"<button class=\"chip\" data-f=\"{id}\" aria-pressed=\"false\">{name}<b>{entries.Count(e => e.Level == level)}</b></button>");
         b.Append($$"""
-            <span class="gap"></span><span class="toast" id="toast" role="status"></span>
+            <span class="actions"><span class="toast" id="toast" role="status"></span>
             <button id="copy" title="Copies the log as text, for a bug report">Copy</button>
             <button id="folder">Open folder</button>
-            <button id="clear" title="Clears Lilt's log; Windows' and the engine's crash reports stay">Clear</button>
+            <button id="clear" title="Clears Lilt's log; Windows' and the engine's crash reports stay">Clear</button></span>
             </div>
             <ol id="log" data-t="{{E(info.Token)}}">
             """);

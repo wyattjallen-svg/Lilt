@@ -40,6 +40,7 @@ public sealed partial class MainWindow
     {
         SyncCustomize();
         ScaleNow(CustomizeFlyout);
+        FitFlyouts();
     }
 
     void CustomizeTabs_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)

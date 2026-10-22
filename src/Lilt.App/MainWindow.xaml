@@ -129,7 +129,7 @@
                 <SelectorBarItem Text="Privacy" Tag="privacy" />
                 <SelectorBarItem Text="Power" Tag="power" />
               </SelectorBar>
-              <ScrollViewer Grid.Row="1" MaxHeight="560" Padding="0,0,12,0">
+              <ScrollViewer x:Name="CustomizeScroll" Grid.Row="1" MaxHeight="560" Padding="0,0,12,0">
                 <Grid>
                   <StackPanel x:Name="LookPage" Spacing="6">
                     <TextBlock Text="Theme" Style="{StaticResource SectionHeader}" />
@@ -403,11 +403,6 @@
       <Grid x:Name="PaletteHost" Grid.Column="1" Width="0" HorizontalAlignment="Center">
         <FlyoutBase.AttachedFlyout>
           <Flyout x:Name="PaletteFlyout" Placement="Bottom" Opened="PaletteFlyout_Opened" Closed="PaletteFlyout_Closed">
-            <Flyout.FlyoutPresenterStyle>
-              <Style TargetType="FlyoutPresenter">
-                <Setter Property="MaxWidth" Value="640" />
-              </Style>
-            </Flyout.FlyoutPresenterStyle>
             <Grid Width="520" RowSpacing="6">
               <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -416,7 +411,15 @@
               <TextBox x:Name="PaletteBox" PlaceholderText="Type a command, tab, bookmark, theme or setting" IsSpellCheckEnabled="False"
                        TextChanged="PaletteBox_TextChanged" KeyDown="PaletteBox_KeyDown" AutomationProperties.Name="Command palette" />
               <ListView x:Name="PaletteList" Grid.Row="1" MaxHeight="420" SelectionMode="Single" IsItemClickEnabled="True"
-                        ItemClick="PaletteList_ItemClick" AutomationProperties.Name="Results" />
+                        ItemClick="PaletteList_ItemClick" AutomationProperties.Name="Results">
+                <!-- Rows size themselves (their padding follows the interface size). -->
+                <ListView.ItemContainerStyle>
+                  <Style TargetType="ListViewItem">
+                    <Setter Property="MinHeight" Value="0" />
+                    <Setter Property="Padding" Value="12,0" />
+                  </Style>
+                </ListView.ItemContainerStyle>
+              </ListView>
             </Grid>
           </Flyout>
         </FlyoutBase.AttachedFlyout>

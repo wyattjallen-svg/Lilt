@@ -29,6 +29,7 @@ public sealed partial class MainWindow
     {
         PaletteBox.Text = "";
         FillPalette("");
+        FitFlyouts();
         ShowFlyout(PaletteFlyout, AddressHost, PaletteHost);
     }
 
@@ -87,7 +88,7 @@ public sealed partial class MainWindow
 
     FrameworkElement Row(PaletteItem item)
     {
-        var grid = new Grid { Tag = item, ColumnSpacing = 10, Padding = new Thickness(0, 4, 0, 4) };
+        var grid = new Grid { Tag = item, ColumnSpacing = 10, Padding = new Thickness(0, 9, 0, 9) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

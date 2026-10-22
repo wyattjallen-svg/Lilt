@@ -17,7 +17,7 @@ public sealed partial class MainWindow
     (double, double, double) playerScaled;
 
     // Sized by Lilt's code from the metrics already: the scaler leaves them, and what's in them, alone.
-    HashSet<object> ScaleSkip() => scaleSkip ??= [.. ChromeButtons(), AddressBox, BookmarkSearch, BookmarkList, TabList, TabsTitle, PanelSiteList];
+    HashSet<object> ScaleSkip() => scaleSkip ??= [.. ChromeButtons(), AddressBox, BookmarkSearch, BookmarkList, TabList, TabsTitle, PanelSiteList, VisualizerCanvas];
 
     void ScaleNow(object? root) => Scaler.Apply(root, metrics.Text, metrics.Scale, ScaleSkip());
 
@@ -35,6 +35,15 @@ public sealed partial class MainWindow
                 if (list.ContainerFromIndex(i) is SelectorItem item) ScaleNow(item.ContentTemplateRoot);
         playerScaled = default;
         ScalePlayer();
+        FitFlyouts();
+    }
+
+    // Customize and the palette grow with the interface size but never past the window (a flyout too tall to fit isn't shown).
+    void FitFlyouts()
+    {
+        var room = Root.ActualHeight > 0 ? Root.ActualHeight : 700;
+        CustomizeScroll.MaxHeight = Math.Max(metrics.Px(200), Math.Min(metrics.Px(560), room - metrics.Px(140)));
+        PaletteList.MaxHeight = Math.Max(metrics.Px(160), Math.Min(metrics.Px(420), room - metrics.Px(170)));
     }
 
     void InitScale()
