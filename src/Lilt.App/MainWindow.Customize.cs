@@ -611,6 +611,8 @@ public sealed partial class MainWindow
             Shortcuts = cur.Shortcuts,
             Panel = cur.Panel,
             Storage = cur.Storage,
+            // Interface size is yours, not part of a look.
+            Scale = cur.Scale,
         }, theme);
         SyncCustomize();
         SaveTheme();

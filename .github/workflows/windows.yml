@@ -453,7 +453,7 @@ jobs:
             (Get-Content out/Lilt/Themes/minimal.json -Raw) -replace '"scale": 1,', "`"scale`": $($size.value)," | Set-Content $st
             New-Item -ItemType Directory "$env:RUNNER_TEMP/lilt-$sn/newtab" -Force | Out-Null
             Copy-Item tools/media-test.html "$env:RUNNER_TEMP/lilt-$sn/newtab/media-test.html"
-            $script = 'wait 4000; open example.com; wait 3500; state; mark player; customize; wait 1500; mark customize; palette; wait 1200; mark palette'
+            $script = 'wait 4000; open example.com; wait 3500; state; mark player; wait 1200; customize; wait 1500; mark customize; wait 1500; palette; wait 1200; mark palette; wait 1200'
             [void](Smoke $sn @('--theme', "`"$st`"", '--url', 'https://newtab.lilt.example/media-test.html', '--browser-args', '"--autoplay-policy=no-user-gesture-required"', '--run', "`"$script`"") {
               param($p); $p.Refresh(); [void][Lilt.Input]::SetForegroundWindow($p.MainWindowHandle); Follow $sn
             } -settle 1)
