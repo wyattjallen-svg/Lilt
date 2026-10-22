@@ -174,7 +174,7 @@ public sealed partial class MainWindow
             dockOver = false;
             ShowDropZone(false);
             live = null;
-            if (widget == "pip") { if (floating is { } video) MoveToPanel(video); }
+            if (widget == "pip") { if (floating is { } video) _ = MoveToPanelAsync(video); }
             else DockWidget(widget);
             return;
         }

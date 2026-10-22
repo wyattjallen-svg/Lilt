@@ -13,9 +13,10 @@ using Windows.ApplicationModel.DataTransfer;
 
 namespace Lilt.App;
 
-// The panel beside the page (theme "panel"): sites from the tab menu (right-click → Move to the panel), one shown at a
-// time, and they keep playing while you browse, switch workspaces or hide the panel. Pages aren't dragged in; the player
-// and the visualizer are, by dragging them over the panel (or dock them from its menu). panel.sections sets the rows.
+// The panel beside the page (theme "panel"): videos (a popped-out video dragged in, or right-click a tab → Move the video
+// to the panel), shown one at a time, that keep playing while you browse, switch workspaces or hide the panel; and the
+// player and the visualizer, dragged over the panel or docked from its menu. Whole pages don't go in. panel.sections sets
+// the rows.
 public sealed partial class MainWindow
 {
     readonly ObservableCollection<BrowserTab> panelTabs = [];
@@ -184,7 +185,9 @@ public sealed partial class MainWindow
         to.Children.Insert(0, view);
     }
 
-    void MoveToPanel(BrowserTab tab)
+    // The panel holds the player, the visualizer and videos, not whole pages: a tab goes in only if it has a video, and
+    // while it's there its page shows just that video (element full screen, as in the pop-out frame).
+    async Task MoveToPanelAsync(BrowserTab tab)
     {
         if (panelTabs.Contains(tab))
         {
@@ -192,12 +195,14 @@ public sealed partial class MainWindow
             return;
         }
         if (!tabs.Contains(tab)) return;
-        // The panel holds the player, the visualizer and a popped-out video, not whole pages.
-        if (tab != floating)
+        if (tab.Core is not { } c || await engine.EvaluateAsync(c, "__lilt.hasVideo()") is not "true")
         {
-            ShowNotice(new("Only a popped-out video goes in the panel. Pop the video out, then drag it here.", NoticeKind.Info));
+            ShowNotice(new("Only videos go in the panel, not whole pages. Pop a video out and drag it here, or dock the player.", NoticeKind.Info));
             return;
         }
+        if (!tabs.Contains(tab)) return;
+        // Out of the pop-out frame without turning its video-only view off.
+        if (floating == tab) floating = null;
         TakeOut(tab);
         Reparent(tab, PanelPages);
         panelTabs.Add(tab);
@@ -207,6 +212,14 @@ public sealed partial class MainWindow
         LayoutPages();
         LayoutPanel();
         ScheduleSave();
+        await VideoOnlyAsync(tab, true);
+    }
+
+    async Task VideoOnlyAsync(BrowserTab tab, bool on)
+    {
+        if (tab.Core is not { } c) return;
+        var result = await engine.EvaluateAsync(c, $"__lilt.float({(on ? "true" : "false")})", userGesture: on);
+        report.Key("panel", "video only " + result);
     }
 
     void ShowPanelTab(BrowserTab tab)
@@ -222,6 +235,7 @@ public sealed partial class MainWindow
         if (!panelTabs.Remove(tab)) return;
         if (panelTab == tab) panelTab = panelTabs.LastOrDefault();
         tab.IsActive = false;
+        _ = VideoOnlyAsync(tab, false);
         Reparent(tab, PageHost);
         tabs.Insert(active is null ? tabs.Count : tabs.IndexOf(active) + 1, tab);
         Activate(tab);

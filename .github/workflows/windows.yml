@@ -115,10 +115,12 @@ jobs:
             if (Test-Path $report) { Copy-Item $report "smoke-$name.json"; Get-Content $report | Out-Host }
             if (Test-Path "$report.keys.txt") { Copy-Item "$report.keys.txt" "smoke-$name.keys.txt" }
             else { Write-Host "::warning::$name produced no startup report (exited: $($p.HasExited))" }
-            if (Test-Path "$dir/logs/error.log") {
-              Copy-Item "$dir/logs/error.log" "smoke-$name.log"
-              Write-Host "::warning::$name wrote error.log"
-              Get-Content "$dir/logs/error.log" | Out-Host
+            # Lilt's log (about:logs): kept for every run; an error in it fails the run.
+            $errors = @()
+            if (Test-Path "$dir/logs/lilt.log") {
+              Copy-Item "$dir/logs/lilt.log" "smoke-$name.log"
+              $errors = @(Get-Content "$dir/logs/lilt.log" | Where-Object { $_ -match '"level":"error"' })
+              if ($errors.Count) { Write-Host "::warning::$name logged $($errors.Count) error(s)"; $errors | Out-Host }
             }
             if ($alive) {
               [void]$p.CloseMainWindow()
@@ -127,7 +129,7 @@ jobs:
             else { Write-Host "::error::$name exited early with code $($p.ExitCode)" }
             $loaded = (Test-Path $report) -and (Get-Content $report -Raw | ConvertFrom-Json).firstNavigationSucceeded
             if (-not $loaded) { Write-Host "::error::$name first page did not load" }
-            if (-not $alive -or -not $loaded -or (Test-Path "$dir/logs/error.log")) { $script:failed += $name }
+            if (-not $alive -or -not $loaded -or $errors.Count) { $script:failed += $name }
             Write-Host "$name alive=$alive report=$(Test-Path $report)"
             return $dir
           }
@@ -431,6 +433,17 @@ jobs:
           Check 'What''s using memory lists the engine''s processes' ($s.Count -gt 2 -and $s[2].memoryRows -ge 3) "$(if ($s.Count -gt 2) { "rows $($s[2].memoryRows)" })"
           Check 'A sleeping tab wakes when opened' ($s.Count -gt 3 -and $s[3].asleep -eq 0 -and $s[3].url -like '*example.com*') "$(if ($s.Count -gt 3) { "asleep $($s[3].asleep), $($s[3].url)" })"
           Check 'The wipe dialog opens and waits for the code' ($s.Count -gt 4 -and $s[4].dialog -like 'Wipe everything*') "$(if ($s.Count -gt 4) { $s[4].dialog })"
+
+          # v0.10: about:logs shows Lilt's log (typed in the address bar), and a web page can't open it.
+          $script = "wait 2500; go about:logs; wait 3000; state; eval document.title + ' ' + document.querySelectorAll('#log li').length; mark logs; wait 500; " +
+            "go example.com; wait 3500; eval (location.href = 'https://about.lilt.example/logs', 1); wait 3000; state; mark guarded"
+          [void](Smoke 'v10' @('--run', "`"$script`"") { param($p); $p.Refresh(); [void][Lilt.Input]::SetForegroundWindow($p.MainWindowHandle); Follow 'v10' } -settle 1)
+          $s = States 'v10'
+          $lk = if (Test-Path smoke-v10.keys.txt) { @(Get-Content smoke-v10.keys.txt) } else { @() }
+          Check 'about:logs opens Lilt''s log' ($s.Count -gt 0 -and $s[0].url -like '*about.lilt.example/logs*' -and [bool]($lk -match ' eval Logs · Lilt [1-9]')) "$(if ($s.Count) { "$($s[0].url), address '$($s[0].address)'" }) / $(($lk -match ' eval ') -join ' / ')"
+          Check 'A web page can''t open Lilt''s own pages' ($s.Count -gt 1 -and $s[1].url -like '*example.com*') "$(if ($s.Count -gt 1) { "$($s[1].url), notice '$($s[1].notice)'" })"
+          $ll = if (Test-Path smoke-v10.log) { @(Get-Content smoke-v10.log) } else { @() }
+          Check 'Lilt logs its start' ([bool]($ll -match '"level":"info".*started')) "$($ll.Count) lines"
 
           [void](Smoke 'proton-pass' @('--install-extension', 'ghmbeldphafepmbegfdlkpapadhbakde') -settle 4)
           $pp = Extensions 'proton-pass'

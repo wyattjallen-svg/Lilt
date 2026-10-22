@@ -1,9 +1,14 @@
+using Lilt.Core.Diagnostics;
+
 namespace Lilt.App;
 
 // Everything Lilt writes lives under one per-user folder (default %LOCALAPPDATA%\Lilt).
 sealed record LiltPaths(string Root)
 {
     static string? root;
+
+    // Lilt's log (about:logs); until the data folder is known it goes to a temporary folder.
+    public static LogBook Log { get; private set; } = new(Path.Combine(Path.GetTempPath(), "Lilt", "logs"));
 
     public string WebView2 => Path.Combine(Root, "WebView2");
     public string Theme => Path.Combine(Root, "theme.json");
@@ -25,6 +30,7 @@ sealed record LiltPaths(string Root)
     {
         root = Path.GetFullPath(overrideRoot ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Lilt"));
         Directory.CreateDirectory(root);
+        Log = new LogBook(Path.Combine(root, "logs"));
         return new LiltPaths(root);
     }
 
@@ -118,15 +124,6 @@ sealed record LiltPaths(string Root)
         if (!File.Exists(to) || File.ReadAllText(to) != File.ReadAllText(from)) File.Copy(from, to, overwrite: true);
     }
 
-    public static void LogError(Exception e)
-    {
-        try
-        {
-            var dir = Path.Combine(root ?? Path.GetTempPath(), "logs");
-            Directory.CreateDirectory(dir);
-            File.AppendAllText(Path.Combine(dir, "error.log"), $"{DateTimeOffset.Now:O} {e}\n\n");
-        }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
-    }
+    public static void LogError(Exception e, string source = "lilt") =>
+        Log.Write(LogLevel.Error, source, $"{e.GetType().Name}: {e.Message}", e.ToString());
 }

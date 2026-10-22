@@ -38,7 +38,7 @@ public sealed partial class MainWindow
 
     void RecordVisit(string url, string title)
     {
-        if (!KeepHistory || BrowserTab.IsHomeUrl(url)) return;
+        if (!KeepHistory || BrowserTab.IsHomeUrl(url) || InternalPages.Is(url)) return;
         history.Record(url, title, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         historyTimer.Stop();
         historyTimer.Start();
@@ -85,10 +85,10 @@ public sealed partial class MainWindow
 
     string CurrentFull => active?.Url is { } u && Uri.TryCreate(u, UriKind.Absolute, out var uri) ? Full(uri) : "";
 
-    static string Full(Uri? uri) => uri is null || UrlPolicy.IsBlank(uri) || uri.Host == BrowserEngine.NewTabHost ? "" : uri.AbsoluteUri;
+    static string Full(Uri? uri) => uri is null || UrlPolicy.IsBlank(uri) || uri.Host == BrowserEngine.NewTabHost ? "" : InternalPages.AboutName(uri) ?? uri.AbsoluteUri;
 
     // While you're not editing: the tidy form.
-    static string Display(Uri? uri) => Full(uri) is { Length: > 0 } ? UrlPolicy.Pretty(uri!) : "";
+    static string Display(Uri? uri) => InternalPages.AboutName(uri) ?? (Full(uri) is { Length: > 0 } ? UrlPolicy.Pretty(uri!) : "");
 
     void AddressBox_GotFocus(object sender, RoutedEventArgs e)
     {

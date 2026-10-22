@@ -169,15 +169,17 @@
   // Media: the element that's playing, or the one that played last.
   let current = null, last = '';
   const media = () => [...document.querySelectorAll('video, audio')];
-  // Several elements can play at once (a site's ad or preview next to the player): the longest is the track.
+  // Several elements can play at once (an ad, a muted background video or a UI sound next to the player): the track is
+  // the audible one, and the long one among those (a short clip beside it is never the one shown).
   const length = m => isFinite(m.duration) ? m.duration : 1e9;
-  // A track is a long element: a short sound playing beside it (a UI click, an ad) is never the one shown.
+  const audible = m => !m.muted && m.volume > 0;
+  const longest = list => list.sort((a, b) => length(b) - length(a))[0];
   const pick = () => {
-    const playing = media().filter(m => !m.paused && !m.ended);
-    const tracks = playing.filter(m => m.readyState > 1 && length(m) > 30);
-    return (tracks.length ? tracks : playing.filter(m => m.readyState > 1)).sort((a, b) => length(b) - length(a))[0]
-    || (current && current.isConnected ? current : null)
-    || media().find(m => m.currentTime > 0) || null;
+    const playing = media().filter(m => !m.paused && !m.ended && m.readyState > 1);
+    const heard = playing.filter(audible);
+    return longest(heard.filter(m => length(m) > 30)) || longest(heard) || longest(playing)
+      || (current && current.isConnected ? current : null)
+      || media().find(m => m.currentTime > 0) || null;
   };
   const report = () => {
     const m = pick();
@@ -187,7 +189,7 @@
     const s = m ? {
       t: 'media', playing: !m.paused && !m.ended, title: (md && md.title) || document.title || '',
       artist: (md && md.artist) || '', album: (md && md.album) || '', art: String(art || ''),
-      video: m.tagName === 'VIDEO' && m.videoWidth > 0, pos: m.currentTime || 0,
+      video: !!bestVideo(), pos: m.currentTime || 0,
       dur: isFinite(m.duration) ? m.duration : 0, rate: m.playbackRate || 1, muted: m.muted,
       pip: !!document.pictureInPictureElement,
     } : { t: 'media', none: true };

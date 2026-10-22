@@ -21,6 +21,10 @@ public static partial class AddressResolver
     {
         var text = input?.Trim() ?? "";
         if (text.Length == 0) return new(AddressKind.Empty);
+        // Lilt's own pages: about:logs, about:crashes.
+        if (text.StartsWith("about:", StringComparison.OrdinalIgnoreCase) && !text.Equals("about:blank", StringComparison.OrdinalIgnoreCase))
+            return InternalPages.FromAbout(text) is { } page ? new(AddressKind.Navigate, page)
+                : new(AddressKind.Rejected, Reason: $"Lilt's own pages are {string.Join(" and ", InternalPages.Names)}.");
         if (text.Any(char.IsWhiteSpace)) return Search(text, searchTemplate);
 
         if (SchemePrefix().IsMatch(text) && !HostWithPort().IsMatch(text))

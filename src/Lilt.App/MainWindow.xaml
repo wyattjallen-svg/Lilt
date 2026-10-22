@@ -463,6 +463,9 @@
               <MenuFlyoutItem Text="Developer tools" KeyboardAcceleratorTextOverride="F12" Click="DevTools_Click">
                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xEC7A;" /></MenuFlyoutItem.Icon>
               </MenuFlyoutItem>
+              <MenuFlyoutItem Text="Logs and crashes" Click="Logs_Click" ToolTipService.ToolTip="about:logs">
+                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xEBE8;" /></MenuFlyoutItem.Icon>
+              </MenuFlyoutItem>
               <MenuFlyoutItem Text="Open data folder" Click="OpenDataFolder_Click">
                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE838;" /></MenuFlyoutItem.Icon>
               </MenuFlyoutItem>

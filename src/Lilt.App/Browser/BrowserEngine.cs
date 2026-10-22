@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Lilt.Core;
@@ -30,6 +31,9 @@ sealed record EngineOptions(
 enum NoticeKind { Info, Success, Warning, Error }
 
 sealed record Notice(string Message, NoticeKind Kind, string? ActionLabel = null, Action? Action = null);
+
+// A page of Lilt's own (about:logs), built by the window for one request.
+sealed record InternalPage(int Status, string ContentType, string Body, string? Csp = null);
 
 sealed record ExtensionInfo(string Id, string Name, bool Enabled, string? Popup, string? Options, bool Bundled);
 
@@ -98,6 +102,19 @@ sealed class BrowserEngine
     (string Url, long At) behindLink;
     public Action<string>? OpenUrlInTab { get; set; }
 
+    // Lilt's own pages (about:logs) are built by the window and served from memory. Only Lilt opens them (the address bar,
+    // a restored tab, a notice's button): a page that links or redirects to one is stopped, other sites can't frame or read
+    // them, and their buttons need a token only the page has.
+    public Func<Uri, string, Task<InternalPage>>? ServeInternal { get; set; }
+    readonly HashSet<CoreWebView2> internalAllowed = [];
+
+    // Every navigation Lilt itself starts goes through here, so its own pages are allowed for it.
+    public void Navigate(CoreWebView2 core, string url)
+    {
+        if (InternalPages.Is(url)) internalAllowed.Add(core);
+        core.Navigate(url);
+    }
+
     Task<CoreWebView2Environment> CreateEnvironmentAsync()
     {
         var o = new CoreWebView2EnvironmentOptions
@@ -152,6 +169,7 @@ sealed class BrowserEngine
         if (core is null) return;
         cores.Remove(core);
         contexts.Remove(core);
+        internalAllowed.Remove(core);
         userContent.Forget(core);
     }
 
@@ -173,6 +191,9 @@ sealed class BrowserEngine
         _ = userContent.ApplyAsync(core);
         InstallPageHelper(core);
 
+        core.AddWebResourceRequestedFilter($"https://{InternalPages.Host}/*", CoreWebView2WebResourceContext.All);
+        core.WebResourceRequested += OnInternalRequest;
+        core.NavigationStarting += OnNavigationStarting;
         core.PermissionRequested += OnPermissionRequested;
         core.LaunchingExternalUriScheme += OnExternalScheme;
         core.NewWindowRequested += OnNewWindowRequested;
@@ -397,6 +418,38 @@ sealed class BrowserEngine
         _ => $"use {kind}",
     };
 
+    void OnNavigationStarting(CoreWebView2 sender, CoreWebView2NavigationStartingEventArgs e)
+    {
+        if (!InternalPages.Is(e.Uri)) return;
+        if (internalAllowed.Remove(sender) || InternalPages.Is(sender.Source)
+            || e.NavigationKind is CoreWebView2NavigationKind.Reload or CoreWebView2NavigationKind.BackOrForward) return;
+        e.Cancel = true;
+        Noticed?.Invoke(new("A page tried to open one of Lilt's own pages. Type about:logs in the address bar to see it.", NoticeKind.Warning));
+    }
+
+    async void OnInternalRequest(CoreWebView2 sender, CoreWebView2WebResourceRequestedEventArgs e)
+    {
+        if (!Uri.TryCreate(e.Request.Uri, UriKind.Absolute, out var uri) || !InternalPages.Is(uri)) return;
+        var deferral = e.GetDeferral();
+        try
+        {
+            var page = ServeInternal is { } serve ? await serve(uri, e.Request.Method) : new InternalPage(404, "text/plain", "Not found");
+            var env = await environment;
+            var headers = $"Content-Type: {page.ContentType}\nCache-Control: no-store\nX-Frame-Options: DENY\nX-Content-Type-Options: nosniff\nReferrer-Policy: no-referrer"
+                + (page.Csp is { } csp ? $"\nContent-Security-Policy: {csp}" : "");
+            var reason = page.Status switch { 200 => "OK", 204 => "No Content", 403 => "Forbidden", _ => "Not Found" };
+            e.Response = env.CreateWebResourceResponse(new MemoryStream(Encoding.UTF8.GetBytes(page.Body)).AsRandomAccessStream(), page.Status, reason, headers);
+        }
+        catch (Exception ex)
+        {
+            LiltPaths.LogError(ex);
+        }
+        finally
+        {
+            deferral.Complete();
+        }
+    }
+
     void OnExternalScheme(CoreWebView2 sender, CoreWebView2LaunchingExternalUriSchemeEventArgs e)
     {
         e.Cancel = true;
@@ -413,7 +466,7 @@ sealed class BrowserEngine
         {
             e.Handled = true;
             var uri = e.Uri;
-            if (!UrlPolicy.IsNavigable(uri))
+            if (!UrlPolicy.IsNavigable(uri) || InternalPages.Is(uri))
             {
                 Noticed?.Invoke(new("Blocked a pop-up to an address Lilt doesn't open.", NoticeKind.Warning));
                 return;

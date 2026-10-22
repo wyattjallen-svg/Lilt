@@ -5,6 +5,7 @@ using Lilt.App.Browser;
 using Lilt.App.Shell;
 using Lilt.Core;
 using Lilt.Core.Bookmarks;
+using Lilt.Core.Diagnostics;
 using Lilt.Core.Layout;
 using Lilt.Core.Navigation;
 using Lilt.Core.Theming;
@@ -58,10 +59,14 @@ public sealed partial class MainWindow : Window
         if (!options.InPrivate)
         {
             crashedBefore = File.Exists(paths.Running);
+            if (crashedBefore)
+                LiltPaths.Log.Write(LogLevel.Crash, "lilt", "Lilt didn't close properly last time",
+                    $"It last started {File.GetLastWriteTime(paths.Running):yyyy-MM-dd HH:mm}. If Windows recorded why, it's listed here too.");
             try { File.WriteAllText(paths.Running, Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture)); }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
         }
+        LiltPaths.Log.Write(LogLevel.Info, "lilt", $"Lilt {LiltVersion} started" + (options.InPrivate ? " (InPrivate)" : ""), $"Windows {Environment.OSVersion.Version}");
         var queue = DispatcherQueue.GetForCurrentThread();
         themes = new ThemeService(paths.PrepareTheme(options.ThemePath), queue);
         var load = themes.Load();
@@ -99,7 +104,7 @@ public sealed partial class MainWindow : Window
         appName = options.InPrivate ? "Lilt (InPrivate)" : "Lilt";
         AppWindow.Title = appName;
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "lilt.ico"));
-        VersionItem.Text = $"Lilt {typeof(MainWindow).Assembly.GetName().Version?.ToString(3)}";
+        VersionItem.Text = $"Lilt {LiltVersion}";
         PlaceWindow();
 
         ApplyTheme(themes.Current, previous: null);
@@ -128,6 +133,7 @@ public sealed partial class MainWindow : Window
         engine.SiteColor += OnSiteColor;
         engine.AskPermission = AskPermissionAsync;
         engine.OpenTabForPage = OpenTabForPageAsync;
+        engine.ServeInternal = ServeInternalAsync;
         engine.OpenUrlInTab = url => AddTab(url);
         AdBlockMenuItem.Visibility = ExtensionsMenuItem.Visibility = engine.ExtensionsEnabled ? Visibility.Visible : Visibility.Collapsed;
 
@@ -213,7 +219,7 @@ public sealed partial class MainWindow : Window
                 ShowNotice(new("uBlock Origin Lite is set up. Reload open pages to block their ads.", NoticeKind.Success, "Reload", () => core?.Reload()));
         }
 
-        first.Navigate(tab.Url);
+        engine.Navigate(first, tab.Url);
         started = true;
         ShowPanelPage();
         if (active is { View: null, Loading: null } other) Load(other);
@@ -227,7 +233,7 @@ public sealed partial class MainWindow : Window
         if (wipeLeft is { Count: > 0 } left)
             ShowNotice(new($"Lilt starts fresh, but {string.Join(", ", left)} was still in use and stayed. Wipe again to remove it.", NoticeKind.Warning));
         if (crashedBefore)
-            ShowNotice(new("Lilt didn't close properly last time. Its error log is in your Lilt folder.", NoticeKind.Warning, "Open the log", () => Open("explorer.exe", paths.Logs)));
+            ShowNotice(new("Lilt didn't close properly last time.", NoticeKind.Warning, "See what happened", OpenLogs));
         if (options.Run is { } script) await RunScriptAsync(script);
     }
 
@@ -238,7 +244,7 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            ShowNotice(new($"Lilt hit an error and carried on ({message}). The details are in the log.", NoticeKind.Error, "Open the log", () => Open("explorer.exe", paths.Logs)));
+            ShowNotice(new($"Lilt hit an error and carried on ({message}).", NoticeKind.Error, "See the log", OpenLogs));
         }
         catch (Exception e) when (e is InvalidOperationException or COMException) { }
     }
@@ -322,7 +328,7 @@ public sealed partial class MainWindow : Window
         palette = PaletteFlyout.IsOpen,
         player = MediaWidget.Visibility == Visibility.Visible,
         visualizer = VisualizerWidget.Visibility == Visibility.Visible,
-        visualizerSource = loopback is not null ? "system" : captureCore is not null ? "page" : "none",
+        visualizerSource = vizDrawn,
         visualizerFrames = vizFrames,
         visualizerPeak = Math.Round(vizPeak, 3),
         media = mediaTab?.Media is { } m ? new { m.Title, m.Artist, m.Playing, m.Video, m.Duration, m.PictureInPicture } : null,
@@ -370,6 +376,18 @@ public sealed partial class MainWindow : Window
 
     void OnProcessFailed(BrowserTab tab, CoreWebView2ProcessFailedEventArgs e)
     {
+        var site = options.InPrivate || tab.IsHome ? "" : UrlPolicy.DisplayHost(tab.Url);
+        var what = e.ProcessFailedKind switch
+        {
+            CoreWebView2ProcessFailedKind.BrowserProcessExited => "The web engine stopped",
+            CoreWebView2ProcessFailedKind.RenderProcessUnresponsive => $"{(site.Length > 0 ? site : "A page")} stopped responding",
+            CoreWebView2ProcessFailedKind.RenderProcessExited or CoreWebView2ProcessFailedKind.FrameRenderProcessExited =>
+                site.Length > 0 ? $"The page on {site} crashed" : "A page crashed",
+            CoreWebView2ProcessFailedKind.GpuProcessExited => "The engine's graphics process stopped (it starts again by itself)",
+            _ => $"An engine process stopped ({e.ProcessFailedKind})",
+        };
+        LiltPaths.Log.Write(e.ProcessFailedKind == CoreWebView2ProcessFailedKind.RenderProcessUnresponsive ? LogLevel.Warning : LogLevel.Crash, "engine", what,
+            $"reason {e.Reason}, exit code {e.ExitCode}" + (e.ProcessDescription is { Length: > 0 } d ? $", {d}" : ""));
         switch (e.ProcessFailedKind)
         {
             case CoreWebView2ProcessFailedKind.BrowserProcessExited:
@@ -429,7 +447,7 @@ public sealed partial class MainWindow : Window
     {
         if (active is null) return;
         active.Url = url;
-        if (active.Core is { } c) c.Navigate(url);
+        if (active.Core is { } c) engine.Navigate(c, url);
         else _ = LoadAsync(active, navigate: true);
         active.View?.Focus(FocusState.Programmatic);
     }
@@ -528,7 +546,7 @@ public sealed partial class MainWindow : Window
             case "panel": TogglePanel(); break;
             case "wipe": _ = WipeAsync(); break;
             case "sleepTabs": SleepBackgroundTabs(); break;
-            case "toPanel": if (active is not null) MoveToPanel(active); break;
+            case "toPanel": if (active is not null) _ = MoveToPanelAsync(active); break;
             case "reopenTab": ReopenTab(); break;
             case "closeTab": if (active is not null) CloseTab(active); break;
             case "nextTab": CycleTab(1); break;
@@ -553,6 +571,7 @@ public sealed partial class MainWindow : Window
 
     void Restart()
     {
+        LiltPaths.Log.Write(LogLevel.Info, "lilt", "Restarting");
         SaveSession();
         var start = new ProcessStartInfo(Environment.ProcessPath!);
         foreach (var arg in Environment.GetCommandLineArgs().Skip(1)) start.ArgumentList.Add(arg);
@@ -795,6 +814,7 @@ public sealed partial class MainWindow : Window
             themeLoadFailed = true;
             ThemeStatus.Text = $"Last save had errors · previous theme kept · {DateTime.Now:t}";
             ShowNotice(new($"Theme not applied: {result.Issues[0]}. Keeping the previous theme.", NoticeKind.Error, "Edit", OpenThemeFile));
+            LiltPaths.Log.Write(LogLevel.Warning, "theme", $"Theme not applied: {result.Issues[0]}. The previous theme was kept.", string.Join("\n", result.Issues));
             return;
         }
         ApplyTheme(result.Theme, theme);

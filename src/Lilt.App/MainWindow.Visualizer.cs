@@ -19,13 +19,11 @@ public sealed partial class MainWindow
     LoopbackCapture? loopback;
     Spectrum? spectrum;
     bool loopbackFailed;
-    // Loopback heard nothing for a while (a quiet start, or no sound Windows can loop back): the page is used until this time.
-    long loopbackRetryAt;
     CoreWebView2? captureCore;
     float[] levels = [];
-    long lastLevels, quietSince, loopbackSince, heardAt;
+    long lastLevels, quietSince, loopbackSince, systemHeardAt, pageRetryAt;
     DispatcherQueueTimer? vizTimer;
-    string vizShape = "";
+    string vizShape = "", vizDrawn = "none";
     int vizFrames;
     double vizPeak;
 
@@ -75,13 +73,15 @@ public sealed partial class MainWindow
         vizTimer.Start();
     }
 
-    // Loopback first (media.source auto or system); the playing tab's media element if that's unavailable or chosen.
-    async void StartSound()
+    // System sound (Windows' loopback of Lilt's own audio: every site, DRM included) runs whenever the visualizer shows,
+    // unless media.source is page. The playing tab's own sound is listened to beside it only while system sound has been
+    // quiet for a few seconds (no audio device, or sound Windows can't loop back), and each frame draws whichever has sound.
+    // Neither ever stops the other, so the visualizer doesn't go blank while switching.
+    void StartSound()
     {
         var m = theme.Media;
-        if (m.Source != VisualizerSource.Page && !loopbackFailed && Environment.TickCount64 >= loopbackRetryAt)
+        if (m.Source != VisualizerSource.Page && !loopbackFailed && (loopback is null || spectrum?.Bars.Count != m.Bars))
         {
-            if (loopback is not null && spectrum?.Bars.Count == m.Bars) return;
             loopback?.Dispose();
             var s = new Spectrum(m.Bars, LoopbackCapture.SampleRate);
             spectrum = s;
@@ -92,14 +92,8 @@ public sealed partial class MainWindow
                     lock (s) s.AddPcm16(pcm, 2);
                 });
                 loopbackSince = Environment.TickCount64;
-                loopbackRetryAt = 0;
-                if (captureCore is { } page)
-                {
-                    _ = engine.EvaluateAsync(page, "__lilt.capture(false)");
-                    captureCore = null;
-                }
+                systemHeardAt = 0;
                 report.Key("visualizer", "system sound");
-                return;
             }
             catch (Exception e)
             {
@@ -109,16 +103,30 @@ public sealed partial class MainWindow
                 report.Key("visualizer", "loopback unavailable: " + e.Message);
             }
         }
-        if (m.Source == VisualizerSource.System) return;
-        var tab = mediaTab is { IsAudible: true } t ? t : AllTabs.FirstOrDefault(x => x.IsAudible) ?? mediaTab;
-        if (tab?.Core is not { } c || (c == captureCore && levels.Length == m.Bars)) return;
-        if (captureCore is { } old) _ = engine.EvaluateAsync(old, "__lilt.capture(false)");
+        if (m.Source == VisualizerSource.System) StopPageSound();
+        else if (m.Source == VisualizerSource.Page || loopback is null || captureCore is not null) _ = StartPageSoundAsync();
+    }
+
+    BrowserTab? SoundTab() => mediaTab is { IsAudible: true } t ? t : AllTabs.FirstOrDefault(x => x.IsAudible) ?? mediaTab;
+
+    // Listens to the playing tab (again, if it changed); a page that has no sound yet is asked again a little later.
+    async Task StartPageSoundAsync()
+    {
+        var m = theme.Media;
+        if (SoundTab()?.Core is not { } c || (c == captureCore && levels.Length == m.Bars)) return;
+        StopPageSound();
         captureCore = c;
         levels = new float[m.Bars];
+        pageRetryAt = Environment.TickCount64 + 3000;
         var result = await engine.EvaluateAsync(c, $"__lilt.capture(true, {m.Bars})", userGesture: true);
         report.Key("visualizer", "page sound: " + result);
-        // Not capturing (the page refused or nothing played yet): the next media update tries again.
-        if (result != "on" && captureCore == c) captureCore = null;
+        if (result != "ok" && captureCore == c) captureCore = null;
+    }
+
+    void StopPageSound()
+    {
+        if (captureCore is { } c) _ = engine.EvaluateAsync(c, "__lilt.capture(false)");
+        captureCore = null;
     }
 
     void OnVisualizerData(CoreWebView2 sender, byte[] data)
@@ -134,8 +142,8 @@ public sealed partial class MainWindow
         loopback?.Dispose();
         loopback = null;
         spectrum = null;
-        if (captureCore is { } c) _ = engine.EvaluateAsync(c, "__lilt.capture(false)");
-        captureCore = null;
+        StopPageSound();
+        vizDrawn = "none";
     }
 
     // One shape per bar (or one line for the wave), rebuilt only when the style, bar count or color changes.
@@ -159,34 +167,44 @@ public sealed partial class MainWindow
         var n = m.Bars;
         var now = Environment.TickCount64;
         Span<float> bars = stackalloc float[n];
+        double systemPeak = 0;
         if (spectrum is { } s && s.Bars.Count == n)
         {
             lock (s) s.Update();
-            for (var i = 0; i < n; i++) bars[i] = s.Bars[i];
+            for (var i = 0; i < n; i++) systemPeak = Math.Max(systemPeak, s.Bars[i]);
+            if (systemPeak > 0.02) systemHeardAt = now;
+        }
+        // Page data stops when the page does; let its bars fall.
+        if (levels.Length == n && now - lastLevels > 150)
+            for (var i = 0; i < n; i++) levels[i] *= 0.82f;
+        var pageFresh = captureCore is not null && levels.Length == n && now - lastLevels < 400;
+        if (spectrum is { } sys && sys.Bars.Count == n && (now - systemHeardAt < 600 || !pageFresh))
+        {
+            for (var i = 0; i < n; i++) bars[i] = sys.Bars[i];
+            vizDrawn = "system";
         }
         else if (levels.Length == n)
         {
-            // Page data stops when the page does; let the bars fall.
-            if (now - lastLevels > 150)
-                for (var i = 0; i < n; i++) levels[i] *= 0.82f;
             levels.AsSpan().CopyTo(bars);
+            vizDrawn = captureCore is not null ? "page" : "none";
         }
         double w = VisualizerCanvas.ActualWidth, h = VisualizerCanvas.ActualHeight, peak = 0;
         if (w <= 0 || h <= 0) return;
         foreach (var b in bars) peak = Math.Max(peak, b);
-        if (peak > 0.02) heardAt = now;
-        // Loopback that has heard nothing at all while a tab plays (no audio device, or sound Windows can't loop back):
-        // listen to the playing tab instead. Once it has heard something it's working, and quiet passages are just quiet.
-        if (loopback is not null && m.Source == VisualizerSource.Auto && now - loopbackSince > 4000 && heardAt == 0
-            && AllTabs.Any(t => t.Media is { Playing: true } && !t.IsMuted))
+        // Page sound while system sound has heard nothing for 4 s and a tab plays; back to system sound alone once it hears.
+        if (m.Source == VisualizerSource.Auto && loopback is not null)
         {
-            loopbackRetryAt = now + 15000;
-            loopback.Dispose();
-            loopback = null;
-            spectrum = null;
-            report.Key("visualizer", "loopback silent, using the page");
-            StartSound();
+            var systemQuiet = now - Math.Max(systemHeardAt, loopbackSince) > 4000;
+            var playing = AllTabs.Any(t => t.Media is { Playing: true } && !t.IsMuted);
+            if (systemQuiet && playing && captureCore is null && now >= pageRetryAt)
+            {
+                report.Key("visualizer", "system sound quiet, listening to the page too");
+                _ = StartPageSoundAsync();
+            }
+            else if (!systemQuiet && captureCore is not null && now - systemHeardAt < 600) StopPageSound();
         }
+        else if (m.Source != VisualizerSource.System && captureCore is null && now >= pageRetryAt && AllTabs.Any(t => t.IsAudible))
+            _ = StartPageSoundAsync();
         vizFrames++;
         vizPeak = Math.Max(vizPeak * 0.99, peak);
 
@@ -210,10 +228,6 @@ public sealed partial class MainWindow
                 Canvas.SetTop(r, m.Style == VisualizerStyle.Mirror ? (h - bh) / 2 : h - bh);
             }
         }
-
-        // Back on system sound after the page has been used for a while (StartSound retries the loopback).
-        if (loopback is null && loopbackRetryAt > 0 && now >= loopbackRetryAt && m.Source == VisualizerSource.Auto)
-            StartSound();
 
         // Nothing audible and the bars have settled: stop drawing until sound starts again (UpdateVisualizer restarts it).
         if (peak > 0.02 || AllTabs.Any(t => t.IsAudible)) quietSince = 0;

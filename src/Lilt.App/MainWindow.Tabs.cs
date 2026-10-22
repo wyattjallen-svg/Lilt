@@ -126,6 +126,8 @@ public sealed partial class MainWindow
                 UpdateTitle();
             }
             if (e.IsSuccess) RecordVisit(c.Source, c.DocumentTitle);
+            // A video in the panel stays video-only when its page reloads or moves on.
+            if (e.IsSuccess && panelTabs.Contains(tab)) _ = VideoOnlyAsync(tab, true);
             if (!firstNavigation) return;
             firstNavigation = false;
             report.FirstNavigation(c.Source, e.IsSuccess, e.WebErrorStatus.ToString());
@@ -171,7 +173,7 @@ public sealed partial class MainWindow
         c.WindowCloseRequested += (_, _) => CloseTab(tab);
         c.ProcessFailed += (_, e) => OnProcessFailed(tab, e);
 
-        if (navigate) c.Navigate(tab.Url);
+        if (navigate) engine.Navigate(c, tab.Url);
         return c;
     }
 
@@ -516,7 +518,7 @@ public sealed partial class MainWindow
             });
         }
         else if (tab != active) Add("Open in split view", "\uE8A9", () => SplitWith(tab));
-        if (tab == floating) Add("Move the video to the panel", "\uE89F", () => MoveToPanel(tab));
+        if (tab.Media is { Video: true } || tab == floating) Add("Move the video to the panel", "\uE89F", () => _ = MoveToPanelAsync(tab));
         if (tab.Media is { Video: true }) Add(tab == floating ? "Put the video back" : "Pop out the video", "\uE8A7", () => _ = PipAsync(tab));
         if (bookmarks.Contains(tab.Url)) Add("Remove bookmark", "", () =>
         {

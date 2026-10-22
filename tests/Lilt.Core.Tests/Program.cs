@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Lilt.Core;
 using Lilt.Core.Bookmarks;
 using Lilt.Core.Customization;
+using Lilt.Core.Diagnostics;
 using Lilt.Core.Extensions;
 using System.Security.Cryptography;
 using System.Buffers.Binary;
@@ -1178,6 +1179,106 @@ Test("tracking parameters are removed from addresses Lilt opens", () =>
     Equal(same, UrlPolicy.StripTracking(same));
     Equal("https://x.com/a?v=9", AddressResolver.Resolve("https://x.com/a?v=9&gclid=3").Uri!.ToString());
     Equal("https://x.com/a", AddressResolver.Resolve("x.com/a?utm_campaign=c").Uri!.ToString());
+});
+
+Test("the log book writes, reads newest first, rolls over and clears", () =>
+{
+    var dir = Path.Combine(Path.GetTempPath(), "lilt-log-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+        var log = new LogBook(dir);
+        Equal(0, log.Read().Count);
+        log.Write(LogLevel.Info, "lilt", "started");
+        log.Write(LogLevel.Crash, "engine", "renderer crashed", "exit code 1");
+        File.AppendAllText(log.Current, "{ half a line\n");
+        var read = log.Read();
+        Equal(2, read.Count);
+        Equal(LogLevel.Crash, read[0].Level);
+        Equal("exit code 1", read[0].Detail);
+        True(File.ReadAllText(log.Current).Contains("\"level\":\"crash\""));
+        log.Write(LogLevel.Error, "lilt", "big", new string('x', LogBook.MaxDetail * 2));
+        Equal(LogBook.MaxDetail + 1, log.Read()[0].Detail.Length);
+        for (var i = 0; i < 80; i++) log.Write(LogLevel.Warning, "lilt", "w" + i, new string('y', 8000));
+        True(File.Exists(log.Current + ".1"));
+        True(new FileInfo(log.Current).Length <= LogBook.MaxBytes + 9000);
+        Equal("w79", log.Read()[0].Message);
+        Equal(5, log.Read(5).Count);
+        log.Clear();
+        Equal(0, log.Read().Count);
+    }
+    finally
+    {
+        if (Directory.Exists(dir)) Directory.Delete(dir, true);
+    }
+});
+
+Test("Windows crash reports are read for the module, code and time", () =>
+{
+    var wer = "﻿Version=1\r\nEventType=APPCRASH\r\nEventTime=134058972000000000\r\nSig[0].Name=Application Name\r\nSig[0].Value=Lilt.exe\r\n" +
+        "Sig[3].Name=Fault Module Name\r\nSig[3].Value=Microsoft.ui.xaml.dll\r\nSig[6].Name=Exception Code\r\nSig[6].Value=C000027B\r\n";
+    var r = WindowsReports.Parse(wer, "AppCrash_Lilt.exe_1")!;
+    True(!r.Hang);
+    Equal("Microsoft.ui.xaml.dll", r.Module);
+    Equal("c000027b", r.Code);
+    Equal(DateTimeOffset.FromFileTime(134058972000000000), r.Time);
+    True(r.Describe().Contains("WinUI"));
+    var hang = WindowsReports.Parse("EventType=AppHangB1\nEventTime=1\n", "x")!;
+    True(hang.Hang && hang.Describe().Contains("stopped responding"));
+    Equal(null, WindowsReports.Parse("nothing here", "x"));
+    var root = Path.Combine(Path.GetTempPath(), "lilt-wer-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+        Directory.CreateDirectory(Path.Combine(root, "AppCrash_Lilt.exe_abc"));
+        Directory.CreateDirectory(Path.Combine(root, "AppCrash_Other.exe_abc"));
+        File.WriteAllText(Path.Combine(root, "AppCrash_Lilt.exe_abc", "Report.wer"), wer, System.Text.Encoding.Unicode);
+        File.WriteAllText(Path.Combine(root, "AppCrash_Other.exe_abc", "Report.wer"), wer, System.Text.Encoding.Unicode);
+        var found = WindowsReports.Find([root, Path.Combine(root, "missing")], "Lilt.exe");
+        Equal(1, found.Count);
+        Equal("c000027b", found[0].Code);
+    }
+    finally
+    {
+        Directory.Delete(root, true);
+    }
+});
+
+Test("about:logs and about:crashes open Lilt's own pages; other about: addresses are refused", () =>
+{
+    Equal(InternalPages.Logs, AddressResolver.Resolve("about:logs").Uri);
+    Equal(InternalPages.Logs, AddressResolver.Resolve("  ABOUT:logs/ ").Uri);
+    Equal("https://about.lilt.example/logs#crash", AddressResolver.Resolve("about:crashes").Uri!.ToString());
+    Equal(AddressKind.Rejected, AddressResolver.Resolve("about:config").Kind);
+    Equal(AddressKind.Navigate, AddressResolver.Resolve("about:blank").Kind);
+    Equal("about:logs", InternalPages.AboutName(InternalPages.Logs));
+    Equal("about:crashes", InternalPages.AboutName(new Uri("https://about.lilt.example/logs#crash")));
+    Equal(null, InternalPages.AboutName(new Uri("https://example.com/logs")));
+    True(!InternalPages.Is(new Uri("http://about.lilt.example/logs")));
+});
+
+Test("about:logs escapes what it shows, counts each kind and summarizes crashes", () =>
+{
+    var now = new DateTimeOffset(2026, 10, 22, 12, 0, 0, TimeSpan.Zero);
+    var info = new LogsPageInfo("0.10.0", "141.0", "10.0.26100", "abc123", "n0nce", "#171A1E", "#2A2F36", "#F3F4F1", "#9AA3AD", "#638B7B", "#33363B", false);
+    LogEntry[] entries =
+    [
+        new(now.AddHours(-2), LogLevel.Crash, "engine", "<script>alert(1)</script> crashed", "at </textarea><b>x</b>"),
+        new(now.AddDays(-1), LogLevel.Error, "lilt", "NullReferenceException: boom"),
+        new(now.AddDays(-9), LogLevel.Crash, "windows", "old crash"),
+        new(now.AddDays(-9), LogLevel.Info, "lilt", "Lilt started"),
+    ];
+    var html = LogsPage.Render(info, entries, now);
+    True(!html.Contains("<script>alert(1)"));
+    True(html.Contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
+    True(!html.Contains("</textarea><b>"));
+    True(html.Contains("data-f=\"crash\" aria-pressed=\"false\">Crashes<b>2</b>"));
+    True(html.Contains("nonce=\"n0nce\""));
+    True(html.Contains("data-t=\"abc123\""));
+    Equal("1 crash in the last 7 days, the latest 2 h ago.", LogsPage.Summary(entries, now));
+    Equal("No crashes in the last 7 days.", LogsPage.Summary([], now));
+    True(LogsPage.Csp("n0nce").Contains("frame-ancestors 'none'") && LogsPage.Csp("n0nce").Contains("script-src 'nonce-n0nce'"));
+    var text = LogsPage.PlainText(info, entries);
+    True(text.StartsWith("Lilt 0.10.0 · engine 141.0") && text.Contains("crash engine: <script>"));
+    True(LogsPage.Render(info, [], now).Contains("Nothing logged yet"));
 });
 
 return Summary();
