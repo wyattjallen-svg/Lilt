@@ -61,20 +61,24 @@ public sealed partial class MainWindow
 
     void PlaceWidgets()
     {
-        var height = WidgetLayer.ActualHeight;
-        var lift = 16d;
+        double width = WidgetLayer.ActualWidth, height = WidgetLayer.ActualHeight;
+        var boxes = new List<Rect>();
         foreach (var (element, widget) in new (FrameworkElement, string)[] { (MediaWidget, "player"), (VisualizerWidget, "visualizer"), (PipFrame, "pip") })
         {
             if (element.Visibility != Visibility.Visible || PanelHost.Children.Contains(element)) continue;
             var b = Box(widget);
-            if (b.Bottom > height - metrics.Px(120)) lift = Math.Max(lift, height - b.Y + 8);
+            boxes.Add(b);
             Canvas.SetLeft(element, b.X);
             Canvas.SetTop(element, b.Y);
             element.Width = b.Width;
             element.Height = widget == "player" && Spec(widget).Height <= 0 ? double.NaN : b.Height;
             if (widget != "pip") element.Opacity = Spec(widget).Opacity;
         }
-        // Notices rise above floating widgets parked along the bottom instead of covering their controls.
+        // Notices (centered, bottom) rise above the floating widgets in their way instead of covering their controls.
+        var half = Math.Min(NoticeBar.MaxWidth, width - 32) / 2;
+        var lift = 16d;
+        foreach (var b in boxes.OrderByDescending(b => b.Bottom))
+            if (b.Right > width / 2 - half && b.X < width / 2 + half && b.Bottom > height - lift - metrics.Px(100)) lift = Math.Max(lift, height - b.Y + 8);
         noticeLift = Math.Min(lift, Math.Max(16, height - metrics.Px(140)));
         var m = NoticeBar.Margin;
         NoticeBar.Margin = new Thickness(m.Left, m.Top, m.Right, noticeLift);
