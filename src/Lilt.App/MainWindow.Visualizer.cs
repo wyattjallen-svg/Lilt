@@ -24,7 +24,10 @@ public sealed partial class MainWindow
     float[] levels = [];
     long lastLevels, quietSince, loopbackSince, systemHeardAt, pageRetryAt;
     DispatcherQueueTimer? vizTimer;
-    string vizShape = "", vizDrawn = "none";
+    string vizShape = "", vizDrawn = "none", pageResult = "not tried";
+    // Once a visualizer has run for a few seconds with a tab playing, what it heard goes in Lilt's log (about:logs).
+    long vizSince;
+    bool vizLogged;
     int vizFrames;
     double vizPeak;
 
@@ -39,7 +42,8 @@ public sealed partial class MainWindow
         {
             WidgetShow.Never => false,
             WidgetShow.Always => playing.Any(),
-            _ => playing.Any(t => IsMusicSite(t.Url)),
+            // Docked in the panel, it's part of the column you chose, so it shows whenever something plays.
+            _ => playing.Any(t => IsMusicSite(t.Url)) || (Docked("visualizer") && playing.Any()),
         };
     }
 
@@ -55,12 +59,18 @@ public sealed partial class MainWindow
         var show = VisualizerWanted() && !pagesHidden && !windowHidden;
         var was = VisualizerWidget.Visibility == Visibility.Visible;
         VisualizerWidget.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        if (was != show) SizePanelRows();
         if (!show)
         {
             StopVisualizer();
             return;
         }
-        if (!was) PlaceWidgets();
+        if (!was)
+        {
+            PlaceWidgets();
+            vizSince = Environment.TickCount64;
+            vizLogged = false;
+        }
         BuildVisualizer();
         StartSound();
         quietSince = 0;
@@ -102,6 +112,7 @@ public sealed partial class MainWindow
                 loopback = null;
                 spectrum = null;
                 report.Key("visualizer", "loopback unavailable: " + e.Message);
+                LiltPaths.Log.Write(Lilt.Core.Diagnostics.LogLevel.Warning, "visualizer", "Windows wouldn't share Lilt's sound with the visualizer", $"{e.GetType().Name}: {e.Message}");
             }
         }
         if (m.Source == VisualizerSource.System) StopPageSound();
@@ -121,6 +132,7 @@ public sealed partial class MainWindow
         pageRetryAt = Environment.TickCount64 + 3000;
         var result = await engine.EvaluateAsync(c, $"__lilt.capture(true, {m.Bars})", userGesture: true);
         report.Key("visualizer", "page sound: " + result);
+        pageResult = result ?? "no answer";
         if (result != "ok" && captureCore == c) captureCore = null;
     }
 
@@ -129,6 +141,9 @@ public sealed partial class MainWindow
         if (captureCore is { } c) _ = engine.EvaluateAsync(c, "__lilt.capture(false)");
         captureCore = null;
     }
+
+    string SystemSoundState() => loopback is { } l ? $"system sound: {l.Packets} packets, {l.SilentPackets} marked silent, loudest {l.Peak:0.000}"
+        : loopbackFailed ? "system sound unavailable" : "system sound off";
 
     void OnVisualizerData(CoreWebView2 sender, byte[] data)
     {
@@ -209,6 +224,14 @@ public sealed partial class MainWindow
             _ = StartPageSoundAsync();
         vizFrames++;
         vizPeak = Math.Max(vizPeak * 0.99, peak);
+        if (!vizLogged && vizSince > 0 && now - vizSince > 6000 && AllTabs.FirstOrDefault(t => t.IsAudible && !t.IsMuted) is { } heard)
+        {
+            vizLogged = true;
+            var ok = vizPeak > 0.05;
+            LiltPaths.Log.Write(ok ? Lilt.Core.Diagnostics.LogLevel.Info : Lilt.Core.Diagnostics.LogLevel.Warning, "visualizer",
+                ok ? $"The visualizer hears {vizDrawn} sound" : "The visualizer hears nothing while a tab plays",
+                $"{SystemSoundState()}; page sound: {pageResult}; playing: {(options.InPrivate ? "a tab" : Lilt.Core.Navigation.UrlPolicy.DisplayHost(heard.Url))}");
+        }
 
         if (VisualizerCanvas.Children.Count == 1 && VisualizerCanvas.Children[0] is Polyline line)
         {

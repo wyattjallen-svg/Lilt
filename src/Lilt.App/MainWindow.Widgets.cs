@@ -128,11 +128,6 @@ public sealed partial class MainWindow
             PanelDragTo(e.GetCurrentPoint(PanelHost).Position);
             return;
         }
-        if (dragging == "vizheight")
-        {
-            VizHeightDragTo(p.Y - dragStart.Y);
-            return;
-        }
         if (dragging is "player" or "visualizer" or "pip")
         {
             var over = OverDock(e);
@@ -176,12 +171,6 @@ public sealed partial class MainWindow
         {
             dragging = null;
             EndPanelDrag();
-            return;
-        }
-        if (tag == "vizheight")
-        {
-            dragging = null;
-            EndVizHeightDrag();
             return;
         }
         var widget = Owner(tag);

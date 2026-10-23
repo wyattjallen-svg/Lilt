@@ -184,14 +184,24 @@
   const report = () => {
     const m = pick();
     if (m) current = m;
-    const md = navigator.mediaSession && navigator.mediaSession.metadata;
+    const ms = navigator.mediaSession;
+    const md = ms && ms.metadata;
     const art = md && md.artwork && md.artwork.length ? md.artwork[md.artwork.length - 1].src : '';
-    const s = m ? {
-      t: 'media', playing: !m.paused && !m.ended, title: (md && md.title) || document.title || '',
+    // Some players never put their media element in the document (Spotify's is made with createElement and kept out),
+    // so the page only shows its media session: title, artist, artwork and, if it says, whether it's playing. Lilt then
+    // takes the position and the controls from Windows' media controls, which WebView2 feeds from that same session.
+    // A short element next to a session (a sound effect, a preview) isn't the track either.
+    const track = m && (length(m) > 30 || !md || !md.title) ? m : null;
+    const state = ms ? ms.playbackState : 'none';
+    const s = track ? {
+      t: 'media', playing: !track.paused && !track.ended, title: (md && md.title) || document.title || '',
       artist: (md && md.artist) || '', album: (md && md.album) || '', art: String(art || ''),
-      video: !!bestVideo(), pos: m.currentTime || 0,
-      dur: isFinite(m.duration) ? m.duration : 0, rate: m.playbackRate || 1, muted: m.muted,
+      video: !!bestVideo(), pos: track.currentTime || 0,
+      dur: isFinite(track.duration) ? track.duration : 0, rate: track.playbackRate || 1, muted: track.muted,
       pip: !!document.pictureInPictureElement,
+    } : md && md.title ? {
+      t: 'media', session: true, state, playing: state === 'playing', title: String(md.title), artist: String(md.artist || ''),
+      album: String(md.album || ''), art: String(art || ''), video: !!bestVideo(), pip: !!document.pictureInPictureElement,
     } : { t: 'media', none: true };
     const j = JSON.stringify(s);
     if (j !== last) {

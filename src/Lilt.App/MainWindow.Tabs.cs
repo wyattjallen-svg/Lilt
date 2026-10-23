@@ -156,6 +156,7 @@ public sealed partial class MainWindow
         c.IsDocumentPlayingAudioChanged += (_, _) =>
         {
             tab.IsAudible = c.IsDocumentPlayingAudio;
+            OnAudibleChanged(tab);
             UpdatePower();
             UpdateVisualizer();
         };

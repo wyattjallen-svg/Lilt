@@ -4,8 +4,10 @@ namespace Lilt.Core;
 
 // What a tab reports about its media (from Lilt's isolated page script). Everything is page-supplied text,
 // so it's length-limited and only shown as text; Artwork is kept only if it's an http(s) URL.
+// Session: the page's media session is all there is (its media element isn't in the document, as with Spotify), so the
+// position, duration and controls come from Windows' media controls. KnownState: the page said whether it's playing.
 public sealed record MediaInfo(bool Playing, string Title, string Artist, string Album, string? Artwork, bool Video,
-    double Position, double Duration, double Rate, bool Muted, bool PictureInPicture)
+    double Position, double Duration, double Rate, bool Muted, bool PictureInPicture, bool Session = false, bool KnownState = true)
 {
     public static MediaInfo? Parse(JsonElement e)
     {
@@ -17,8 +19,11 @@ public sealed record MediaInfo(bool Playing, string Title, string Artist, string
         bool Flag(string name) => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.True;
         var art = Text("art", 2000);
         var artwork = Uri.TryCreate(art, UriKind.Absolute, out var u) && (u.Scheme == Uri.UriSchemeHttps || u.Scheme == Uri.UriSchemeHttp) ? u.AbsoluteUri : null;
+        var session = Flag("session");
+        var state = Text("state", 10);
         return new MediaInfo(Flag("playing"), Text("title", 300), Text("artist", 200), Text("album", 200), artwork, Flag("video"),
-            Num("pos", 1e7), Num("dur", 1e7), Num("rate", 16) is var r && r > 0 ? r : 1, Flag("muted"), Flag("pip"));
+            Num("pos", 1e7), Num("dur", 1e7), Num("rate", 16) is var r && r > 0 ? r : 1, Flag("muted"), Flag("pip"),
+            session, !session || state is "playing" or "paused");
     }
 
     static string Clip(string s, int max)

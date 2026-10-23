@@ -332,12 +332,13 @@ public sealed partial class MainWindow : Window
         player = MediaWidget.Visibility == Visibility.Visible,
         visualizer = VisualizerWidget.Visibility == Visibility.Visible,
         visualizerSource = vizDrawn,
+        visualizerSystem = SystemSoundState(),
         scale = metrics.Scale,
         toolbarHeight = Math.Round(Toolbar.ActualHeight),
         playerWidth = Math.Round(MediaWidget.ActualWidth),
         visualizerFrames = vizFrames,
         visualizerPeak = Math.Round(vizPeak, 3),
-        media = mediaTab?.Media is { } m ? new { m.Title, m.Artist, m.Playing, m.Video, m.Duration, m.PictureInPicture } : null,
+        media = mediaTab?.Media is { } m ? new { m.Title, m.Artist, m.Playing, m.Video, m.Duration, m.PictureInPicture, m.Session } : null,
         power = powerLevel.ToString(),
         shortcuts = Root.KeyboardAccelerators.Count,
         address = AddressBox.Text,
@@ -531,6 +532,7 @@ public sealed partial class MainWindow : Window
             case "palette": ShowPalette(); break;
             case "split": ToggleSplit(); break;
             case "media": ToggleMediaWidget(); break;
+            case "playPause": _ = PlayPauseAsync(); break;
             case "visualizer": ToggleVisualizer(); break;
             case "pip": _ = PipAsync(); break;
             case "closePeek": ClosePeek(); break;

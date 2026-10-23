@@ -136,12 +136,12 @@ public sealed record MediaSpec(WidgetSpec Player, WidgetSpec Visualizer, WidgetS
     ];
 }
 
-// The panel beside the page: tabs you keep there (music, chat, a reference), and the visualizer and player docked
-// under them if you like. Edge: left or right. Sections, top to bottom: "web", "visualizer", "player"; leave one out to
-// keep it floating (the visualizer and player) or hidden (web).
+// The panel beside the page: a column for what's playing. Edge: left or right. Sections, top to bottom: "web" (videos
+// moved there), "player", "visualizer" (it fills the height left over); leave one out to keep it floating (the player and
+// visualizer) or hidden (web).
 public sealed record PanelSpec(DockEdge Edge, double Width, Ids Sections)
 {
-    public static readonly string[] All = ["web", "visualizer", "player"];
+    public static readonly string[] All = ["web", "player", "visualizer"];
 }
 
 // What sites keep on your PC, trimmed without signing you out. CacheLimit: MB of cached files the engine may keep

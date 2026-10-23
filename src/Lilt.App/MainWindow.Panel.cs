@@ -13,17 +13,19 @@ using Windows.ApplicationModel.DataTransfer;
 
 namespace Lilt.App;
 
-// The panel beside the page (theme "panel"): videos (a popped-out video dragged in, or right-click a tab → Move the video
-// to the panel), shown one at a time, that keep playing while you browse, switch workspaces or hide the panel; and the
-// player and the visualizer, dragged over the panel or docked from its menu. Whole pages don't go in. panel.sections sets
-// the rows.
+// The panel beside the page (theme "panel"): a column for what's playing. Videos (a popped-out video dragged in, or
+// right-click a tab → Move the video to the panel) show one at a time at their own 16:9 shape and keep playing while you
+// browse, switch workspaces or hide the panel; the player becomes a column of its own (artwork as wide as the panel, then
+// the title, the time and the controls); the visualizer fills whatever height is left. Whole pages don't go in.
+// panel.sections sets the order.
 public sealed partial class MainWindow
 {
     readonly ObservableCollection<BrowserTab> panelTabs = [];
     BrowserTab? panelTab;
     bool panelOpen, dockOver;
-    double? dragPanelWidth, vizHeight;
-    double vizStart;
+    double? dragPanelWidth;
+    // Rows in the panel's grid: the videos (-1 without the "web" section) and the visualizer (-1 when it floats).
+    int pagesRow = -1, vizRow = -1;
 
     void InitPanel()
     {
@@ -62,6 +64,7 @@ public sealed partial class MainWindow
         // Notices and permission questions stay over the page.
         NoticeBar.Margin = left ? new Thickness(16 + taken, 16, 16, 16) : new Thickness(16, 16, 16 + taken, 16);
         PermissionBar.Margin = left ? new Thickness(12 + taken, 12, 12, 12) : new Thickness(12, 12, 12 + taken, 12);
+        SizePanelRows();
         ScalePlayer();
     }
 
@@ -73,20 +76,21 @@ public sealed partial class MainWindow
         PanelToggle.IsChecked = panelOpen;
         SizePanel();
 
-        // Rows top to bottom from panel.sections: the sites and their pages, the visualizer, the player.
+        // Rows top to bottom from panel.sections, then a spacer that takes the height nothing else wants.
         PanelHost.RowDefinitions.Clear();
         var web = spec.Sections.Has("web");
-        var vizRow = -1;
+        pagesRow = vizRow = -1;
         foreach (var id in spec.Sections.Items)
         {
             var row = PanelHost.RowDefinitions.Count;
             if (id == "web")
             {
                 PanelHost.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                PanelHost.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+                PanelHost.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                pagesRow = row + 1;
                 Grid.SetRow(PanelHeader, row);
-                Grid.SetRow(PanelPages, row + 1);
-                Grid.SetRow(PanelEmpty, row + 1);
+                Grid.SetRow(PanelPages, pagesRow);
+                Grid.SetRow(PanelEmpty, pagesRow);
                 continue;
             }
             PanelHost.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -95,19 +99,34 @@ public sealed partial class MainWindow
             Dock(widget, open ? PanelHost : null);
             Grid.SetRow(widget, row);
         }
-        if (!web) PanelHost.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        PanelHost.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         if (!spec.Sections.Has("visualizer")) Dock(VisualizerWidget, null);
         if (!spec.Sections.Has("player")) Dock(MediaWidget, null);
         PanelHeader.Visibility = PanelPages.Visibility = web ? Visibility.Visible : Visibility.Collapsed;
-        PanelEmpty.Visibility = web && panelTabs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        // The visualizer's height grip sits on its bottom edge, clear of the panel's own edge grip.
-        PanelVizGrip.Visibility = open && vizRow >= 0 ? Visibility.Visible : Visibility.Collapsed;
-        if (vizRow >= 0) Grid.SetRow(PanelVizGrip, vizRow);
-        PanelVizGrip.Margin = spec.Edge == DockEdge.Left ? new Thickness(0, 0, metrics.Px(12), 0) : new Thickness(metrics.Px(12), 0, 0, 0);
         Grid.SetRowSpan(PanelGrip, PanelHost.RowDefinitions.Count);
         ShowPanelPage();
         PlaceWidgets();
         UpdateMedia();
+        SizePanelRows();
+    }
+
+    // The column fills top to bottom with nothing stretched out of shape: videos at 16:9 for the panel's width, the player
+    // at its own height, and the visualizer taking the rest. With nothing docked showing, the "drag here" note sits in the
+    // middle. Cheap enough to run whenever something in the panel shows, hides or the panel's width changes.
+    void SizePanelRows()
+    {
+        var rows = PanelHost.RowDefinitions;
+        if (rows.Count == 0) return;
+        var star = new GridLength(1, GridUnitType.Star);
+        var viz = vizRow >= 0 && PanelHost.Children.Contains(VisualizerWidget) && VisualizerWidget.Visibility == Visibility.Visible;
+        var player = PanelHost.Children.Contains(MediaWidget) && MediaWidget.Visibility == Visibility.Visible;
+        var empty = pagesRow >= 0 && panelTabs.Count == 0 && !viz && !player;
+        PanelEmpty.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
+        var inner = (double.IsNaN(PanelHost.Width) ? PanelHost.ActualWidth : PanelHost.Width) - metrics.Px(12);
+        if (pagesRow >= 0 && pagesRow < rows.Count)
+            rows[pagesRow].Height = panelTabs.Count > 0 ? new GridLength(Math.Round(Math.Max(1, inner) * 9 / 16)) : empty ? star : new GridLength(0);
+        if (vizRow >= 0 && vizRow < rows.Count) rows[vizRow].Height = viz ? star : GridLength.Auto;
+        rows[^1].Height = viz || empty ? new GridLength(0) : star;
     }
 
     // A docked widget fills the panel's width; floating, it goes back over the page where it was.
@@ -125,10 +144,13 @@ public sealed partial class MainWindow
         if (host is null)
         {
             widget.Margin = default;
+            widget.MinHeight = 0;
             return;
         }
-        widget.Width = double.NaN;
-        widget.Height = widget == VisualizerWidget ? Math.Round(theme.Media.Visualizer.Height * metrics.Scale) : double.NaN;
+        // The visualizer fills its (stretching) row; the player is as tall as what's in it.
+        widget.Width = widget.Height = double.NaN;
+        widget.VerticalAlignment = widget == VisualizerWidget ? VerticalAlignment.Stretch : VerticalAlignment.Top;
+        widget.MinHeight = widget == VisualizerWidget ? metrics.Px(56) : 0;
         widget.Margin = new Thickness(metrics.Px(6), 0, metrics.Px(6), metrics.Px(6));
         widget.Opacity = 1;
     }
@@ -306,27 +328,6 @@ public sealed partial class MainWindow
         var ids = Current.Panel.Sections;
         Queue(Current with { Panel = Current.Panel with { Sections = ids.Has(widget) ? ids : new Ids(ids.Items.Append(widget).ToArray()) } });
         LayoutPanel();
-    }
-
-    // The visualizer's bottom edge, dragged: its height in the panel and on the page.
-    void VizGrip_PointerPressed(object sender, PointerRoutedEventArgs e)
-    {
-        if (dragging is not null) return;
-        vizStart = VisualizerWidget.ActualHeight;
-        StartDrag("vizheight", PanelVizGrip, e);
-    }
-
-    void VizHeightDragTo(double dy)
-    {
-        vizHeight = Math.Clamp(vizStart + dy, metrics.Px(40), metrics.Px(400));
-        VisualizerWidget.Height = vizHeight.Value;
-    }
-
-    void EndVizHeightDrag()
-    {
-        if (vizHeight is not { } h) return;
-        vizHeight = null;
-        Queue(Current with { Media = Current.Media with { Visualizer = Current.Media.Visualizer with { Height = Math.Round(h / metrics.Scale) } } });
     }
 
     void PanelGrip_PointerPressed(object sender, PointerRoutedEventArgs e)

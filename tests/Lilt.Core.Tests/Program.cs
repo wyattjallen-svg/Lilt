@@ -640,6 +640,13 @@ Test("media info: page reports are checked and clipped", () =>
     var bad = Parse("""{"t":"media","playing":"yes","title":5,"art":"javascript:alert(1)","pos":-3,"dur":"x","rate":0}""")!;
     True(!bad.Playing && bad.Title == "" && bad.Artwork == null && bad.Position == 0 && bad.Duration == 0 && bad.Rate == 1);
     Equal(300, Parse("{\"title\":\"" + new string('x', 1000) + "\"}")!.Title.Length);
+    var session = Parse("{\"t\":\"media\",\"session\":true,\"state\":\"none\",\"playing\":false,\"title\":\"Song\",\"artist\":\"Band\",\"art\":\"https://i.scdn.co/image/x\"}")!;
+    True(session.Session && !session.KnownState && !session.Playing);
+    Equal("Song", session.Title);
+    Equal("https://i.scdn.co/image/x", session.Artwork);
+    True(Parse("{\"t\":\"media\",\"session\":true,\"state\":\"playing\",\"playing\":true,\"title\":\"S\"}")!.KnownState);
+    var element = Parse("{\"t\":\"media\",\"playing\":true,\"title\":\"V\",\"pos\":3,\"dur\":200}")!;
+    True(!element.Session && element.KnownState);
     Equal("1:01", MediaInfo.Clock(61.4));
     Equal("1:00:00", MediaInfo.Clock(3600));
 });

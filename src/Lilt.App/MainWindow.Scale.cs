@@ -14,7 +14,7 @@ public sealed partial class MainWindow
 {
     static readonly double[] interfaceSizes = [0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5];
     HashSet<object>? scaleSkip;
-    (double, double, double) playerScaled;
+    (double, double, double, bool) playerScaled;
 
     // Sized by Lilt's code from the metrics already: the scaler leaves them, and what's in them, alone.
     HashSet<object> ScaleSkip() => scaleSkip ??= [.. ChromeButtons(), AddressBox, BookmarkSearch, BookmarkList, TabList, TabsTitle, PanelSiteList, VisualizerCanvas];
@@ -26,7 +26,7 @@ public sealed partial class MainWindow
         foreach (var root in new object?[]
         {
             CustomizeFlyout, DownloadsFlyout, PaletteFlyout, MainMenu, BookmarkMenu, TabsHeader, BookmarksPanel, PanelHeader, PanelEmpty, PanelGrip,
-            PanelVizGrip, PanelDropZone.Child, PeekBar, PermissionBar, NoticeBar, BookmarksOverlay, PipHeader, VisualizerWidget.Child,
+            PanelDropZone.Child, PeekBar, PermissionBar, NoticeBar, BookmarksOverlay, PipHeader, VisualizerWidget.Child,
         })
             ScaleNow(root);
         VisualizerWidget.Padding = new Thickness(metrics.Px(8));
@@ -61,11 +61,37 @@ public sealed partial class MainWindow
         var width = docked ? PanelHost.Width - metrics.Px(12) : MediaWidget.Width;
         if (double.IsNaN(width) || width <= 0) width = theme.Media.Player.Width * metrics.Scale;
         var f = Math.Round(Math.Clamp(width / (300 * metrics.Scale), 0.85, 1.6), 2);
-        var key = (f, metrics.Text, metrics.Scale);
-        if (key == playerScaled) return;
-        playerScaled = key;
-        MediaWidget.Padding = new Thickness(Math.Round(10 * metrics.Scale * f));
-        Scaler.Apply(MediaWidget.Child, metrics.Text * f, metrics.Scale * f);
+        var key = (f, metrics.Text, metrics.Scale, docked);
+        if (key != playerScaled)
+        {
+            playerScaled = key;
+            MediaWidget.Padding = new Thickness(Math.Round(10 * metrics.Scale * f));
+            Scaler.Apply(MediaWidget.Child, metrics.Text * f, metrics.Scale * f);
+        }
+        ArrangePlayer(docked, width - 2 * Math.Round(10 * metrics.Scale * f));
+    }
+
+    // Floating, the player is a strip: artwork, title and controls side by side. Docked in the (tall, narrow) panel it's a
+    // column: artwork as wide as the panel, then the title (two lines if it needs them), the time and the controls,
+    // centered. Under its own video in the panel the artwork steps aside, since the video is already showing.
+    void ArrangePlayer(bool column, double inner)
+    {
+        Grid.SetRowSpan(PlayerArt, column ? 1 : 2);
+        Grid.SetColumnSpan(PlayerArt, column ? 3 : 1);
+        Grid.SetRow(PlayerText, column ? 1 : 0);
+        Grid.SetColumn(PlayerText, column ? 0 : 1);
+        Grid.SetColumnSpan(PlayerText, column ? 3 : 1);
+        Grid.SetRow(MediaControls, column ? 3 : 1);
+        Grid.SetColumn(MediaControls, column ? 0 : 1);
+        Grid.SetColumnSpan(MediaControls, column ? 3 : 2);
+        MediaControls.HorizontalAlignment = column ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+        PlayerClose.Visibility = column ? Visibility.Collapsed : Visibility.Visible;
+        MediaTitle.TextWrapping = column ? TextWrapping.WrapWholeWords : TextWrapping.NoWrap;
+        MediaTitle.MaxLines = column ? 2 : 1;
+        var videoAbove = column && panelTab is not null && panelTab == mediaTab && PanelShowsPages;
+        PlayerArt.Visibility = videoAbove ? Visibility.Collapsed : Visibility.Visible;
+        if (column) PlayerArt.Width = PlayerArt.Height = Math.Max(48, Math.Round(Math.Min(inner, metrics.Px(440))));
+        PlayerArt.HorizontalAlignment = column ? HorizontalAlignment.Center : HorizontalAlignment.Left;
     }
 
     // Ctrl+K or your own keys: one step bigger or smaller, or back to 100%.

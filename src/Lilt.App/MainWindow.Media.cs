@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Lilt.App.Browser;
 using Lilt.Core;
 using Lilt.Core.Navigation;
@@ -12,7 +13,9 @@ using Windows.Media.Control;
 namespace Lilt.App;
 
 // Now playing: each tab's page helper reports its media (title, artist, artwork, position) and Lilt shows the tab that
-// last started playing in a floating player. Picture in picture uses Windows' floating video window when WebView2 offers
+// last started playing in a floating player. A page whose media element isn't in the document (Spotify) reports only its
+// media session; the play state, position and controls then come from Windows' media controls, which WebView2 feeds
+// from that same session. Picture in picture uses Windows' floating video window when WebView2 offers
 // it, otherwise the tab itself pops out into a small frame over the page you're on ("floating").
 public sealed partial class MainWindow
 {
@@ -31,7 +34,16 @@ public sealed partial class MainWindow
         engine.VisualizerData += OnVisualizerData;
         mediaClock = DispatcherQueue.CreateTimer();
         mediaClock.Interval = TimeSpan.FromSeconds(1);
-        mediaClock.Tick += (_, _) => UpdateProgress();
+        mediaClock.Tick += (_, _) =>
+        {
+            UpdateProgress();
+            // A session-only page sends nothing when its track changes: ask it, and Windows, every few seconds while it plays.
+            if (mediaTab is { Media.Session: true } tab && ++sessionTicks % 3 == 0)
+            {
+                if (tab.Core is { } c) _ = engine.EvaluateAsync(c, "__lilt.report()");
+                _ = SyncSessionAsync();
+            }
+        };
         MediaWidget.SizeChanged += (_, _) => PlaceWidgets();
     }
 
@@ -39,6 +51,17 @@ public sealed partial class MainWindow
     {
         if (AllTabs.FirstOrDefault(t => t.Core == core) is not { } tab) return;
         var was = tab.Media;
+        if (info is { Session: true })
+        {
+            // The page only knows the session; keep what Windows said about the same track until it's asked again.
+            var same = was is { Session: true } && was.Title == info.Title;
+            if (same)
+            {
+                var elapsed = was!.Playing ? (Environment.TickCount64 - tab.MediaAt) / 1000.0 * was.Rate : 0;
+                info = info with { Position = was.Duration > 0 ? Math.Min(was.Position + elapsed, was.Duration) : 0, Duration = was.Duration, Rate = was.Rate };
+            }
+            if (!info.KnownState) info = info with { Playing = same ? was!.Playing || tab.IsAudible : tab.IsAudible };
+        }
         tab.Media = info;
         tab.MediaAt = Environment.TickCount64;
         if (info is { Playing: true } && (mediaTab != tab || was?.Title != info.Title || was?.Playing != true))
@@ -49,6 +72,98 @@ public sealed partial class MainWindow
         else if (mediaTab == tab && info is null) mediaTab = AllTabs.FirstOrDefault(t => t.Media is { Playing: true });
         if (floating == tab && info is null) DockFloating(activate: false);
         UpdateMedia();
+        if (tab == mediaTab && info is { Session: true }) _ = SyncSessionAsync();
+    }
+
+    int sessionTicks;
+    bool syncingSession;
+
+    // Sound starting or stopping is often the only sign from a session-only page (its element's events never reach the
+    // document), so the page is asked again and the play state follows the sound until Windows says more.
+    void OnAudibleChanged(BrowserTab tab)
+    {
+        if (tab.Core is { } c) _ = engine.EvaluateAsync(c, "__lilt.report()");
+        if (tab.Media is { Session: true, KnownState: false } m)
+        {
+            tab.Media = m with { Playing = tab.IsAudible };
+            tab.MediaAt = Environment.TickCount64;
+            if (tab.IsAudible) mediaTab = tab;
+            UpdateMedia();
+        }
+        if (tab == mediaTab && tab.Media is { Session: true }) _ = SyncSessionAsync();
+    }
+
+    // Windows' media controls for what plays in Lilt. WebView2's sessions all come from msedgewebview2.exe (other apps'
+    // included), so the title picks the right one; with no title to go by, a lone WebView2 session is taken.
+    async Task<GlobalSystemMediaTransportControlsSession?> LiltSessionAsync(string? title)
+    {
+        smtc ??= await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+        GlobalSystemMediaTransportControlsSession? only = null;
+        var count = 0;
+        foreach (var session in smtc.GetSessions())
+        {
+            if (!IsLiltSession(session.SourceAppUserModelId)) continue;
+            if (title is { Length: > 0 } && (await session.TryGetMediaPropertiesAsync()).Title == title) return session;
+            only = session;
+            count++;
+        }
+        return count == 1 ? only : null;
+    }
+
+    async Task SyncSessionAsync()
+    {
+        if (syncingSession || mediaTab is not { Media: { Session: true } info } tab) return;
+        syncingSession = true;
+        try
+        {
+            if (await LiltSessionAsync(info.Title) is not { } s) return;
+            var p = s.GetPlaybackInfo();
+            var t = s.GetTimelineProperties();
+            var playing = p.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+            var rate = p.PlaybackRate is double r && r > 0 ? r : 1;
+            var duration = Math.Max(0, (t.EndTime - t.StartTime).TotalSeconds);
+            var position = Math.Max(0, (t.Position - t.StartTime).TotalSeconds);
+            // The position is as of Windows' last update; carry it to now while playing.
+            if (playing && t.LastUpdatedTime > DateTimeOffset.Now.AddDays(-1)) position += Math.Max(0, (DateTimeOffset.Now - t.LastUpdatedTime).TotalSeconds) * rate;
+            if (mediaTab != tab || tab.Media is not { Session: true } now || now.Title != info.Title) return;
+            tab.Media = now with { Playing = playing, Position = duration > 0 ? Math.Min(position, duration) : 0, Duration = duration, Rate = rate };
+            tab.MediaAt = Environment.TickCount64;
+            UpdateMedia();
+        }
+        catch (Exception e) when (e is COMException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            LiltPaths.Log.Write(Lilt.Core.Diagnostics.LogLevel.Warning, "media", "Windows' media controls didn't answer", e.Message);
+        }
+        finally
+        {
+            syncingSession = false;
+        }
+    }
+
+    // Play, pause, seek or skip through Windows' media controls, then read the session again.
+    async Task<bool> WithSessionAsync(string what, Func<GlobalSystemMediaTransportControlsSession, Task<bool>> act)
+    {
+        try
+        {
+            if (await LiltSessionAsync(mediaTab?.Media?.Title) is not { } s) return false;
+            var done = await act(s);
+            report.Key("media", $"{what} via Windows: {done}");
+            await Task.Delay(250);
+            await SyncSessionAsync();
+            return done;
+        }
+        catch (Exception e) when (e is COMException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            LiltPaths.Log.Write(Lilt.Core.Diagnostics.LogLevel.Warning, "media", $"Couldn't {what} through Windows' media controls", e.Message);
+            return false;
+        }
+    }
+
+    // The page's own element when it has one; its media session through Windows otherwise.
+    async Task PlayPauseAsync()
+    {
+        if (mediaTab?.Media is not { Session: true } && await MediaCommandAsync("__lilt.media('toggle')") == "ok") return;
+        await WithSessionAsync("play or pause", async s => await s.TryTogglePlayPauseAsync());
     }
 
     bool OnScreen(BrowserTab tab) => tab == active || tab == floating || (active is not null && Partner(active) == tab) || PanelShows(tab);
@@ -73,7 +188,9 @@ public sealed partial class MainWindow
         hasMedia = info is not null;
         ArrangeToolbar(theme.Toolbar.Items);
         var show = PlayerWanted() && !pagesHidden;
+        var shown = MediaWidget.Visibility == Visibility.Visible;
         MediaWidget.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        if (shown != show) SizePanelRows();
         if (!show)
         {
             mediaClock.Stop();
@@ -91,10 +208,11 @@ public sealed partial class MainWindow
         {
             artShown = info?.Artwork;
             // Artwork comes from the site that's playing (its own image server); otherwise the tab's icon.
-            MediaArt.Source = artShown is not null ? new BitmapImage(new Uri(artShown)) { DecodePixelWidth = 104 } : tab?.Icon;
+            // Decoded big enough for the panel's wide artwork.
+            MediaArt.Source = artShown is not null ? new BitmapImage(new Uri(artShown)) { DecodePixelWidth = 480 } : tab?.Icon;
         }
         UpdateProgress();
-        if (info is { Playing: true, Duration: > 0 }) mediaClock.Start();
+        if (info is { Playing: true } && (info.Duration > 0 || info.Session)) mediaClock.Start();
         else mediaClock.Stop();
     }
 
@@ -130,7 +248,7 @@ public sealed partial class MainWindow
         mediaTab?.Core is { } c ? engine.EvaluateAsync(c, js, userGesture: true) : Task.FromResult<string?>(null);
 
     void MediaButton_Click(object sender, RoutedEventArgs e) => ToggleMediaWidget();
-    void MediaPlay_Click(object sender, RoutedEventArgs e) => _ = MediaCommandAsync("__lilt.media('toggle')");
+    void MediaPlay_Click(object sender, RoutedEventArgs e) => _ = PlayPauseAsync();
     void MediaNext_Click(object sender, RoutedEventArgs e) => _ = SkipAsync("next");
     void MediaPrev_Click(object sender, RoutedEventArgs e) => _ = SkipAsync("prev");
     void MediaVisualizer_Click(object sender, RoutedEventArgs e) => ToggleVisualizer();
@@ -157,7 +275,8 @@ public sealed partial class MainWindow
         e.Handled = true;
         if (mediaTab?.Media is not { Duration: > 0 } info || MediaProgress.ActualWidth <= 0) return;
         var to = e.GetCurrentPoint(MediaProgress).Position.X / MediaProgress.ActualWidth * info.Duration;
-        _ = MediaCommandAsync($"__lilt.media('seekto', {to.ToString(System.Globalization.CultureInfo.InvariantCulture)})");
+        if (info.Session) _ = WithSessionAsync("seek", async s => await s.TryChangePlaybackPositionAsync((s.GetTimelineProperties().StartTime + TimeSpan.FromSeconds(to)).Ticks));
+        else _ = MediaCommandAsync($"__lilt.media('seekto', {to.ToString(System.Globalization.CultureInfo.InvariantCulture)})");
     }
 
     // The site's own next/previous buttons first (YouTube, Spotify, SoundCloud…), then Windows' media controls,
@@ -165,23 +284,7 @@ public sealed partial class MainWindow
     async Task SkipAsync(string which)
     {
         if (await MediaCommandAsync($"__lilt.media('{which}')") == "ok") return;
-        try
-        {
-            smtc ??= await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
-            var title = mediaTab?.Media?.Title;
-            foreach (var session in smtc.GetSessions())
-            {
-                // WebView2's sessions all come from msedgewebview2.exe, other apps' included; the title tells them apart.
-                if (!IsLiltSession(session.SourceAppUserModelId) || (await session.TryGetMediaPropertiesAsync()).Title != title) continue;
-                var done = which == "next" ? await session.TrySkipNextAsync() : await session.TrySkipPreviousAsync();
-                report.Key("media", $"{which} via Windows: {done}");
-                return;
-            }
-        }
-        catch (Exception e)
-        {
-            LiltPaths.LogError(e);
-        }
+        await WithSessionAsync(which, async s => which == "next" ? await s.TrySkipNextAsync() : await s.TrySkipPreviousAsync());
     }
 
     static bool IsLiltSession(string id) =>

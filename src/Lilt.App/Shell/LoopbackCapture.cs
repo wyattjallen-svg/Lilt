@@ -13,6 +13,13 @@ public sealed class LoopbackCapture : IDisposable
     readonly Thread thread;
     readonly AutoResetEvent ready = new(false);
     volatile bool stop;
+    long packets, silent;
+    int peak;
+
+    // For diagnostics (about:logs): packets received, packets Windows marked silent, and the loudest sample (0 to 1).
+    public long Packets => Interlocked.Read(ref packets);
+    public long SilentPackets => Interlocked.Read(ref silent);
+    public double Peak => Volatile.Read(ref peak) / 32768.0;
 
     LoopbackCapture(IAudioClient client, IAudioCaptureClient capture, Samples onSamples)
     {
@@ -78,11 +85,16 @@ public sealed class LoopbackCapture : IDisposable
                 while (!stop && capture.GetNextPacketSize(out var frames) >= 0 && frames > 0)
                 {
                     if (capture.GetBuffer(out var data, out var count, out var flags, out _, out _) < 0) break;
-                    const uint silent = 0x2;
+                    const uint silentFlag = 0x2;
                     var bytes = (int)Math.Min(count * 4, (uint)buffer.Length);
-                    if ((flags & silent) == 0 && bytes > 0)
+                    Interlocked.Increment(ref packets);
+                    if ((flags & silentFlag) != 0) Interlocked.Increment(ref silent);
+                    else if (bytes > 0)
                     {
                         Marshal.Copy(data, buffer, 0, bytes);
+                        var loudest = 0;
+                        foreach (var sample in MemoryMarshal.Cast<byte, short>(buffer.AsSpan(0, bytes))) loudest = Math.Max(loudest, Math.Abs((int)sample));
+                        if (loudest > Volatile.Read(ref peak)) Volatile.Write(ref peak, loudest);
                         onSamples(buffer.AsSpan(0, bytes));
                     }
                     capture.ReleaseBuffer(count);

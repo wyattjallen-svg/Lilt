@@ -597,10 +597,6 @@
           <TextBlock TextWrapping="Wrap" TextAlignment="Center" Foreground="{StaticResource LiltTextMutedBrush}"
                      Text="Drag the player or the visualizer here to dock it. A popped-out video can go here too, and it plays on the side while you browse." />
         </StackPanel>
-        <Border x:Name="PanelVizGrip" Height="10" VerticalAlignment="Bottom" Canvas.ZIndex="2" Background="Transparent" Visibility="Collapsed"
-                PointerPressed="VizGrip_PointerPressed" ToolTipService.ToolTip="Drag to resize the visualizer" AutomationProperties.Name="Visualizer height">
-          <Border Width="40" Height="4" CornerRadius="2" Background="{StaticResource LiltBorderBrush}" VerticalAlignment="Center" HorizontalAlignment="Center" />
-        </Border>
         <Border x:Name="PanelGrip" Width="10" Canvas.ZIndex="2" Background="Transparent" PointerPressed="PanelGrip_PointerPressed"
                 ToolTipService.ToolTip="Drag to resize the panel" AutomationProperties.Name="Panel edge">
           <Border Width="4" Height="40" CornerRadius="2" Background="{StaticResource LiltBorderBrush}" VerticalAlignment="Center" />
@@ -619,6 +615,8 @@
         <Border x:Name="MediaWidget" Tag="player" Visibility="Collapsed" Width="300" Padding="10" CornerRadius="12" BorderThickness="1"
                 Background="{StaticResource LiltOverlayBrush}" BorderBrush="{StaticResource LiltBorderBrush}"
                 PointerPressed="Widget_PointerPressed" AutomationProperties.Name="Now playing">
+          <!-- Floating: a strip (artwork, title and controls side by side). Docked in the panel: a column, with the artwork as
+               wide as the panel (see ArrangePlayer). -->
           <Grid ColumnSpacing="10" RowSpacing="6">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="Auto" />
@@ -629,18 +627,19 @@
               <RowDefinition Height="Auto" />
               <RowDefinition Height="Auto" />
               <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <Border Grid.RowSpan="2" Width="52" Height="52" CornerRadius="8" Background="{StaticResource LiltSurfaceRaisedBrush}" VerticalAlignment="Top">
+            <Border x:Name="PlayerArt" Grid.RowSpan="2" Width="52" Height="52" CornerRadius="8" Background="{StaticResource LiltSurfaceRaisedBrush}" VerticalAlignment="Top">
               <Grid>
                 <FontIcon Glyph="&#xE8D6;" FontSize="20" Foreground="{StaticResource LiltTextMutedBrush}" />
                 <Image x:Name="MediaArt" Stretch="UniformToFill" />
               </Grid>
             </Border>
-            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+            <StackPanel x:Name="PlayerText" Grid.Column="1" VerticalAlignment="Center">
               <TextBlock x:Name="MediaTitle" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{StaticResource LiltTextBrush}" />
               <TextBlock x:Name="MediaArtist" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{StaticResource LiltTextMutedBrush}" />
             </StackPanel>
-            <Button Grid.Column="2" Style="{StaticResource ChromeButton}" Width="24" Height="24" VerticalAlignment="Top" Click="MediaClose_Click"
+            <Button x:Name="PlayerClose" Grid.Column="2" Style="{StaticResource ChromeButton}" Width="24" Height="24" VerticalAlignment="Top" Click="MediaClose_Click"
                     ToolTipService.ToolTip="Hide until something else plays" AutomationProperties.Name="Hide the player">
               <FontIcon Glyph="&#xE711;" FontSize="10" />
             </Button>
@@ -674,7 +673,7 @@
                 <FontIcon Glyph="&#xE72A;" FontSize="13" />
               </Button>
             </StackPanel>
-            <Grid Grid.Row="2" Grid.ColumnSpan="3" ColumnSpacing="8">
+            <Grid x:Name="PlayerProgress" Grid.Row="2" Grid.ColumnSpan="3" ColumnSpacing="8">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />

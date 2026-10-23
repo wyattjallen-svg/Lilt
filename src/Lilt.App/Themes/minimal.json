@@ -71,7 +71,7 @@
   "split": { "orientation": "horizontal", "ratio": 0.5, "gap": 6 },
   // The panel beside the page (F4): drag a tab in to keep it there. sections, top to bottom: "web" (the tabs you put
   // there), "visualizer", "player"; leave the visualizer or player out to keep it floating over the page.
-  "panel": { "edge": "right", "width": 380, "sections": ["web", "visualizer", "player"] },
+  "panel": { "edge": "right", "width": 380, "sections": ["web", "player", "visualizer"] },
   // cacheLimit: MB of cached files (0 = the engine decides; after a restart). forgetAfterDays: sites you haven't opened
   // in that long lose what they stored and their readable cookies; sign-ins stay unless signOut is true. keep: never touched.
   "storage": { "cacheLimit": 300, "forgetAfterDays": 90, "signOut": false, "keep": [] },
