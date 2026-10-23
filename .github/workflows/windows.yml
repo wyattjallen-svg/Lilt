@@ -254,6 +254,7 @@ jobs:
           Get-Content (Join-Path $mdir 'startup.json.keys.txt') -ErrorAction SilentlyContinue | Where-Object { $_ -match ' (probe|pip|visualizer|media) ' } | Set-Content smoke-media-probe.txt
           $probe = if (Test-Path smoke-media-probe.txt) { (Get-Content smoke-media-probe.txt) -join ' / ' } else { 'none' }
           Check 'Media reported from the page (title, artist)' ($s.Count -gt 0 -and $s[0].media.Title -eq 'Lilt test tone' -and $s[0].media.Artist -eq 'Lilt CI') "$(if ($s.Count) { $s[0].media | ConvertTo-Json -Compress })"
+          Check 'A short audible element is the track, not the media session' ($s.Count -gt 0 -and $s[0].media.Playing -and -not $s[0].media.Session -and $s[0].media.Duration -gt 9) "$(if ($s.Count) { $s[0].media | ConvertTo-Json -Compress })"
           Check 'Player stays hidden while the playing tab is on screen' ($s.Count -gt 0 -and -not $s[0].player) "$(if ($s.Count) { $s[0] | ConvertTo-Json -Compress })"
           Check 'Player shows when the playing tab is out of sight' ($s.Count -gt 1 -and $s[1].player) "$(if ($s.Count -gt 1) { $s[1] | ConvertTo-Json -Compress })"
           Check 'Visualizer draws from Lilt''s sound or the page' ($s.Count -gt 2 -and $s[2].visualizer -and $s[2].visualizerFrames -gt 10 -and $s[2].visualizerSource -ne 'none') "$(if ($s.Count -gt 2) { $s[2] | ConvertTo-Json -Compress })"

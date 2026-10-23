@@ -212,7 +212,7 @@ public sealed partial class MainWindow
         if (m.Source == VisualizerSource.Auto && loopback is not null)
         {
             var systemQuiet = now - Math.Max(systemHeardAt, loopbackSince) > 1500;
-            var playing = AllTabs.Any(t => t.Media is { Playing: true } && !t.IsMuted);
+            var playing = AllTabs.Any(t => (t.IsAudible || t.Media is { Playing: true }) && !t.IsMuted);
             if (systemQuiet && playing && captureCore is null && now >= pageRetryAt)
             {
                 report.Key("visualizer", "system sound quiet, listening to the page too");

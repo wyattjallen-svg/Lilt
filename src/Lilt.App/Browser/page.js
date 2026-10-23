@@ -190,8 +190,8 @@
     // Some players never put their media element in the document (Spotify's is made with createElement and kept out),
     // so the page only shows its media session: title, artist, artwork and, if it says, whether it's playing. Lilt then
     // takes the position and the controls from Windows' media controls, which WebView2 feeds from that same session.
-    // A short element next to a session (a sound effect, a preview) isn't the track either.
-    const track = m && (length(m) > 30 || !md || !md.title) ? m : null;
+    // A short muted element next to a session (Spotify's looping Canvas video) isn't the track either.
+    const track = m && (length(m) > 30 || audible(m) || !md || !md.title) ? m : null;
     const state = ms ? ms.playbackState : 'none';
     const s = track ? {
       t: 'media', playing: !track.paused && !track.ended, title: (md && md.title) || document.title || '',
