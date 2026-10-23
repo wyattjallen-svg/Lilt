@@ -80,7 +80,13 @@ Reading these:
 
 ## Testing this build
 
-Unzip `Lilt-v0.10.0-win-x64.zip` and run `Lilt.exe`. Tabs, bookmarks and settings from earlier builds carry over; your `theme.json` gains the new settings with their defaults.
+Unzip `Lilt-v0.11.0-win-x64.zip` and run `Lilt.exe`. Tabs, bookmarks and settings from earlier builds carry over; your `theme.json` gains the new settings with their defaults.
+
+**New in v0.11**
+- [ ] Play something on open.spotify.com, then switch to another tab: the player shows the song, artist and artwork, the track line moves and shows the song's real length, and play/pause, next, previous and clicking the track line all work.
+- [ ] Press F4 (panel) while it plays: the player is a column with big artwork, and the visualizer fills the space under it. Widen the panel by its edge: everything grows.
+- [ ] Pop a YouTube video out and drag it onto the panel: the video sits at the top, the player under it has no artwork, and the visualizer fills the rest.
+- [ ] If the visualizer stays flat, open `about:logs`, choose Warnings (or Info), and send me the "visualizer" line.
 
 **New in v0.10**
 - [ ] Customize → Look → Interface size: try 125% and 80%. The toolbar, tabs, sidebar, Customize itself, menus (right-click a tab), the palette (Ctrl+K) and the home page should all change together, with nothing cut off. Move Text size too.

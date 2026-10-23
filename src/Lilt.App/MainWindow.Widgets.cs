@@ -57,18 +57,27 @@ public sealed partial class MainWindow
         return Math.Clamp(at, margin, Math.Max(margin, room - size - margin));
     }
 
+    double noticeLift = 16;
+
     void PlaceWidgets()
     {
+        var height = WidgetLayer.ActualHeight;
+        var lift = 16d;
         foreach (var (element, widget) in new (FrameworkElement, string)[] { (MediaWidget, "player"), (VisualizerWidget, "visualizer"), (PipFrame, "pip") })
         {
             if (element.Visibility != Visibility.Visible || PanelHost.Children.Contains(element)) continue;
             var b = Box(widget);
+            if (b.Bottom > height - metrics.Px(120)) lift = Math.Max(lift, height - b.Y + 8);
             Canvas.SetLeft(element, b.X);
             Canvas.SetTop(element, b.Y);
             element.Width = b.Width;
             element.Height = widget == "player" && Spec(widget).Height <= 0 ? double.NaN : b.Height;
             if (widget != "pip") element.Opacity = Spec(widget).Opacity;
         }
+        // Notices rise above floating widgets parked along the bottom instead of covering their controls.
+        noticeLift = Math.Min(lift, Math.Max(16, height - metrics.Px(140)));
+        var m = NoticeBar.Margin;
+        NoticeBar.Margin = new Thickness(m.Left, m.Top, m.Right, noticeLift);
         PipFrame.RowDefinitions[0].Height = new GridLength(PipBar);
         ScalePlayer();
         // The popped-out page sits exactly in the frame's empty area (the page host and the widget layer share a cell).

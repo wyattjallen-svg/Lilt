@@ -529,6 +529,14 @@ Command line: `--url <url>`, `--theme <file>`, `--user-data <folder>`, `--startu
 1. ~~Password manager~~: answered in v0.2: Proton Pass, with WebView2's saving as fallback (section 7.2).
 2. **Rust in the build.** If the filtering spike shows Path A is needed, is adding a Rust toolchain acceptable? Without it, cosmetic filtering and path rules wait or fall to Path B.
 
+## 21. v0.11
+
+After your report that the player and visualizer still didn't work and the panel felt empty (2026-10-23). Spotify's web player plays through a `<video>` made with `createElement` and never inserted (KDE's browser integration found the same), so `querySelectorAll` in the isolated world saw only a short in-page sound, which explains the 7-second track line. Rather than hooking `createElement` in the page's own world (the trick KDE uses: insert and remove the element so a MutationObserver sees it, which can pause an element that's already playing), the page helper reports the page's media session when no in-document element is the track (none, or only one shorter than 30 s next to session metadata). Windows' System Media Transport Controls supply the rest. WebView2 publishes the page's media session there from its media players whether or not they're in the DOM, so the play state, the timeline (extrapolated from `LastUpdatedTime`) and toggle, seek and skip all go through the matching session. The match is by title, because every WebView2 app's sessions come from msedgewebview2.exe; a lone one is used when there's no title. Such pages raise no media events in the document, so `IsDocumentPlayingAudioChanged` asks the page to report again, and while one plays it's asked again, along with Windows, every three seconds.
+
+The visualizer's loopback now counts packets, packets flagged silent and its loudest sample, and writes one line to the log six seconds after it starts with a tab playing. The runner has no sound card, so CI can't exercise system sound; installing a virtual one would mean running a third-party driver installer in CI, and that's held back for now.
+
+The panel became a column. Rows: videos at 16:9 for the panel's width, then the player at its own height, then the visualizer as the one star row (when it's showing), then a spacer that takes the height otherwise. The docked player rearranges its grid into a column, with the artwork square at the panel's width and no artwork under its own video. The visualizer shows whenever something plays while it's docked.
+
 ## 20. v0.9 and v0.10
 
 After your reports of a blank visualizer, a 7-second track line, untidy pages in the panel and crashes with no output, and your asks for real scaling and a Firefox-like log (2026-10-22).
