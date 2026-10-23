@@ -28,7 +28,7 @@ jobs:
       # Enables the developer switches the smoke tests use (--run, --user-data, --browser-args...). Off in releases.
       LILT_DEV: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-dotnet@v4
         with:
