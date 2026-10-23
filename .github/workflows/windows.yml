@@ -127,9 +127,13 @@ jobs:
               if (-not $p.WaitForExit(15000)) { Stop-Process -Id $p.Id -Force; $script:checks += "| $name closes within 15 s | FAIL | had to be killed |"; Write-Host "::warning::$name didn't exit after closing" }
             }
             else { Write-Host "::error::$name exited early with code $($p.ExitCode)" }
-            $loaded = (Test-Path $report) -and (Get-Content $report -Raw | ConvertFrom-Json).firstNavigationSucceeded
-            if (-not $loaded) { Write-Host "::error::$name first page did not load" }
-            if (-not $alive -or -not $loaded -or $errors.Count) { $script:failed += $name }
+            $nav = if (Test-Path $report) { Get-Content $report -Raw | ConvertFrom-Json } else { $null }
+            $loaded = $nav -and $nav.firstNavigationSucceeded
+            # The runner's network sometimes can't reach a site: noted as a failed check, not a failed build.
+            $offline = $nav -and -not $loaded -and $nav.firstNavigationStatus -in 'Timeout', 'CannotConnect', 'HostNameNotResolved', 'ConnectionAborted', 'ConnectionReset', 'Disconnected', 'ServerUnreachable'
+            if (-not $loaded) { Write-Host "::$(if ($offline) { 'warning' } else { 'error' })::$name first page did not load ($(if ($nav) { $nav.firstNavigationStatus } else { 'no report' }))" }
+            if ($offline) { $script:checks += "| $name reaches its first page | FAIL | network: $($nav.firstNavigationStatus) |" }
+            if (-not $alive -or (-not $loaded -and -not $offline) -or $errors.Count) { $script:failed += $name }
             Write-Host "$name alive=$alive report=$(Test-Path $report)"
             return $dir
           }
