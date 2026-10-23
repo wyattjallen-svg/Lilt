@@ -157,7 +157,8 @@ jobs:
             if (Test-Path "smoke-$name.json") { @((Get-Content "smoke-$name.json" -Raw | ConvertFrom-Json).extensions) } else { @() }
           }
 
-          [void](Smoke 'newtab' @() -settle 25)
+          # The runner's first WebView2 start can be slow enough to miss the report, so a throwaway launch goes first.
+          [void](Smoke 'newtab' @() -settle 25 -warm)
           $ubol = Extensions 'newtab'
           Check 'uBlock Origin Lite installed' ([bool]($ubol -match 'uBlock')) ($ubol -join '; ')
           [void](Smoke 'dusk-page' @('--url', 'https://example.com'))
